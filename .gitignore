@@ -2,3 +2,4 @@ results/
 *.egg-info/
 __pycache__/
 data/*/gt.converted.musicxml
+data/
