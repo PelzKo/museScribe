@@ -38,7 +38,19 @@ def with_timeout(fn, *args, timeout: float):
     return val
 
 
-def _structural(pred_path: Path, gt_path: Path, omr: Path | None) -> dict:
+def _normalise_pred(pred: Path) -> tuple[Path, list[int] | None]:
+    """Expand single-measure multirests; returns (path to score, old->new measure map)."""
+    root = musicxml.load(pred)
+    index_map = musicxml.expand_multirests(root)
+    if index_map is None:
+        return pred, None
+    out = pred.with_name(pred.stem + ".scored.musicxml")
+    musicxml.write(root, out)
+    return out, index_map
+
+
+def _structural(pred_path: Path, gt_path: Path, omr: Path | None,
+                index_map: list[int] | None = None) -> dict:
     pred_root = musicxml.load(pred_path)
     gt_root = musicxml.load(gt_path)
     ps, gs = musicxml.extract_staves(pred_root), musicxml.extract_staves(gt_root)
@@ -63,6 +75,9 @@ def _structural(pred_path: Path, gt_path: Path, omr: Path | None) -> dict:
     fl = {"validator": flags.validator_flags(pred_root)}
     if omr is not None and Path(omr).exists():
         fl["audiveris"] = flags.audiveris_flags(Path(omr))
+        if index_map:  # .omr counts measures before multirest expansion
+            fl["audiveris"] = {(pi, index_map[mi] if mi < len(index_map) else mi): why
+                               for (pi, mi), why in fl["audiveris"].items()}
         fl["combined"] = {**fl["validator"], **fl["audiveris"]}
     out["flags"] = {name: flags.flag_scores(f, ps, wrong) for name, f in fl.items()}
     out["flagged_measures"] = {name: sorted(f"{pi}:{mi + 1} {why}" for (pi, mi), why in f.items())
@@ -81,10 +96,19 @@ def score(res: EngineResult, sample: Sample, cfg: dict) -> dict:
     if res.output is None or not Path(res.output).exists():
         out["errors"]["engine"] = res.error or "no output"
         return out
-    pred, gt = Path(res.output), sample.gt
+    gt = sample.gt
+    try:
+        pred, index_map = _normalise_pred(Path(res.output))
+    except Exception as e:
+        out["errors"]["normalise"] = str(e)
+        pred, index_map = Path(res.output), None
+    if index_map:
+        out["measures_added_by_multirest_expansion"] = (
+            musicxml.measure_count(musicxml.load(pred)) - len(index_map))
 
     try:
-        out.update(with_timeout(_structural, pred, gt, res.extras.get("omr"), timeout=timeout))
+        out.update(with_timeout(_structural, pred, gt, res.extras.get("omr"), index_map,
+                                timeout=timeout))
     except Exception as e:
         out["errors"]["structural"] = str(e)
 

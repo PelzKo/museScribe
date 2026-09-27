@@ -3,7 +3,8 @@
   omrbench doctor                      check engines, GPU and data folder
   omrbench new-sample NAME             create data/NAME with a meta.yaml template
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
-  omrbench run [--engines a,b] [--samples x,y] [--resume RUN_ID]
+  omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
+               [--resume RUN_ID]
   omrbench score RUN_DIR               re-score an existing run (e.g. after fixing a GT)
   omrbench report RUN_DIR              regenerate report.md (e.g. after adding correction times)
 """
@@ -78,6 +79,7 @@ def cmd_run(cfg: dict, args) -> int:
     if args.jobs:
         cfg.setdefault("scoring", {})["jobs"] = args.jobs
     run_dir = run(cfg, engines_only=_csv(args.engines), samples_only=_csv(args.samples),
+                  samples_exclude=_csv(args.exclude), prefix_matching=args.prefix_matching,
                   run_id=args.resume or args.run_id, resume=bool(args.resume),
                   do_score=not args.no_score)
     print(f"\nreport: {run_dir / 'report.md'}")
@@ -114,6 +116,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("run")
     p.add_argument("--engines", help="comma-separated engine names (default: all enabled)")
     p.add_argument("--samples", help="comma-separated sample ids (default: all)")
+    p.add_argument("--exclude", help="comma-separated sample ids to skip")
+    p.add_argument("--prefix_matching", "--prefix-matching", action="store_true",
+                   help="match --samples/--exclude as id prefixes (e.g. --exclude demo)")
     p.add_argument("--run-id", help="name of the results folder (default: timestamp)")
     p.add_argument("--resume", metavar="RUN_ID", help="continue a run, re-using successful engine outputs")
     p.add_argument("--jobs", type=int, help="parallel scoring workers")

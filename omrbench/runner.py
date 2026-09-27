@@ -154,9 +154,10 @@ def load_results(run_dir: Path) -> list[EngineResult]:
             for p in sorted(run_dir.glob("*/*/result.json"))]
 
 
-def run(cfg: dict, *, engines_only=None, samples_only=None, run_id=None, resume=False,
-        do_score=True) -> Path:
-    samples, warnings = dataset.discover(Path(cfg["data_dir"]), samples_only, cfg.get("musescore_cli"))
+def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None,
+        prefix_matching=False, run_id=None, resume=False, do_score=True) -> Path:
+    samples, warnings = dataset.discover(Path(cfg["data_dir"]), samples_only, cfg.get("musescore_cli"),
+                                         exclude=samples_exclude, prefix=prefix_matching)
     for w in warnings:
         _log("WARN " + w)
     if not samples:

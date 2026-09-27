@@ -109,6 +109,127 @@ def merge_pages(roots: list[etree._Element]) -> etree._Element:
     return out
 
 
+def _rename_ids(el: etree._Element, old: str, new: str) -> None:
+    for e in el.iter():
+        v = e.get("id")
+        if v is not None and (v == old or v.startswith(old + "-")):
+            e.set("id", new + v[len(old):])
+
+
+def merge_parts(roots: list[etree._Element]) -> etree._Element:
+    """Stack the parts of several scores (e.g. per-instrument GT exports) into one score.
+
+    Header (work, identification, defaults) comes from the first score. Part ids are
+    renumbered P1..Pn in the given order. System text (tempo, rall. ...; MuseScore marks
+    it system="only-top"/"also-top" and repeats it in every part export) is kept only in
+    the first part, as printed.
+    """
+    if not roots:
+        raise ValueError("no scores to merge")
+    out = copy.deepcopy(roots[0])
+    part_list = out.find("part-list")
+    for el in list(part_list) + out.findall("part"):
+        el.getparent().remove(el)
+    k = 0
+    for r in roots:
+        parts = {p.get("id"): p for p in r.findall("part")}
+        for sp in r.iterfind("part-list/score-part"):
+            old = sp.get("id")
+            k += 1
+            new = f"P{k}"
+            sp, part = copy.deepcopy(sp), copy.deepcopy(parts[old])
+            _rename_ids(sp, old, new)
+            _rename_ids(part, old, new)
+            if k > 1:
+                for d in part.findall("measure/direction"):
+                    if d.get("system") in ("only-top", "also-top"):
+                        d.getparent().remove(d)
+            part_list.append(sp)
+            out.append(part)
+    return out
+
+
+def drop_measures(root: etree._Element, numbers: list) -> list[str]:
+    """Remove measures by their `number` attribute from every part. Returns warnings."""
+    wanted = {str(n) for n in numbers}
+    found: set[str] = set()
+    warnings = []
+    for part in root.findall("part"):
+        for m in part.findall("measure"):
+            num = m.get("number")
+            if num not in wanted:
+                continue
+            found.add(num)
+            for a in m.findall("attributes"):
+                if any(a.find(t) is not None for t in ("divisions", "key", "time", "clef", "staves")):
+                    warnings.append(f"dropped measure {num} of {part.get('id')} contained "
+                                    "key/time/clef/divisions changes; they are lost")
+            part.remove(m)
+    for n in sorted(wanted - found):
+        warnings.append(f"measure {n} to drop not found")
+    return warnings
+
+
+def _multirest_count(m: etree._Element) -> int:
+    el = m.find("attributes/measure-style/multiple-rest")
+    try:
+        return int(el.text.strip()) if el is not None and el.text else 1
+    except ValueError:
+        return 1
+
+
+def _rest_only(m: etree._Element) -> bool:
+    notes = m.findall("note")
+    return bool(notes) and all(n.find("rest") is not None for n in notes)
+
+
+def _rest_copy(m: etree._Element, suffix: int) -> etree._Element:
+    c = copy.deepcopy(m)
+    for el in list(c):
+        if el.tag not in ("note", "backup", "forward"):
+            c.remove(el)
+    c.set("number", f"{m.get('number', '')}.{suffix}")
+    return c
+
+
+def expand_multirests(root: etree._Element) -> list[int] | None:
+    """Expand measures marked <multiple-rest>N into N whole-rest measures, in place.
+
+    MuseScore stores a multi-measure rest as N real measures (the first carries the
+    measure-style); some engines emit a single measure. Blocks already followed by
+    N-1 rest-only measures are left alone. Returns old->new measure index map, or
+    None if nothing changed.
+    """
+    parts = root.findall("part")
+    measures = [p.findall("measure") for p in parts]
+    n = max((len(ms) for ms in measures), default=0)
+    index_map, offset = [], 0
+    for i in range(n):
+        index_map.append(i + offset)
+        # a part's multirest is already expanded if its own next N-1 measures are rests
+        # (other parts may hold notes there: MuseScore part exports merged into one score)
+        counts = [(ms, _multirest_count(ms[i])) for ms in measures if i < len(ms)]
+        if not any(kp > 1 and not (i + kp <= len(ms) and
+                                   all(_rest_only(ms[i + j]) for j in range(1, kp)))
+                   for ms, kp in counts):
+            continue
+        k = max(kp for _, kp in counts)
+        for ms in measures:
+            if i >= len(ms):
+                continue
+            src = ms[i]
+            copies = [_rest_copy(src, j) for j in range(1, k)]
+            for bl in src.findall("barline"):
+                if bl.get("location", "right") == "right":
+                    copies[-1].append(bl)
+            anchor = src
+            for c in copies:
+                anchor.addnext(c)
+                anchor = c
+        offset += k - 1
+    return index_map if offset else None
+
+
 # --------------------------------------------------------------------------- events
 
 CATEGORIES = [

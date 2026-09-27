@@ -10,13 +10,10 @@ from pathlib import Path
 import yaml
 
 DEMOS = {
-    "demo-lindenbaum": ("schubert/lindenbaum", {"type": "piano", "languages": ["deu"],
-                                                "staves_per_system": 3}),
-    "demo-bach-chorale": ("bach/bwv66.6", {"type": "choir", "languages": ["deu"],
-                                           "staves_per_system": 4}),
+    "demo-lindenbaum": ("schubert/lindenbaum", {"type": "piano_reduction", "languages": ["deu"]}),
+    "demo-bach-chorale": ("bach/bwv66.6", {"type": "choir", "languages": ["deu"]}),
     # first violin only -> single-staff part
-    "demo-violin-part": ("mozart/k156/movement4#0", {"type": "part", "instruments": ["Violin"],
-                                                     "staves_per_system": 1}),
+    "demo-violin-part": ("mozart/k156/movement4#0", {"type": "part"}),
 }
 
 

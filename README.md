@@ -39,7 +39,7 @@ omrbench new-sample choir-01      # creates data/choir-01/ with meta.yaml templa
 data/choir-01/
   input.pdf          2-3 pages, scan or phone photo
   gt.musicxml        hand-corrected in MuseScore (File > Export > MusicXML); gt.mxl/gt.mscz also OK
-  meta.yaml          type (choir|piano|part|orchestral|drums|other), languages, switches, correction times
+  meta.yaml          type (choir|piano|piano_reduction|part|orchestral|drums|other), languages, switches, correction times
   external/          optional: soundslice.musicxml, playscore.mxl, ...
 ```
 
@@ -50,6 +50,7 @@ The ground truth must cover exactly the pages in `input.pdf`. See `meta.example.
 ```bash
 omrbench run                              # all engines, all samples -> results/<timestamp>/report.md
 omrbench run --engines audiveris,homr --samples choir-01
+omrbench run --exclude demo --prefix_matching   # skip every demo-* sample
 omrbench run --resume 20260927-1300       # re-use finished engine outputs, retry failures
 omrbench score results/<run>              # re-score, e.g. after fixing a GT file
 omrbench report results/<run>             # re-render, e.g. after adding correction times
@@ -78,7 +79,7 @@ Outputs go to `results/<run>/`:
 
 ## Known engine behaviour
 
-- **Audiveris** OCRs the part label on every system. If the label changes (for example "Soprano" becomes "S.", or an OCR slip turns "Voice" into "Voico"), it opens a new part. The Structure table in the report shows this. The fix is post-processing from `meta.yaml` instruments, not the benchmark.
+- **Audiveris** OCRs the part label on every system. If the label changes (for example "Soprano" becomes "S.", or an OCR slip turns "Voice" into "Voico"), it opens a new part. The Structure table in the report shows this. The fix is post-processing with the known instrument list, not the benchmark.
 - **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs the pinned old `numpy`, `opencv` and `onnxruntime` that `setup.sh` installs.
 - **homr** reads notes only: no lyrics, dynamics or text. The `notes` OMR-NED variant is the fair comparison for it.
 - **GPU:** `--gpu` and `device: cuda` only help with an NVIDIA GPU that is visible inside WSL (`nvidia-smi` works). AMD iGPUs (Radeon 780M, for example) can't be used from WSL by these engines, so they run on CPU.
