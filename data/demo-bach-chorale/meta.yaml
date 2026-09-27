@@ -1,5 +1,0 @@
-type: choir
-languages:
-- deu
-staves_per_system: 4
-source: music21 corpus bach/bwv66.6, rendered with Verovio (1 pages)

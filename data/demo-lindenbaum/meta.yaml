@@ -1,5 +1,0 @@
-type: piano
-languages:
-- deu
-staves_per_system: 3
-source: music21 corpus schubert/lindenbaum, rendered with Verovio (3 pages)
