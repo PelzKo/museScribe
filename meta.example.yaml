@@ -23,6 +23,15 @@ languages: [deu, lat]
 # Measures (by MusicXML number) that exist in the GT but are not printed, e.g. cuts.
 # gt_drop_measures: [12, 13]
 
+# pipeline engine: instruments of a condensed part (percussion), in score order. A shared
+# staff is split into one part per instrument at the printed labels; aliases are other
+# spellings in the print. Splitting is on for type: drums, or force it:
+# split_instruments: true
+# instruments:
+#   - Timpani
+#   - Sus Cymbal
+#   - {name: Violin (cue), aliases: ["(Vln)"]}
+
 # Audiveris processing switches for the audiveris-meta variant
 # one_line_percussion: true
 # small_heads: true

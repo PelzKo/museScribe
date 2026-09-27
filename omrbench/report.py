@@ -200,6 +200,9 @@ def write_report(run_dir: Path) -> Path:
             extra.append("switches from meta.yaml")
         if c.get("constants"):
             extra.append(f"constants: {c['constants']}")
+        if e["type"] == "pipeline":
+            extra.append(f"audiveris (meta.yaml switches) layout + homr per staff group; "
+                         f"prefer {c.get('prefer', 'auto')}, text at {c.get('text_onset', 'bar')}")
         rows.append([f"`{name}`", e["type"], e["version"] if e["available"] else f"UNAVAILABLE: {e['version']}",
                      "; ".join(extra) or "defaults"])
     A(_table(["Engine", "Type", "Version", "Options"], rows))

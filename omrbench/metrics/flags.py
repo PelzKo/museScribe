@@ -62,31 +62,39 @@ def validator_flags(root) -> dict[tuple[int, int], str]:
     return flags
 
 
+def _omr_sheets(omr: Path):
+    """Yield sheet XML roots in page order from one .omr, or from a directory of
+    per-sheet books (sheetNN/*.omr, see Audiveris per-sheet fallback)."""
+    books = sorted(omr.rglob("*.omr")) if omr.is_dir() else [omr]
+    for book in books:
+        with zipfile.ZipFile(book) as z:
+            sheets = sorted((n for n in z.namelist() if re.fullmatch(r"sheet#\d+/sheet#\d+\.xml", n)),
+                            key=lambda n: int(re.search(r"#(\d+)/", n).group(1)))
+            for n in sheets:
+                yield ET.fromstring(z.read(n))
+
+
 def audiveris_flags(omr: Path) -> dict[tuple[int, int], str]:
     """Map .omr abnormal measures / excess stacks to (part, global measure index)."""
     flags: dict[tuple[int, int], str] = {}
-    with zipfile.ZipFile(omr) as z:
-        sheets = sorted((n for n in z.namelist() if re.fullmatch(r"sheet#\d+/sheet#\d+\.xml", n)),
-                        key=lambda n: int(re.search(r"#(\d+)/", n).group(1)))
-        offset = 0
-        for n in sheets:
-            root = ET.fromstring(z.read(n))
-            for page in root.iter("page"):
-                count = int(page.get("measure-count") or 0)
-                n_parts = 0
-                for sys_ in page.findall("system"):
-                    parts = sys_.findall("part")
-                    n_parts = max(n_parts, len(parts))
-                    for pi, p in enumerate(parts):
-                        for m in p.findall("measure"):
-                            if m.get("abnormal") == "true":
-                                flags[(pi, offset + int(m.get("id")) - 1)] = "audiveris abnormal"
-                    for s in sys_.iter("stack"):
-                        if s.get("excess"):
-                            for pi in range(len(parts)):
-                                flags.setdefault((pi, offset + int(s.get("id")) - 1),
-                                                 f"audiveris excess {s.get('excess')}")
-                offset += count
+    offset = 0
+    for root in _omr_sheets(omr):
+        for page in root.iter("page"):
+            count = int(page.get("measure-count") or 0)
+            n_parts = 0
+            for sys_ in page.findall("system"):
+                parts = sys_.findall("part")
+                n_parts = max(n_parts, len(parts))
+                for pi, p in enumerate(parts):
+                    for m in p.findall("measure"):
+                        if m.get("abnormal") == "true":
+                            flags[(pi, offset + int(m.get("id")) - 1)] = "audiveris abnormal"
+                for s in sys_.iter("stack"):
+                    if s.get("excess"):
+                        for pi in range(len(parts)):
+                            flags.setdefault((pi, offset + int(s.get("id")) - 1),
+                                             f"audiveris excess {s.get('excess')}")
+            offset += count
     return flags
 
 

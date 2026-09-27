@@ -292,13 +292,22 @@ def _norm_text(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _duration_token(note) -> str:
+def _alone_in_voice(note, measure) -> bool:
+    key = (_txt(note, "voice", "1"), _txt(note, "staff", "1"))
+    return all(n is note or (_txt(n, "voice", "1"), _txt(n, "staff", "1")) != key
+               for n in measure.iterfind("note"))
+
+
+def _duration_token(note, measure=None) -> str:
     rest = note.find("rest")
-    if rest is not None and rest.get("measure") == "yes":
-        return "measure"  # engines differ on whether a whole-bar rest carries <type>
     typ = _txt(note, "type")
     dots = len(note.findall("dot"))
     tm = note.find("time-modification")
+    if rest is not None and (rest.get("measure") == "yes" or (
+            typ in (None, "whole") and not dots and tm is None
+            and measure is not None and _alone_in_voice(note, measure))):
+        # engines differ on whether a whole-bar rest carries measure="yes" and/or <type>
+        return "measure"
     tup = ""
     if tm is not None:
         tup = f"/{_txt(tm, 'actual-notes', '?')}:{_txt(tm, 'normal-notes', '?')}"
@@ -377,7 +386,7 @@ def extract_staves(root: etree._Element) -> list[Staff]:
                     is_grace = el.find("grace") is not None
                     onset = last_onset if is_chord else cur
                     s = st(int(_txt(el, "staff", "1") or 1))
-                    dur_tok = _duration_token(el)
+                    dur_tok = _duration_token(el, measure)
                     if is_grace:
                         dur_tok = "grace:" + dur_tok
                     ev = s.events

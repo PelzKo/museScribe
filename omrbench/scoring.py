@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import multiprocessing as mp
 import traceback
+import warnings
 from pathlib import Path
 
 from . import musicxml
@@ -12,6 +13,9 @@ from .metrics import elements, flags, omrned, tedn
 
 
 def _child(conn, fn, args):
+    # music21 warns about harmless import details (unknown MIDI instrument numbers in
+    # MuseScore exports, notes without <voice>); they flood the console during scoring
+    warnings.filterwarnings("ignore", message=r".*(does not map to a valid instrument|missing voice tag)")
     try:
         conn.send(("ok", fn(*args)))
     except BaseException as e:  # noqa: BLE001 - report everything to the parent

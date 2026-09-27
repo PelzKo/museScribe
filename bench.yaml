@@ -15,8 +15,12 @@ engines:
     use_metadata: true
   homr:
     type: homr
-  oemer:
+  pipeline:               # audiveris-meta layout + homr per staff group + repairs
+    type: pipeline
+    prefer: auto          # scans: homr bars first; vector PDFs: audiveris bars first
+  oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
+    enabled: false
   # Every data/<sample>/external/<name>.musicxml is picked up automatically as
   # engine <name> (type: external). Add one here only to disable it:
   # soundslice: {type: external, enabled: false}
