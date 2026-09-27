@@ -1,0 +1,26 @@
+# Per-sample metadata. Everything is optional.
+
+# choir | piano | part | orchestral | drums | other   (groups the report)
+type: choir
+
+source: "Scan of ... (phone photo / flatbed 300 dpi)"
+instruments: [Soprano, Alto, Tenor, Bass]
+staves_per_system: 2
+languages: [deu, lat]          # Tesseract codes; used by the audiveris-meta variant
+
+# Audiveris processing switches for the audiveris-meta variant
+# (type: drums also turns on drumNotation)
+# drums: true
+# one_line_percussion: true
+# small_heads: true
+# lyrics: true
+# implicit_tuplets: true
+# audiveris_constants:         # any other -constant key=value
+#   org.audiveris.omr.sheet.ProcessingSwitches.crossHeads: true
+
+# Fill in after correcting each engine's output in MuseScore (minutes).
+# manual_entry = time to type the same pages from scratch.
+# correction_minutes:
+#   manual_entry: 90
+#   audiveris: 35
+#   homr: 50

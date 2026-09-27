@@ -1,0 +1,32 @@
+# omrbench configuration. Paths are relative to this file.
+home: ~/.local/share/omrbench     # where setup.sh put venvs/tools (or $OMRBENCH_HOME)
+data_dir: data
+results_dir: results
+dpi: 300                  # rasterisation for page-image engines (homr, oemer)
+device: cpu               # cpu | cuda  (cuda needs `setup.sh --gpu` and a CUDA-visible GPU)
+timeout_s: 1800           # per engine call (per page for homr/oemer)
+musescore_cli: null       # only needed if you drop gt.mscz instead of gt.musicxml
+
+engines:
+  audiveris:              # stock settings
+    type: audiveris
+  audiveris-meta:         # switches derived from meta.yaml (drums, OCR languages, ...)
+    type: audiveris
+    use_metadata: true
+  homr:
+    type: homr
+  oemer:
+    type: oemer
+  # Every data/<sample>/external/<name>.musicxml is picked up automatically as
+  # engine <name> (type: external). Add one here only to disable it:
+  # soundslice: {type: external, enabled: false}
+
+scoring:
+  jobs: 4                 # parallel scoring processes (engines always run one at a time)
+  metric_timeout_s: 1200  # per metric per (engine, sample)
+  omr_ned_variants:       # musicdiff DetailLevel names, combine with "|"
+    all: AllObjects
+    notes: NotesAndRests  # fair to engines that ignore lyrics/dynamics (homr, oemer)
+  tedn: true
+  tedn_max_nodes: 2500    # larger parts are scored measure-by-measure (see metrics/tedn.py)
+  correction_ratio_threshold: 0.7   # decision rule from the evaluation protocol

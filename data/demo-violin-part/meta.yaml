@@ -1,0 +1,5 @@
+type: part
+instruments:
+- Violin
+staves_per_system: 1
+source: music21 corpus mozart/k156/movement4, rendered with Verovio (1 pages)
