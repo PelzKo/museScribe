@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -25,13 +27,14 @@ from lxml import etree
 
 from . import config as config_mod
 from . import dataset
+from . import log as logmod
 from . import musicxml
+from .rasterize import FITZ_LOCK, pdf_pages
 
 WINDOWS_MUSESCORE = Path("/mnt/c/Program Files/MuseScore 4/bin/MuseScore4.exe")
 
 
-def _log(msg: str) -> None:
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+LOG = logmod.get("transcribe")
 
 
 def parse_pages(spec, n_pages: int) -> list[int]:
@@ -60,7 +63,7 @@ def parse_pages(spec, n_pages: int) -> list[int]:
 
 
 def subset_pdf(pdf: Path, spec, out: Path) -> Path:
-    with pymupdf.open(pdf) as doc:
+    with FITZ_LOCK, pymupdf.open(pdf) as doc:
         keep = parse_pages(spec, doc.page_count)
         doc.select(keep)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -100,6 +103,13 @@ def to_mscz(src: Path, out: Path, exe: str) -> bool:
 def combine(files: list[tuple[str, Path]], out: Path) -> Path:
     """Stack the parts of every (name, musicxml) into one score, named after `name`."""
     roots = [musicxml.load(p) for _, p in files]
+    counts = {name: len(r.find("part").findall("measure")) if r.find("part") is not None else 0
+              for (name, _), r in zip(files, roots)}
+    if len(set(counts.values())) > 1:
+        LOG.warning("bar counts differ between the combined files: "
+                    + ", ".join(f"{n}: {c}" for n, c in counts.items()))
+    else:
+        LOG.info(f"all {len(files)} combined files have {next(iter(counts.values()), 0)} bars")
     labels = []
     for (name, _), r in zip(files, roots):
         parts = r.findall("part-list/score-part")
@@ -123,8 +133,11 @@ def combine(files: list[tuple[str, Path]], out: Path) -> Path:
 
 
 def transcribe(cfg: dict, *, engine: str = "pipeline", samples_only=None, samples_exclude=None,
-               prefix_matching=False, force=False, run_id=None) -> int:
+               prefix_matching=False, force=False, run_id=None, jobs=None) -> int:
     """Return the number of failed PDFs."""
+    run_dir = Path(cfg["results_dir"]) / (run_id or f"transcribe-{datetime.now():%Y%m%d-%H%M%S}")
+    log_path = logmod.setup(run_dir)
+    LOG.info(f"transcribe run {run_dir.name}; log: {log_path}")
     engines = config_mod.engines(cfg, set(), [engine])
     if not engines:
         raise SystemExit(f"unknown engine '{engine}' (configured: {', '.join(cfg.get('engines') or {})})")
@@ -133,25 +146,28 @@ def transcribe(cfg: dict, *, engine: str = "pipeline", samples_only=None, sample
         raise SystemExit(f"engine '{engine}' is external and can't be run")
     ok, ver = eng.check()
     if not ok:
+        LOG.error(f"engine {engine} unavailable: {ver}")
         raise SystemExit(f"engine {engine} unavailable: {ver}")
-    _log(f"engine {engine}: {ver}")
+    LOG.info(f"engine {engine}: {ver}")
 
     dirs, warnings = dataset.select_dirs(Path(cfg["data_dir"]), samples_only, samples_exclude,
                                          prefix_matching)
     for w in warnings:
-        _log("WARN " + w)
-    run_dir = Path(cfg["results_dir"]) / (run_id or f"transcribe-{datetime.now():%Y%m%d-%H%M%S}")
-    done = skipped = failed = 0
-    outputs: list[tuple[Path, Path]] = []   # (pdf, musicxml) of every selected PDF with output
+        LOG.warning(w)
+    skipped = failed = 0
+    outputs: dict[Path, Path] = {}     # pdf -> musicxml of every selected PDF with output
+    order: list[Path] = []
+    todo = []                          # (label, pdf, out, sample, work dir, pages)
     for d in dirs:
         folder_meta = dataset.load_meta(d / "meta.yaml")
         for pdf in sorted(d.glob("*.pdf")):
             out = pdf.with_suffix(".musicxml")
             label = f"{d.name}/{pdf.name}"
+            order.append(pdf)
             if out.exists() and not force:
-                _log(f"{label}: {out.name} exists, skipped (--force to redo)")
+                LOG.info(f"{label}: {out.name} exists, skipped (--force to redo)")
                 skipped += 1
-                outputs.append((pdf, out))
+                outputs[pdf] = out
                 continue
             sid = f"{d.name}--{pdf.stem}"
             wd = run_dir / engine / sid
@@ -160,28 +176,58 @@ def transcribe(cfg: dict, *, engine: str = "pipeline", samples_only=None, sample
                 src = pdf
                 if meta.get("pages") is not None:
                     src = subset_pdf(pdf, meta["pages"], wd / "subset.pdf")
+                n_pages = pdf_pages(src)
             except Exception as e:  # bad meta / page range is per-PDF
-                _log(f"{label}: FAILED {type(e).__name__}: {e}")
+                LOG.error(f"{label}: FAILED {type(e).__name__}: {e}", extra={"sample": sid})
                 failed += 1
                 continue
-            sample = dataset.Sample(sid, d, src, None, meta)
-            pages = f" (pages {meta['pages']})" if meta.get("pages") is not None else ""
-            _log(f"{label}{pages}: running {engine} ...")
+            todo.append((label, pdf, out, dataset.Sample(sid, d, src, None, meta), wd, n_pages))
+
+    # several PDFs at once: Audiveris of one overlaps homr of another (homr crops of all
+    # of them share one worker pool); the longest first so the last one doesn't run alone
+    n_jobs = max(1, int(jobs or cfg.get("transcribe_jobs", 2)))
+    todo.sort(key=lambda j: -j[5])
+    LOG.info(f"{len(todo)} PDFs to transcribe ({sum(j[5] for j in todo)} pages), "
+             f"{min(n_jobs, len(todo) or 1)} at a time")
+    t0 = time.perf_counter()
+
+    def one(job):
+        label, pdf, out, sample, wd, n_pages = job
+        with logmod.context(sample.id):
+            pages = f" (pages {sample.meta['pages']})" if sample.meta.get("pages") is not None else ""
+            LOG.info(f"{label}{pages}: running {engine} on {n_pages} pages ...")
             r = eng.run(sample, wd)
             if r.error or r.output is None:
-                _log(f"{label}: FAILED {r.error}; see {wd}")
-                failed += 1
-                continue
+                LOG.error(f"{label}: FAILED {r.error}; see {wd}")
+                return pdf, None
             shutil.copyfile(r.output, out)
             took = f" in {r.stats.wall_s:.0f}s" if r.stats else ""
-            _log(f"{label}: -> {out.name}{took}" + (f" ({r.extras['warning']})"
-                                                    if "warning" in r.extras else ""))
-            done += 1
-            outputs.append((pdf, out))
-    _log(f"done: {done} written, {skipped} skipped, {failed} failed")
+            msg = f"{label}: -> {out.name}{took}"
+            if "warning" in r.extras:
+                LOG.warning(f"{msg} ({r.extras['warning']})")
+            else:
+                LOG.info(msg)
+            return pdf, out
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=n_jobs) as ex:
+        for fut in as_completed([ex.submit(one, j) for j in todo]):
+            try:
+                pdf, out = fut.result()
+            except Exception as e:  # noqa: BLE001 - one PDF never stops the others
+                LOG.error(f"transcription crashed: {type(e).__name__}: {e}", exc_info=True)
+                failed += 1
+                continue
+            if out is None:
+                failed += 1
+            else:
+                done += 1
+                outputs[pdf] = out
+    LOG.info(f"done in {time.perf_counter() - t0:.0f}s: {done} written, {skipped} skipped, "
+             f"{failed} failed")
     if outputs:
-        _combine(outputs, run_dir, cfg)
-    _log(f"results in {run_dir}")
+        _combine([(pdf, outputs[pdf]) for pdf in order if pdf in outputs], run_dir, cfg)
+    LOG.info(f"results in {run_dir}")
     return failed
 
 
@@ -198,16 +244,19 @@ def _combine(outputs: list[tuple[Path, Path]], run_dir: Path, cfg: dict) -> None
     try:
         combined = combine(files, run_dir / "combined.musicxml")
     except Exception as e:  # noqa: BLE001 - the individual files are still there
-        _log(f"combine FAILED {type(e).__name__}: {e}")
+        LOG.error(f"combine FAILED {type(e).__name__}: {e}", exc_info=True)
         return
-    _log(f"combined {len(files)} files -> {combined.name}")
+    LOG.info(f"combined {len(files)} files -> {combined.name}")
     exe = find_musescore(cfg.get("musescore_cli"))
     if not exe:
-        _log("WARN MuseScore CLI not found (set musescore_cli in bench.yaml); no combined.mscz")
+        LOG.warning("MuseScore CLI not found (set musescore_cli in bench.yaml); no combined.mscz")
         return
     try:
         clean = to_mscz(combined, combined.with_suffix(".mscz"), exe)
-        _log("-> combined.mscz" + ("" if clean else " (MuseScore flagged differing bar counts/"
-                                    "lengths between parts and filled them; saved with -f)"))
+        if clean:
+            LOG.info("-> combined.mscz")
+        else:
+            LOG.warning("-> combined.mscz (MuseScore flagged differing bar counts/lengths "
+                        "between parts and filled them; saved with -f)")
     except Exception as e:  # noqa: BLE001
-        _log(f"combined.mscz FAILED {type(e).__name__}: {e}")
+        LOG.error(f"combined.mscz FAILED {type(e).__name__}: {e}")

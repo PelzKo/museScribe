@@ -7,7 +7,8 @@ Steps (all timed into the engine's runtime):
 3. homr on each crop (homr only reads 1-2 staff systems, crops make it usable on
    vocal scores and condensed parts)
 4. assemble (see assemble.py): per-bar source choice, directions, printed text,
-   multi-measure rests, percussion split by instrument labels
+   multi-measure rests, bars lined up with the printed bar numbers, percussion split
+   by instrument labels
 
 Config (bench.yaml):
   pipeline:
@@ -17,6 +18,7 @@ Config (bench.yaml):
     split_percussion: auto      # auto = score type drums; true/false to force
     crop_margins: [5, 4, 3]     # interlines above/below a staff group; retried in order
     text_onset: bar             # bar = words at the bar start (as in the GTs); estimated
+    align_bar_numbers: true     # rest bars where printed numbers / "[to] 97" cuts skip bars
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from .. import log as logmod
 from .. import musicxml
 from ..dataset import Sample
 from ..engines.audiveris import Audiveris
@@ -37,6 +40,21 @@ from ..rasterize import is_scan, rasterize
 from . import assemble as A
 from . import bars as B
 from . import layout
+from .layout import where
+
+
+LOG = logmod.get("pipeline")
+
+
+def _last_error(log: Path) -> str:
+    try:
+        lines = [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip()]
+    except OSError:
+        return "no output"
+    for ln in reversed(lines[-60:]):
+        if "Error" in ln or "Exception" in ln:
+            return ln.strip()[-200:]
+    return "no output"
 
 
 class Pipeline(Engine):
@@ -86,10 +104,52 @@ class Pipeline(Engine):
                         box = (max(0, int(left * sx)), max(0, int(top * sy_)),
                                min(im.width, int(right * sx)), min(im.height, int(bottom * sy_)))
                         out = crop_dir / f"s{k + 1:02d}-g{gi + 1}{tag}.png"
-                        im.crop(box).save(out)
+                        im.crop(box).save(out, compress_level=1)
                         jobs.append((k, gi, len(g), out))
                     k += 1
         return jobs
+
+    def _homr_batch(self, jobs: list, crop_dir: Path, log: Path, total: RunStats):
+        """(job, error or None) per crop job, in order. The persistent worker pool by
+        default; one `homr` process per crop with `pool: false` or extra_args."""
+        if not jobs:
+            return []
+        if not self.homr.use_pool():
+            out = []
+            for job in jobs:
+                img = job[3]
+                st = run_monitored(self.homr.page_cmd(img, crop_dir), log_path=log, cwd=crop_dir,
+                                   env=self.homr.env(), timeout_s=self.timeout_s)
+                total.add(st)
+                err = None
+                if st.timed_out:
+                    err = f"timeout after {self.timeout_s:.0f}s"
+                elif self.homr.find_output(img, crop_dir) is None:
+                    err = f"exit {st.exit_code}: {_last_error(log)}"
+                out.append((job, err))
+            return out
+        pool = self.homr.pool()
+        t0 = time.perf_counter()
+        futs = [pool.submit(job[3], self.timeout_s) for job in jobs]
+        results = [f.result() for f in futs]
+        wall = time.perf_counter() - t0
+        out = []
+        with log.open("a", encoding="utf-8") as f:
+            for job, r in zip(jobs, results):
+                f.write(f"$ homr {r.image}\n{r.log}\n[ok={r.ok} wall={r.wall_s:.1f}s "
+                        f"cpu={r.cpu_s:.1f}s{' timed_out' if r.timed_out else ''}]\n")
+                LOG.debug(f"homr {r.image.name}: {'ok' if r.ok else r.error} ({r.wall_s:.1f}s)")
+                out.append((job, None if r.ok else (r.error or "failed")))
+        # workers run side by side: count the batch's elapsed time, the summed CPU time,
+        # memory of the workers that were busy
+        busy = min(len(jobs), len(pool.workers))
+        rss = max((r.rss_mb for r in results), default=0.0)
+        st = RunStats(wall_s=wall, wall_clock_s=wall, cpu_user_s=sum(r.cpu_s for r in results),
+                      peak_rss_mb=rss * busy, peak_single_rss_mb=rss,
+                      exit_code=0, timed_out=any(r.timed_out for r in results),
+                      commands=[f"homr pool ({len(pool.workers)} workers): {len(jobs)} crops"])
+        total.add(st)
+        return out
 
     def _run(self, sample: Sample, workdir: Path, res: EngineResult) -> None:
         # bad meta fails now, not after the engines ran
@@ -134,29 +194,38 @@ class Pipeline(Engine):
         #    margin, fine at another), so failed crops are retried with other margins
         roots: dict[tuple[int, int], object] = {}
         stats = A.Stats()
+        systems = [sy for p in pages for sy in p.systems]
+        reasons: dict[tuple[int, int], list[str]] = {}
         todo = jobs
+        LOG.info(f"homr on {len(jobs)} crops of {sum(not sy.skip for sy in systems)} systems")
+        t_h = time.perf_counter()
         for attempt, margin in enumerate(margins):
             if attempt:
                 wanted = {(k, gi) for k, gi, _, _ in todo}
                 todo = [j for j in self._crop_jobs(pages, images, crop_dir, margin, f"-m{margin:g}")
                         if (j[0], j[1]) in wanted]
             failed = []
-            for job in todo:
+            for job, err in self._homr_batch(todo, crop_dir, log, total):
                 k, gi, n_staves, img = job
-                st = run_monitored(self.homr.page_cmd(img, crop_dir), log_path=log, cwd=crop_dir,
-                                   env=self.homr.env(), timeout_s=self.timeout_s)
-                total.add(st)
-                out = self.homr.find_output(img, crop_dir)
-                try:
-                    if out is None or st.timed_out:
-                        raise ValueError("no output")
-                    roots[(k, gi)] = musicxml.load(out)
-                except Exception:  # noqa: BLE001 - a broken crop is just a missing candidate
+                if err is None:
+                    out = self.homr.find_output(img, crop_dir)
+                    try:
+                        if out is None:
+                            raise ValueError("no MusicXML written")
+                        roots[(k, gi)] = musicxml.load(out)
+                    except Exception as e:  # noqa: BLE001 - a broken crop is just a missing candidate
+                        err = f"unreadable output: {e}"
+                if err is not None:
+                    reasons.setdefault((k, gi), []).append(f"margin {margin:g}: {err}")
                     failed.append(job)
+            if failed and attempt + 1 < len(margins):
+                LOG.debug(f"homr: {len(failed)} crops failed at margin {margin:g}, retrying")
             todo = failed
             if not todo:
                 break
         stats.homr_crops_failed = len(todo)
+        stats.failed_crops = [(k, gi, n, img, reasons.get((k, gi), [])) for k, gi, n, img in todo]
+        LOG.info(f"homr done in {time.perf_counter() - t_h:.0f}s: {len(roots)}/{len(jobs)} crops read")
 
         # 4. assemble
         t1 = time.perf_counter()
@@ -173,7 +242,11 @@ class Pipeline(Engine):
         (workdir / "pipeline.json").write_text(json.dumps(summary, indent=2))
         res.extras["summary"] = workdir / "pipeline.json"
         if stats.homr_crops_failed:
-            res.extras["warning"] = f"homr failed on {stats.homr_crops_failed}/{len(jobs)} crops"
+            exp = stats.homr_crops_expected
+            res.extras["warning"] = (f"homr failed on {stats.homr_crops_failed}/{len(jobs)} crops"
+                                     + (f", {exp} of them rest-only systems" if exp else ""))
+            log_fn = LOG.info if exp == stats.homr_crops_failed else LOG.warning
+            log_fn(res.extras["warning"] + " (each listed above; details in engine.log)")
 
     def split(self, sample: Sample) -> bool:
         split_cfg = self.cfg.get("split_percussion", "auto")
@@ -202,7 +275,20 @@ class Pipeline(Engine):
                 homr_bars[(k, gi)] = bars
             else:
                 stats.homr_crops_failed += 1
+                got = max((b.staves for b in bars), default=0)
+                LOG.warning(f"homr output of {where(systems, k)} staff group {gi + 1} unusable: "
+                            + (f"read {got} staves, expected {n_staves}" if bars else "no bars")
+                            + " -> Audiveris bars used")
         aud_bars = A.group_bars(A.audiveris_bars(a_roots, systems, D), systems)
+        for k, gi, n_staves, img, why in stats.failed_crops:
+            ab = aud_bars.get((k, gi))
+            # "No noteheads found" on a staff of rests is homr working as designed
+            expected = bool(ab) and all(b.rest_only for b in ab) and all("noteheads" in w for w in why)
+            stats.homr_crops_expected += expected
+            (LOG.info if expected else LOG.warning)(
+                f"homr failed on {where(systems, k)} staff group {gi + 1} ({n_staves} staves)"
+                f"{' (Audiveris reads only rests there: expected)' if expected else ''} -> Audiveris "
+                f"bars used; {'; '.join(why)}; crop {img}")
         prefer = self.cfg.get("prefer") or "auto"
         if prefer == "auto":
             # homr reads scans better; on born-digital PDFs Audiveris is near perfect
@@ -219,6 +305,8 @@ class Pipeline(Engine):
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
         A.expand_multirests(plans, homr_bars, D, stats)
+        if self.cfg.get("align_bar_numbers", True):
+            A.align_bars(plans, D, stats, LOG)
         names = {}
         # regrouped tracks are not the Audiveris parts, their names don't apply
         for r in a_roots[:1] if not any(sy.regrouped for sy in systems) else []:
@@ -228,6 +316,12 @@ class Pipeline(Engine):
                                      doubling=bool(sample.meta.get("doubling")),
                                      transpose=sample.meta.get("transpose"))
         score = A.write_score(parts, times, credits, D)
+        for note in stats.notes:
+            if not note.startswith("bar numbers:"):     # those were logged as they happened
+                LOG.info(f"assemble: {note}")
+        LOG.info(f"assembled {len(times)} bars in {len(parts)} part(s); bar sources "
+                 f"{dict(stats.bars)}; {stats.multirest_bars_added} multi-rest and "
+                 f"{stats.alignment_bars_added} alignment rest bars added")
         self.last_plans = plans
         summary = {**stats.to_dict(), "divisions": D,
                    "systems_bars": [p.n for p in plans],

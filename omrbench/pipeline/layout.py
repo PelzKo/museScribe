@@ -239,6 +239,14 @@ def load(omr: Path) -> list[Page]:
     return pages
 
 
+def where(systems: list[System], k: int) -> str:
+    """Global system k for messages: page, system on that page, and the 1-based global
+    number that skip_systems uses."""
+    sy = systems[k]
+    on_page = [s for s in systems if s.page == sy.page].index(sy) + 1
+    return f"page {sy.page} system {on_page} (#{k + 1})"
+
+
 def regroup(pages: list[Page], keep_bottom: int | None = None, singles: bool = False,
             skip: set[int] | None = None) -> None:
     """Change what the pipeline reads as staff groups, in place.

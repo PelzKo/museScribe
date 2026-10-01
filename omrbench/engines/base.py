@@ -4,8 +4,11 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .. import log as logmod
 from ..dataset import Sample
 from ..monitor import RunStats
+
+LOG = logmod.get("engine")
 
 
 @dataclass
@@ -70,14 +73,21 @@ class Engine:
     def run(self, sample: Sample, workdir: Path) -> EngineResult:
         workdir.mkdir(parents=True, exist_ok=True)
         res = EngineResult(self.name, sample.id)
+        crashed = False
         try:
             self._run(sample, workdir, res)
         except Exception as e:  # engine failures are results, not crashes
             res.error = f"{type(e).__name__}: {e}"
+            LOG.error(f"{self.name} crashed: {res.error} (work dir {workdir})", exc_info=True)
+            crashed = True
         if res.output is None and res.error is None:
             res.error = "engine produced no MusicXML"
         if res.stats and res.stats.timed_out and not res.error:
             res.error = f"timeout after {self.timeout_s:.0f}s"
+        if res.error and not crashed:
+            LOG.error(f"{self.name} failed: {res.error} (work dir {workdir})")
+        elif res.extras.get("warning"):
+            LOG.debug(f"{self.name}: {res.extras['warning']}")
         res.extras.setdefault("log", workdir / "engine.log")
         (workdir / "result.json").write_text(json.dumps(res.to_dict(), indent=2))
         return res

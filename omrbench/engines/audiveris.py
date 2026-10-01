@@ -6,10 +6,13 @@ section 7 of the research notes.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+from collections import Counter
 from pathlib import Path
 
+from .. import log as logmod
 from .. import musicxml
 from ..dataset import Sample
 from ..monitor import run_monitored
@@ -18,6 +21,10 @@ from .base import Engine, EngineResult
 
 SWITCH = "org.audiveris.omr.sheet.ProcessingSwitches."
 LANG = "org.audiveris.omr.text.Language.defaultSpecification"
+# sheets of a book transcribed in parallel: ~2x faster, but Audiveris 5.11 has a race there
+# ("this.parameters" is null NPEs) that drops symbols (an accent in a test) and kills some
+# books; opt-in (parallel_sheets: true), a failed parallel run is redone serially
+PARALLEL = "org.audiveris.omr.sheet.Book.processAllStubsInParallel"
 
 # meta.yaml boolean key -> Audiveris processing switch
 META_SWITCHES = {
@@ -32,6 +39,37 @@ META_SWITCHES = {
     "chord_names": "chordNames",
     "poor_input": "poorInputMode",
 }
+
+
+LOG = logmod.get("audiveris")
+_LOG_LINE = re.compile(r"^(WARN|ERROR)\s+\[([^\]]*)\]\s+\S+\s+\d+\s+\|\s*(.*)$")
+
+
+def report_log(log: Path) -> None:
+    """Audiveris ERROR lines -> WARNING, its WARN lines -> DEBUG (deduplicated, counted)."""
+    try:
+        text = log.read_text(errors="replace")
+    except OSError:
+        return
+    seen: Counter = Counter()
+    first: dict[tuple[str, str], str] = {}
+    for line in text.splitlines():
+        m = _LOG_LINE.match(line.strip())
+        if m:
+            key = (m.group(1), m.group(3))
+            seen[key] += 1
+            first.setdefault(key, m.group(2))
+    for (level, msg), n in seen.items():
+        where = first[(level, msg)]
+        more = f" (x{n})" if n > 1 else ""
+        if level == "ERROR":
+            LOG.warning(f"Audiveris error [{where}]: {msg}{more}")
+        else:
+            LOG.debug(f"Audiveris warning [{where}]: {msg}{more}")
+    n_warn = sum(n for (lv, _), n in seen.items() if lv == "WARN")
+    n_err = sum(n for (lv, _), n in seen.items() if lv == "ERROR")
+    if n_warn or n_err:
+        LOG.info(f"Audiveris log: {n_err} errors, {n_warn} warnings (details in {log})")
 
 
 class Audiveris(Engine):
@@ -65,8 +103,10 @@ class Audiveris(Engine):
         except Exception as e:
             return False, str(e)
 
-    def constants(self, sample: Sample) -> dict[str, str]:
+    def constants(self, sample: Sample, parallel: bool | None = None) -> dict[str, str]:
         consts: dict[str, str] = {}
+        if self.cfg.get("parallel_sheets", False) if parallel is None else parallel:
+            consts[PARALLEL] = "true"
         for k, v in (self.cfg.get("constants") or {}).items():
             consts[k] = str(v).lower() if isinstance(v, bool) else str(v)
         if self.cfg.get("use_metadata"):
@@ -83,13 +123,14 @@ class Audiveris(Engine):
                 consts[k] = str(v).lower() if isinstance(v, bool) else str(v)
         return consts
 
-    def _cmd(self, sample: Sample, src: Path, out_dir: Path, sheet: int | None = None) -> list:
+    def _cmd(self, sample: Sample, src: Path, out_dir: Path, sheet: int | None = None,
+             parallel: bool | None = None) -> list:
         # no -save: the .omr is written anyway, and -save makes Audiveris 5.11 reload
         # stored sheets before export, which can crash (RunTable.afterUnmarshal NPE)
         cmd = [self.exe, "-batch", "-transcribe", "-export", "-output", out_dir]
         if sheet is not None:
             cmd += ["-sheets", str(sheet)]
-        for k, v in self.constants(sample).items():
+        for k, v in self.constants(sample, parallel).items():
             cmd += ["-constant", f"{k}={v}"]
         cmd += self.cfg.get("extra_args") or []
         return cmd + ["--", src]
@@ -108,14 +149,37 @@ class Audiveris(Engine):
         src = workdir / "input.pdf"
         shutil.copyfile(sample.pdf, src)
         log = workdir / "engine.log"
+        log.unlink(missing_ok=True)
+        LOG.debug(f"Audiveris on {res.pages} pages: {sample.pdf}")
+        parallel = PARALLEL in self.constants(sample)
         res.stats = run_monitored(self._cmd(sample, src, out_dir), log_path=log, env=self.env(),
                                   timeout_s=self.timeout_s)
+        LOG.debug(f"Audiveris finished in {res.stats.wall_s:.0f}s (exit {res.stats.exit_code}, "
+                  f"peak {res.stats.peak_rss_mb:.0f} MB)")
+        if res.stats.timed_out:
+            LOG.error(f"Audiveris timed out after {self.timeout_s:.0f}s; see {log}")
         mxls = self._exports(out_dir)
+        if not mxls and parallel and res.pages > 1 and not res.stats.timed_out:
+            LOG.warning(f"Audiveris parallel book run exported nothing (exit {res.stats.exit_code}) "
+                        f"after {res.stats.wall_s:.0f}s; retrying with the sheets one after another")
+            shutil.rmtree(out_dir)
+            out_dir.mkdir(parents=True)
+            with log.open("a") as f:
+                f.write("\n### parallel book run failed; serial retry\n")
+            st = run_monitored(self._cmd(sample, src, out_dir, parallel=False), log_path=log,
+                               env=self.env(), timeout_s=self.timeout_s)
+            res.stats.add(st)
+            res.stats.exit_code = st.exit_code
+            mxls = self._exports(out_dir)
         if not mxls and res.pages > 1 and not res.stats.timed_out:
             # book-level passes can still crash on reloading a sheet; transcribing each
             # sheet as its own book avoids them, the pages are concatenated below
+            LOG.warning(f"Audiveris book run exported nothing (exit {res.stats.exit_code}); "
+                        f"retrying sheet by sheet")
             self._run_per_sheet(sample, src, out_dir, log, res)
+            report_log(log)
             return
+        report_log(log)
         if not mxls:
             res.error = f"no export (exit {res.stats.exit_code}); see engine.log"
             return
@@ -129,6 +193,7 @@ class Audiveris(Engine):
         musicxml.write(merged, res.output)
         if res.stats.exit_code not in (0, None):
             res.extras["warning"] = f"exit code {res.stats.exit_code} but export present"
+            LOG.warning(f"Audiveris exit code {res.stats.exit_code} but export present")
 
     def _run_per_sheet(self, sample: Sample, src: Path, out_dir: Path, log: Path,
                        res: EngineResult) -> None:
@@ -164,3 +229,4 @@ class Audiveris(Engine):
         if failed:
             msg += f"; sheets {failed} produced no export"
         res.extras["warning"] = msg
+        LOG.warning(msg)

@@ -25,6 +25,7 @@ import psutil
 
 from . import config as config_mod
 from . import dataset
+from . import log as logmod
 from .engines import Engine, EngineResult
 from .scoring import score
 
@@ -63,8 +64,14 @@ def host_info() -> dict:
     return info
 
 
+LOG = logmod.get("run")
+
+
 def _log(msg: str) -> None:
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+    if msg.startswith("WARN "):
+        LOG.warning(msg[5:])
+    else:
+        LOG.info(msg)
 
 
 def run_engines(engines: list[Engine], samples: list[dataset.Sample], run_dir: Path,
@@ -83,7 +90,8 @@ def run_engines(engines: list[Engine], samples: list[dataset.Sample], run_dir: P
             if eng.kind == "external" and eng.name not in s.external:
                 continue
             _log(f"{eng.name:>16} | {s.id}: running ...")
-            r = eng.run(s, wd)
+            with logmod.context(s.id):
+                r = eng.run(s, wd)
             st = r.stats
             took = f"{st.wall_s:.1f}s, {st.peak_rss_mb:.0f} MB" if st else "external"
             _log(f"{eng.name:>16} | {s.id}: {'FAILED ' + r.error if r.error else 'ok'} ({took})")
@@ -158,8 +166,6 @@ def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None
         prefix_matching=False, run_id=None, resume=False, do_score=True) -> Path:
     samples, warnings = dataset.discover(Path(cfg["data_dir"]), samples_only, cfg.get("musescore_cli"),
                                          exclude=samples_exclude, prefix=prefix_matching)
-    for w in warnings:
-        _log("WARN " + w)
     if not samples:
         raise SystemExit(f"no samples in {cfg['data_dir']}")
     ext = {n for s in samples for n in s.external}
@@ -167,6 +173,9 @@ def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None
     run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = Path(cfg["results_dir"]) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    logmod.setup(run_dir)
+    for w in warnings:
+        LOG.warning(w)
 
     versions = {}
     usable = []
@@ -194,6 +203,7 @@ def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None
 def rescore(run_dir: Path, cfg: dict | None = None) -> None:
     from .report import write_report
 
+    logmod.setup(run_dir)
     manifest = json.loads((run_dir / "manifest.json").read_text())
     cfg = cfg or manifest["config"]
     samples, _ = dataset.discover(Path(cfg["data_dir"]), None, cfg.get("musescore_cli"))

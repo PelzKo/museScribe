@@ -8,13 +8,18 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
+from .. import log as logmod
 from .. import musicxml
 from ..dataset import Sample
 from ..monitor import RunStats, run_monitored
 from ..rasterize import rasterize
 from .base import Engine, EngineResult
+
+
+LOG = logmod.get("pagewise")
 
 
 class PagewiseEngine(Engine):
@@ -42,11 +47,13 @@ class PagewiseEngine(Engine):
     def page_cmd(self, image: Path, out_dir: Path) -> list:
         raise NotImplementedError
 
+    def use_pool(self) -> bool:
+        return False
+
     def find_output(self, image: Path, out_dir: Path) -> Path | None:
         raise NotImplementedError
 
     def _run(self, sample: Sample, workdir: Path, res: EngineResult) -> None:
-        import time
         dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
         t0 = time.perf_counter()
         cache = workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi"
@@ -60,14 +67,39 @@ class PagewiseEngine(Engine):
         pdir.mkdir(parents=True)
         total = RunStats()
         roots, failed = [], []
+        locals_ = []
         for img in pages:
             local = pdir / img.name
             shutil.copyfile(img, local)
-            st = run_monitored(self.page_cmd(local, pdir), log_path=workdir / "engine.log",
-                               cwd=pdir, env=self.env(), timeout_s=self.timeout_s)
-            total.add(st)
+            locals_.append(local)
+        log = workdir / "engine.log"
+        if self.use_pool():
+            pool = self.pool()
+            t1 = time.perf_counter()
+            results = [f.result() for f in [pool.submit(p, self.timeout_s) for p in locals_]]
+            wall = time.perf_counter() - t1
+            rss = max((r.rss_mb for r in results), default=0.0)
+            with log.open("a", encoding="utf-8") as f:
+                for r in results:
+                    f.write(f"$ {self.kind} {r.image}\n{r.log}\n[ok={r.ok} wall={r.wall_s:.1f}s]\n")
+                    if not r.ok:
+                        LOG.warning(f"{self.kind} failed on {r.image.name}: {r.error}")
+            total.add(RunStats(wall_s=wall, wall_clock_s=wall, cpu_user_s=sum(r.cpu_s for r in results),
+                               peak_rss_mb=rss * min(len(results), len(pool.workers)),
+                               peak_single_rss_mb=rss, exit_code=0,
+                               timed_out=any(r.timed_out for r in results)))
+            timed_out = {r.image.name for r in results if r.timed_out}
+        else:
+            timed_out = set()
+            for local in locals_:
+                st = run_monitored(self.page_cmd(local, pdir), log_path=log,
+                                   cwd=pdir, env=self.env(), timeout_s=self.timeout_s)
+                total.add(st)
+                if st.timed_out:
+                    timed_out.add(local.name)
+        for img, local in zip(pages, locals_):
             out = self.find_output(local, pdir)
-            if out is None or st.timed_out:
+            if out is None or local.name in timed_out:
                 failed.append(img.name)
                 continue
             try:
@@ -77,6 +109,7 @@ class PagewiseEngine(Engine):
         res.stats = total
         if failed:
             res.extras["failed_pages"] = ", ".join(failed)
+            LOG.warning(f"{self.kind}: {len(failed)}/{len(pages)} pages failed: {', '.join(failed)}")
         if not roots:
             res.error = f"all pages failed ({', '.join(failed)}); see engine.log"
             return
@@ -92,6 +125,15 @@ class Homr(PagewiseEngine):
 
     def page_cmd(self, image, out_dir):
         return [self.exe, *(self.cfg.get("extra_args") or []), image]
+
+    def use_pool(self) -> bool:
+        """Persistent workers (homr_pool.py); CLI options need the one-process-per-image path."""
+        return bool(self.cfg.get("pool", True)) and not self.cfg.get("extra_args")
+
+    def pool(self):
+        from .homr_pool import get_pool
+        return get_pool(self.venv / "bin" / "python", self.cfg.get("workers", "auto"),
+                        int(self.cfg.get("threads", 2)), self.env(), int(self.cfg.get("nice", 0)))
 
     def find_output(self, image, out_dir):
         p = image.with_suffix(".musicxml")

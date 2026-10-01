@@ -69,6 +69,16 @@ Runs one engine (`--engine`, default `pipeline`) on every `*.pdf` in the selecte
 `<name>.pdf`. No ground truth needed, nothing is scored, no report. PDFs that already have a
 `<name>.musicxml` are skipped unless `--force`.
 
+Several PDFs run at once (`--jobs N`, default `transcribe_jobs: 2` in `bench.yaml`), longest
+first, so Audiveris on one PDF overlaps homr on another. All homr crops go to one pool of
+persistent homr workers (default 8 workers x 2 ONNX threads on a 16-thread CPU, ~1 GB RAM each;
+`workers` / `threads` under the `homr` settings). On the 8-core laptop this was tuned on, a
+crop takes ~0.9 s instead of ~3.5 s. Measured on 4 anastasia-4 parts (25 pages): 1380 s
+before, 554 s now; 3 PDFs at once or niced workers were slower. `parallel_sheets: true` (Audiveris
+settings) processes the sheets of a PDF in parallel, ~2x faster, but Audiveris 5.11 has a race
+there that drops symbols (`"this.parameters" is null` in its log) and kills some PDFs, so it is
+off; a parallel run that exports nothing is redone serially.
+
 `results/transcribe-<timestamp>/` then holds:
 
 - `<sample>--<name>.musicxml`: a copy of every selected PDF's output (new or already existing)
@@ -79,6 +89,12 @@ Runs one engine (`--engine`, default `pipeline`) on every `*.pdf` in the selecte
   saved with `-f`. The `.mscz` needs the MuseScore CLI (`musescore_cli` in `bench.yaml`, `mscore` on
   PATH, or the default Windows MuseScore 4 install when running in WSL)
 - `<engine>/<sample>--<name>/`: engine work dirs
+- `run.log`: everything the run reported, one line each:
+  `2026-10-01 10:39:12 | WARNING | anastasia-4--Horn | homr failed on page 3 system 2 (#12) ...`
+  (time, level DEBUG/INFO/WARNING/ERROR, the PDF it is about, message). Every failed homr crop
+  with its reason and crop image, Audiveris errors (its warnings at DEBUG), bar-number
+  alignment (rest bars added, numbers ignored as misread, places where an extra bar was read),
+  engine crashes with traceback. The console shows INFO and up. `omrbench run` writes one too.
 
 Per-PDF meta: `<name>.yaml` next to `<name>.pdf`, merged over the folder's `meta.yaml` (its keys
 win). Extra key `pages: "2-4,7"` (1-based; a list `[2, 3, 4]` works too) transcribes only those pages
@@ -196,7 +212,18 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
 7. **Multi-measure rests** are expanded from the printed evidence: the count above the rest,
    printed ranges ("15-17"), and gaps in the printed bar numbers. Systems of rests only are
    rebuilt from that evidence (neither engine finds their barlines reliably). A tiny bar at
-   the end of a page (page-turn reminder) is dropped.
+   the end of a page (page-turn reminder) is dropped. Ranges over 99 bars are OCR slips and
+   ignored; a homr rest count the printed numbers leave no room for is not used.
+   **Bar numbers line up with the printed ones** (`align_bar_numbers: true`): wherever the
+   printed numbers jump ahead of the output, rest bars are inserted, so output bar n is
+   printed bar n in every part. A cut mark `[to] 97` (or `[to 16]`) printed at a barline means
+   the bar there is bar 97 and the bars before it were cut from this part: they become rests.
+   Without a cut mark the rests go after the last rest bar before the number (an unread
+   multi-rest count), else right before it. Lettered bars added in a revision (`131A`,
+   `[to] 132C`) count as bars of their own. OCR misreads numbers, so the step function that
+   agrees with most numbers is used; a single stray number shifts nothing. Bars are never
+   removed, except empty bars before printed bar 1. Where the output has more bars than the
+   numbers say (an extra bar was read), `run.log` says where.
 8. **Percussion split:** for `type: drums` (or `split_instruments: true`), a shared staff is
    split into one part per instrument at the printed labels ("Timpani", "Bell Tree", ...).
    Instrument names come from `instruments:` in `meta.yaml`, or else from the header lines that
@@ -204,7 +231,7 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    instrument.
 
 `<run>/pipeline/<sample>/pipeline.json` records what was taken from where (bars per source,
-multi-rest expansions, crops that failed).
+multi-rest expansions, alignment rest bars, crops that failed); `<run>/run.log` has the details.
 
 ## Layout
 

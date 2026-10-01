@@ -8,6 +8,8 @@ Per system:
 4. Audiveris dynamics/wedges/tempo and layout text are attached by bar and onset
 5. multi-measure rests are expanded from printed bar ranges ("15-17"), counts printed
    above the rest, or homr <multiple-rest>
+6. bars are lined up with the printed bar numbers and cut marks ("[to] 97"): missing
+   bars (cuts, unread multi-rest counts) become rest bars, so bar n is printed bar n
 Then staff tracks become parts; percussion tracks are split by instrument labels.
 """
 from __future__ import annotations
@@ -21,7 +23,7 @@ from lxml import etree
 
 from . import bars as B
 from . import text as T
-from .layout import Page, System
+from .layout import Page, System, where
 
 
 @dataclass
@@ -36,6 +38,8 @@ class SysPlan:
     pending: dict[tuple[int, int], str] = field(default_factory=dict) # "to Flute": from the next played bar
     cues: set[tuple[int, int]] = field(default_factory=set)           # (group, bar) cue notes removed
     printed: dict[int, int] = field(default_factory=dict)             # bar -> printed bar number
+    jumps: dict[int, tuple[int, str]] = field(default_factory=dict)   # bar -> "[to] 97C" there
+    lettered: dict[int, tuple[int, str]] = field(default_factory=dict) # bar -> printed "131A"
     mr: dict[int, tuple[str, int, int]] = field(default_factory=dict) # bar -> multi-rest evidence
     evidence: list[tuple[float, str, int, int]] = field(default_factory=list)  # x, kind, a, b
     aud: list[B.Bar] | None = None       # Audiveris bars of the system, if their count is n
@@ -46,16 +50,21 @@ class Stats:
     bars: Counter = field(default_factory=Counter)      # chosen source per staff-group bar
     systems: Counter = field(default_factory=Counter)   # how the bar count was decided
     multirest_bars_added: int = 0
+    alignment_bars_added: int = 0
     homr_crops_failed: int = 0
     cue_notes_removed: int = 0
     words: int = 0
     notes: list[str] = field(default_factory=list)
+    failed_crops: list = field(default_factory=list)   # (system, group, staves, image, reasons)
+    homr_crops_expected: int = 0                         # of the failed: rests only, nothing to read
 
     def to_dict(self) -> dict:
         return {"bars": dict(self.bars), "systems": dict(self.systems),
                 "multirest_bars_added": self.multirest_bars_added,
+                "alignment_bars_added": self.alignment_bars_added,
                 "homr_crops_failed": self.homr_crops_failed, "words": self.words,
                 "cue_notes_removed": self.cue_notes_removed,
+                "homr_crops_failed_rest_only": self.homr_crops_expected,
                 "notes": self.notes}
 
 
@@ -359,6 +368,18 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if plan and plan.n and not pl.above:
                 # bar numbers are printed below the start of their bar
                 plan.printed.setdefault(_bar_at(plan, pl.line.x + pl.line.h), n)
+        for pl, n in pt.jumps:
+            plan = by_sys.get(id(pl.system))
+            if plan and plan.n:
+                # "[to] 97" starts just left of the barline where bar 97 begins; at the
+                # system end it names the first bar of the next system (index n)
+                edges = [l for l, _ in plan.xs] + [plan.xs[-1][1]]
+                i = min(range(len(edges)), key=lambda e: abs(edges[e] - pl.line.x))
+                plan.jumps[i] = n
+        for pl, n in pt.lettered:
+            plan = by_sys.get(id(pl.system))
+            if plan and plan.n:
+                plan.lettered.setdefault(_bar_at(plan, pl.line.x + pl.line.h), n)
         _multirest_evidence(pt, by_sys)
     return credits, instruments
 
@@ -401,6 +422,10 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
     rest_only = {(k, i): all(g[i].rest_only for g in p.chosen.values()) if p.chosen else False
                  for k, p in enumerate(plans) for i in range(p.n)}
     printed = {(k, i): v for k, p in enumerate(plans) for i, v in p.printed.items()}
+    for k, p in enumerate(plans):
+        for i, (kind, a, _) in p.mr.items():
+            if kind == "range":
+                printed.setdefault((k, i), a)     # "15-17": that bar is bar 15
     known: dict[tuple[int, int], int] = {}
     unknown: set[tuple[int, int]] = set()
     homr_count: dict[tuple[int, int], int] = {}
@@ -412,6 +437,10 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
                 known[(k, i)] = a
             elif (k, i) not in known:
                 count = b - a + 1
+                if count > MAX_GAP:
+                    # "149-1488": an OCR'd range that long is a misread, not a rest
+                    stats.notes.append(f"system {k + 1}: range {a}-{b} ignored (over {MAX_GAP} bars)")
+                    continue
                 nxt = printed.get((k, i + 1)) or (printed.get((k + 1, 0)) if i + 1 >= p.n else None)
                 if nxt is not None and a < nxt <= a + 99 and nxt - a != count:
                     stats.notes.append(f"system {k + 1}: range {a}-{b}, next bar number {nxt}"
@@ -435,12 +464,24 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
             continue
         prev = next(((j, printed[glob[j]]) for j in range(pos - 1, -1, -1) if glob[j] in printed), None)
         nxt = next(((j, printed[glob[j]]) for j in range(pos + 1, len(glob)) if glob[j] in printed), None)
+        size = lambda j: known.get(glob[j], 1)
         if prev and nxt and not any(glob[j] in unknown for j in range(prev[0] + 1, nxt[0]) if j != pos):
-            size = lambda j: known.get(glob[j], 1)
             here = prev[1] + sum(size(j) for j in range(prev[0], pos))
             count = nxt[1] - here - sum(size(j) for j in range(pos + 1, nxt[0]))
             if 2 <= count <= 99:
                 known[key] = count
+                continue
+            if count <= 1:
+                stats.notes.append(f"system {key[0] + 1}: bar {key[1] + 1} not a multi-rest "
+                                   f"(printed {prev[1]} and {nxt[1]} leave no room)")
+                continue
+        elif prev is None and nxt and not any(glob[j] in unknown for j in range(0, nxt[0]) if j != pos):
+            # before the first printed number the piece is taken to start at bar 1: only to
+            # veto a count (the empty stack before a start repeat is no 8-bar rest)
+            here = 1 + sum(size(j) for j in range(0, pos))
+            if nxt[1] - here - sum(size(j) for j in range(pos + 1, nxt[0])) <= 1:
+                stats.notes.append(f"system {key[0] + 1}: bar {key[1] + 1} not a multi-rest "
+                                   f"(printed {nxt[1]} follows too soon)")
                 continue
         if key in homr_count:
             known[key] = homr_count[key]
@@ -467,7 +508,9 @@ def drop_courtesy_bars(plans: list[SysPlan], stats: Stats) -> None:
             plan.xs.pop()
             plan.mr.pop(plan.n - 1, None)
             plan.printed.pop(plan.n - 1, None)
+            plan.lettered.pop(plan.n - 1, None)
             plan.n -= 1
+            plan.jumps = {min(j, plan.n): v for j, v in plan.jumps.items()}
             stats.notes.append(f"system {k + 1}: dropped {(st.right - st.left) / il:.1f}-interline"
                                " rest bar at the system end")
 
@@ -524,16 +567,34 @@ def resegment_rest_systems(plans: list[SysPlan], D: int, stats: Stats) -> None:
             plan.chosen[gi] = new
         plan.times = [plan.times[0]] * m
         plan.xs = [(bounds[i], bounds[i + 1]) for i in range(m)]
+        plan.jumps = {(m if j >= plan.n else j): v for j, v in plan.jumps.items()}
+        plan.lettered = {}
         plan.n = m
         plan.mr = {i: ("range", s["number"], s["number"] + s["count"] - 1) if s["kind"] == "range"
                    else ("count", s["count"], s["count"]) for i, s in enumerate(segs) if s["count"]}
         plan.printed = {i: s["number"] for i, s in enumerate(segs) if s["number"] is not None}
 
 
+def _shift(d: dict, at: int, by: int, keyed_by_group: bool = False) -> dict:
+    """Re-index a per-bar dict after `by` bars were inserted before bar `at`."""
+    if keyed_by_group:
+        return {(g, j + (by if j >= at else 0)): v for (g, j), v in d.items()}
+    return {j + (by if j >= at else 0): v for j, v in d.items()}
+
+
+def _shift_set(s: set, at: int, by: int) -> set:
+    return {(g, j + (by if j >= at else 0)) for g, j in s}
+
+
 def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) -> None:
     drop_courtesy_bars(plans, stats)
     resegment_rest_systems(plans, D, stats)
     counts = _multirest_counts(plans, homr, stats)
+    for plan in plans:
+        # "15-17" over a rest: its first bar is printed bar 15
+        for i, (kind, a, _) in plan.mr.items():
+            if kind == "range" and i < plan.n:
+                plan.printed.setdefault(i, a)
     for k, plan in enumerate(plans):
         for i in sorted((i for (kk, i) in counts if kk == k), reverse=True):
             count = counts[(k, i)]
@@ -550,8 +611,288 @@ def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) ->
             plan.xs[i:i + 1] = [plan.xs[i]] * count
             plan.labels = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.labels.items()}
             plan.pending = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.pending.items()}
+            plan.printed = _shift(plan.printed, i + 1, count - 1)
+            plan.jumps = _shift(plan.jumps, i + 1, count - 1)
+            plan.lettered = _shift(plan.lettered, i + 1, count - 1)
+            plan.cues = _shift_set(plan.cues, i + 1, count - 1)
             plan.n += count - 1
             stats.multirest_bars_added += count - 1
+
+
+# ------------------------------------------------------------------------ bar numbers
+
+MAX_GAP = 99            # longest multi-rest / cut taken from printed numbers
+ALIGN_PENALTY = 1.2     # a gap must be backed by more than one printed bar number ...
+JUMP_WEIGHT = 1.5       # ... or by a cut mark ("[to] 97"), which is explicit
+
+
+@dataclass
+class _Obs:
+    j: int              # global bar index
+    value: int          # position of that bar in the printed numbering (lettered bars count)
+    weight: float
+    kind: str           # number | jump
+    label: str = ""     # as printed: "97", "131A"
+
+    @property
+    def offset(self) -> int:
+        return self.value - (self.j + 1)
+
+
+def _insert_rests(plan: SysPlan, i: int, count: int, D: int) -> None:
+    """`count` rest bars before bar i of the plan (i == n: at its end)."""
+    if not plan.n:
+        return
+    ref = min(i, plan.n - 1)
+    time = plan.times[i - 1] if i > 0 else plan.times[0]
+    length = B.bar_length(time, D)
+    for gi, g in plan.chosen.items():
+        staves = g[ref].staves
+        g[i:i] = [B.rest_bar(staves, length, D) for _ in range(count)]
+    plan.times[i:i] = [time] * count
+    x = plan.xs[i][0] if i < plan.n else plan.xs[-1][1]
+    plan.xs[i:i] = [(x, x)] * count
+    plan.labels = _shift(plan.labels, i, count, keyed_by_group=True)
+    plan.pending = _shift(plan.pending, i, count, keyed_by_group=True)
+    plan.printed = _shift(plan.printed, i, count)
+    plan.jumps = _shift(plan.jumps, i, count)
+    plan.lettered = _shift(plan.lettered, i, count)
+    plan.cues = _shift_set(plan.cues, i, count)
+    plan.n += count
+
+
+def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
+    """Remove bar i of plan k; its directions (tempo, text) move to the next bar."""
+    plan = plans[k]
+    nxt = (k, i + 1) if i + 1 < plan.n else next(((kk, 0) for kk in range(k + 1, len(plans))
+                                                   if plans[kk].n), None)
+    for gi, g in plan.chosen.items():
+        dirs = [e for e in g[i].items if e.tag == "direction"]
+        if dirs and nxt is not None and gi in plans[nxt[0]].chosen:
+            plans[nxt[0]].chosen[gi][nxt[1]].items[0:0] = dirs   # index before the delete
+        del g[i]
+    del plan.times[i]
+    del plan.xs[i]
+    for attr in ("labels", "pending"):
+        d = getattr(plan, attr)
+        setattr(plan, attr, _shift({kk: v for kk, v in d.items() if kk[1] != i}, i + 1, -1,
+                                   keyed_by_group=True))
+    plan.printed = _shift({j: v for j, v in plan.printed.items() if j != i}, i + 1, -1)
+    plan.jumps = _shift(plan.jumps, i + 1, -1)
+    plan.lettered = _shift({j: v for j, v in plan.lettered.items() if j != i}, i + 1, -1)
+    plan.cues = _shift_set({c for c in plan.cues if c[1] != i}, i + 1, -1)
+    plan.n -= 1
+
+
+def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
+    """Insert rest bars so that bar n of the output is printed bar n.
+
+    Evidence: printed bar numbers, the first number of printed ranges ("15-17"), and
+    cut marks ("[to] 97": the bar there is bar 97, the bars before it were cut).
+    Lettered bars ("131A", "[to] 132C") are bars added in a revision: each takes a
+    position of its own, so all parts showing them line up. OCR
+    misreads some numbers, so the offset (printed - position) is chosen as the
+    non-decreasing step function that agrees with the most evidence; every step costs
+    ALIGN_PENALTY, so one stray number never shifts the rest of the part. Bars are
+    only added, never removed: evidence that the output is ahead is reported.
+    """
+    flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
+    if not flat:
+        return
+    systems = [p.system for p in plans]
+    start = {}
+    pos = 0
+    for k, p in enumerate(plans):
+        start[k] = pos
+        pos += p.n
+    # lettered bars ("131A": added after 131) shift every later number by one; a cut to
+    # "132C" means 132A and 132B exist (in other parts) and were cut here
+    extra: set[tuple[int, str]] = set()
+    for p in plans:
+        for n, letter in list(p.lettered.values()) + list(p.jumps.values()):
+            for c in range(ord("A"), ord(letter) + 1 if letter else ord("A")):
+                extra.add((n, chr(c)))
+
+    def position(n: int, letter: str = "") -> int:
+        return n + sum(1 for m, _ in extra if m < n) + (ord(letter) - ord("A") + 1 if letter else 0)
+
+    obs: list[_Obs] = []
+    for k, p in enumerate(plans):
+        for i, v in p.printed.items():
+            if i < p.n and 0 < v <= 9999:
+                obs.append(_Obs(start[k] + i, position(v), 1.0, "number", str(v)))
+        for i, (n, letter) in p.lettered.items():
+            if i < p.n and 0 < n <= 9999:
+                obs.append(_Obs(start[k] + i, position(n, letter), 1.0, "number", f"{n}{letter}"))
+        for i, (n, letter) in p.jumps.items():
+            if start[k] + i < len(flat) and 0 < n <= 9999:
+                obs.append(_Obs(start[k] + i, position(n, letter), JUMP_WEIGHT, "jump", f"{n}{letter}"))
+    obs.sort(key=lambda o: (o.j, o.kind != "jump"))
+    if not obs:
+        return
+
+    def at(j: int) -> str:
+        k, i = flat[j]
+        return f"{where(systems, k)} bar {i + 1}"
+
+    # the step function: a chain of agreeing evidence; between links the offset may
+    # change (each change costs ALIGN_PENALTY)
+    score = [0.0] * len(obs)
+    back: list[int | None] = [None] * len(obs)
+    for t, o in enumerate(obs):
+        # start at offset 0, or -1: a pickup bar before bar 1 (it stays the output's bar 1)
+        best, arg = o.weight - (0.0 if o.offset in (0, -1) else ALIGN_PENALTY), None
+        if abs(o.offset) > MAX_GAP:
+            best = float("-inf")
+        for u in range(t):
+            q = obs[u]
+            if q.j == o.j and q.offset != o.offset or abs(q.offset - o.offset) > MAX_GAP:
+                continue
+            cand = score[u] + o.weight - (ALIGN_PENALTY if q.offset != o.offset else 0.0)
+            if cand > best:
+                best, arg = cand, u
+        score[t], back[t] = best, arg
+    end = max(range(len(obs)), key=lambda t: score[t])
+    chain: list[int] = []
+    if score[end] > 0:
+        t = end
+        while t is not None:
+            chain.append(t)
+            t = back[t]
+        chain.reverse()
+    if chain and obs[chain[0]].offset < 0:
+        # more bars before the first number than it allows: empty ones are no music (a
+        # stack before a start repeat, a misread rest count); a pickup bar has notes
+        n_extra = -obs[chain[0]].offset
+        lead = flat[:n_extra]
+        if len(lead) == n_extra and all(all(g[i].rest_only for g in plans[k].chosen.values())
+                                      for k, i in lead):
+            msg = (f"bar numbers: dropped {n_extra} empty bar(s) at {at(0)} before printed bar "
+                   f"{obs[chain[0]].label} at {at(obs[chain[0]].j)}")
+            stats.notes.append(msg)
+            if log:
+                log.warning(msg)
+            for k, i in reversed(lead):
+                _drop_bar(plans, k, i)
+            return align_bars(plans, D, stats, log)
+    # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
+    base = -1 if chain and obs[chain[0]].offset == -1 else 0
+    # numbers inside a step whose offsets lie between its two sides split it: the total
+    # padding stays, part of it moves to where the evidence puts it (a cut mark whose
+    # "[to]" OCR lost leaves only the number)
+    refined: list[int] = []
+    prev_off, prev_j = base, -1
+    for t in chain + [None]:
+        nxt_off = obs[t].offset if t is not None else None
+        nxt_j = obs[t].j if t is not None else len(flat)
+        if nxt_off is not None and nxt_off != prev_off:
+            lo, hi = sorted((prev_off, nxt_off))
+            up = nxt_off > prev_off
+            mids = [u for u in range(len(obs)) if prev_j < obs[u].j < nxt_j
+                    and lo < obs[u].offset < hi]
+            # longest run of them that is monotone in the step's direction
+            best: dict[int, list[int]] = {}
+            for u in mids:
+                cands = [best[v] for v in best if obs[v].j < obs[u].j and
+                         (obs[v].offset <= obs[u].offset if up else obs[v].offset >= obs[u].offset)]
+                best[u] = max(cands, key=len, default=[]) + [u]
+            refined += max(best.values(), key=len, default=[])
+        if t is not None:
+            refined.append(t)
+            prev_off, prev_j = nxt_off, nxt_j
+    chain = refined
+    on_chain = set(chain)
+
+    steps = []          # (anchor obs, previous offset, previous anchor j)
+    prev_off, prev_j = base, -1
+    for t in chain:
+        o = obs[t]
+        if o.offset != prev_off:
+            steps.append((o, prev_off, prev_j))
+        prev_off, prev_j = o.offset, o.j
+
+    def offset_at(j: int) -> int:
+        off = base
+        for t in chain:
+            if obs[t].j <= j:
+                off = obs[t].offset
+        return off
+
+    # numbers off the chain: the output bar there follows from the padding before it
+    # (padding = the increases so far); report the ones that disagree
+    def output_bar(j: int) -> int:
+        pad = 0
+        prev = base
+        for t in chain:
+            if obs[t].j > j:
+                break
+            if obs[t].offset > prev:
+                pad += obs[t].offset - prev
+            prev = obs[t].offset
+        return j + 1 + pad
+
+    rejected = 0
+    for t, o in enumerate(obs):
+        if t in on_chain or o.value == o.j + 1 + offset_at(o.j):
+            continue
+        what = "cut mark [to]" if o.kind == "jump" else "printed bar number"
+        msg = (f"bar numbers: {what} {o.label} at {at(o.j)} ignored (output bar "
+               f"{output_bar(o.j)}): not confirmed by the numbers around it (likely misread)")
+        stats.notes.append(msg)
+        rejected += 1
+        if log and rejected <= 25:
+            log.warning(msg)
+    if log and rejected > 25:
+        log.warning(f"bar numbers: {rejected - 25} more ignored numbers (see pipeline.json notes)")
+    for o, before, pj in steps:
+        if o.offset < before and o.label == "1":
+            msg = (f"bar numbers: numbering restarts at 1 at {at(o.j)}: the next piece? "
+                   "(check pages / skip_systems)")
+            stats.notes.append(msg)
+            if log:
+                log.warning(msg)
+        elif o.offset < before:
+            # bars can only be added: from here on the output runs ahead
+            ahead = output_bar(o.j) - o.value
+            msg = (f"bar numbers: output is {ahead} bar(s) ahead from {at(o.j)} on (printed "
+                   f"{o.label}, output bar {output_bar(o.j)}): {before - o.offset} extra bar(s) "
+                   f"read since {at(pj) if pj >= 0 else 'the start'}; bars kept")
+            stats.notes.append(msg)
+            if log:
+                log.warning(msg)
+
+    rest_only = {j: all(g[i].rest_only for g in plans[k].chosen.values()) if plans[k].chosen else False
+                 for j, (k, i) in enumerate(flat)}
+    inserts = []        # (global position: insert before this bar, count, why)
+    for o, before, pj in steps:
+        d = o.offset - before
+        if d <= 0:
+            continue
+        if o.kind == "jump":
+            inserts.append((o.j, d, f"cut mark [to] {o.label}"))
+            continue
+        # no cut mark: most likely a rest whose count was not read; extend the last rest
+        # bar before the number, else put the bars right before it
+        rests = [j for j in range(max(pj, 0), o.j) if rest_only[j]]
+        if rests:
+            inserts.append((rests[-1] + 1, d, f"after the rest at {at(rests[-1])}, printed bar "
+                                             f"number {o.label} at {at(o.j)}"))
+        else:
+            inserts.append((o.j, d, f"printed bar number {o.label}"))
+    for j, d, why in sorted(inserts, key=lambda x: -x[0]):
+        if j < len(flat):
+            k, i = flat[j]
+        else:
+            k, i = flat[-1][0], plans[flat[-1][0]].n
+        if i == 0 and j > 0:
+            # between systems: at the end of the previous one (where the cut is printed)
+            k, i = flat[j - 1][0], flat[j - 1][1] + 1
+        _insert_rests(plans[k], i, d, D)
+        stats.alignment_bars_added += d
+        msg = f"bar numbers: {d} rest bar(s) inserted before {at(min(j, len(flat) - 1))} ({why})"
+        stats.notes.append(msg)
+        if log:
+            log.info(msg)
 
 
 # ----------------------------------------------------------------------------- parts

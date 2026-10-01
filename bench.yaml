@@ -5,19 +5,26 @@ results_dir: results
 dpi: 300                  # rasterisation for page-image engines (homr, oemer)
 device: cpu               # cpu | cuda  (cuda needs `setup.sh --gpu` and a CUDA-visible GPU)
 timeout_s: 1800           # per engine call (per page for homr/oemer)
+transcribe_jobs: 2        # PDFs transcribed at once (omrbench transcribe --jobs overrides)
 musescore_cli: null       # only needed if you drop gt.mscz instead of gt.musicxml
 
 engines:
   audiveris:              # stock settings
     type: audiveris
+    # parallel_sheets: false  # true: sheets of a PDF in parallel, ~2x faster, but Audiveris
+    #                         # 5.11 then drops symbols / crashes on some PDFs (a race)
   audiveris-meta:         # switches derived from meta.yaml (drums, OCR languages, ...)
     type: audiveris
     use_metadata: true
   homr:
     type: homr
+    # workers: auto       # persistent homr processes (auto = CPU threads / threads)
+    # threads: 2          # ONNX threads per worker; pool: false = one process per image
+    # nice: 0             # >0 lowers the workers' CPU priority (was slower in tests)
   pipeline:               # audiveris-meta layout + homr per staff group + repairs
     type: pipeline
     prefer: auto          # scans: homr bars first; vector PDFs: audiveris bars first
+    # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run)
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
     enabled: false

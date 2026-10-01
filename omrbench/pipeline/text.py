@@ -6,6 +6,7 @@ regrouped into lines by position and classified by where it sits and what it say
 
 - page header/footer lines        -> <credit>
 - "15-17" style ranges, numbers   -> bar-number evidence (multi-measure rests)
+- "[to] 97" (a cut: the bar there is bar 97) -> bar-number evidence, and kept as <words>
 - other lines inside the music    -> <words> on the nearest staff
 """
 from __future__ import annotations
@@ -17,6 +18,20 @@ from .layout import Page, Staff, System, Text
 
 RANGE = re.compile(r"^\[?(\d{1,4})\s*[-–—]\s*(\d{1,4})\]?$")
 NUMBER = re.compile(r"^\d{1,4}$")
+TO_BAR = re.compile(r"^\[?\s*to\s*\]?\s*(\d[\d ]{0,6})\s*([A-E])?\s*\]?$", re.I)  # "[to] 97", "[to 16]"
+# "131A": a bar added after bar 131 (A-E: later letters are OCR noise, "120V")
+LETTERED = re.compile(r"^(\d{1,4})([A-E])$")
+
+
+def to_bar(text: str) -> tuple[int, str] | None:
+    """Target bar of a cut mark: "[to] 97" -> (97, ""), "[to] 132C" -> (132, "C")."""
+    m = TO_BAR.match(text.strip())
+    if not m:
+        return None
+    letter = (m.group(2) or "").upper()
+    return int(m.group(1).replace(" ", "")), letter
+
+
 HEADER_ROLES = {"Title", "Number", "CreatorComposer", "CreatorLyricist", "CreatorArranger",
                 "Rights", "PartName"}
 
@@ -105,6 +120,8 @@ class PageText:
     words: list[Placed] = field(default_factory=list)
     ranges: list[tuple[Placed, int, int]] = field(default_factory=list)
     numbers: list[tuple[Placed, int]] = field(default_factory=list)
+    jumps: list[tuple[Placed, tuple[int, str]]] = field(default_factory=list)  # "[to] 97" -> (97, "")
+    lettered: list[tuple[Placed, tuple[int, str]]] = field(default_factory=list)  # "131A"
     rehearsals: list[tuple[Placed, str]] = field(default_factory=list)
 
 
@@ -155,7 +172,16 @@ def classify(page: Page) -> PageText:
             if is_words(t) or NUMBER.match(t):
                 res.credits.append(ln)
             continue
-        staff, above = nearest_staff([st for s in systems for st in s.all_staves], ln.cy)
+        all_staves = [st for s in systems for st in s.all_staves]
+        staff, above = nearest_staff(all_staves, ln.cy)
+        if above and (to_bar(t) is not None or LETTERED.match(t.replace(" ", ""))):
+            # printed like a bar number, below the staff it belongs to: often nearer to the
+            # next system than the 1.5 rule allows
+            up = [s for s in all_staves if s.bottom < ln.cy]
+            if up:
+                st_up = max(up, key=lambda s: s.bottom)
+                if ln.top - st_up.bottom <= 8 * st_up.interline:
+                    staff, above = st_up, False
         sy = next(s for s in systems if staff in s.staves or staff in s.dropped)
         if sy.skip:
             continue
@@ -177,10 +203,16 @@ def classify(page: Page) -> PageText:
             ln = Line(ln.page, atoms[1:])
             t = ln.text
         pl = Placed(ln, sy, staff, above)
+        if (target := to_bar(t)) is not None:
+            res.jumps.append((pl, target))
+            res.words.append(pl)          # the text stays in the score too
+            continue
         m = RANGE.match(t.replace(" ", ""))
         if m:
             if int(m.group(1)) < int(m.group(2)):
                 res.ranges.append((pl, int(m.group(1)), int(m.group(2))))
+        elif lm := LETTERED.match(t.replace(" ", "")):
+            res.lettered.append((pl, (int(lm.group(1)), lm.group(2))))
         elif NUMBER.match(t):
             if above and ln.x < staff.left + 4 * staff.interline:
                 res.rehearsals.append((pl, t))       # boxed number at the system start

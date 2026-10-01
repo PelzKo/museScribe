@@ -15,6 +15,8 @@ from fractions import Fraction
 
 from lxml import etree
 
+from .. import log as logmod
+
 # direction types taken over from Audiveris (text is rebuilt from the page layout)
 KEEP_DIRECTION_TYPES = {"dynamics", "wedge", "metronome", "rehearsal", "pedal",
                         "octave-shift", "dashes", "bracket", "segno", "coda"}
@@ -50,9 +52,11 @@ def common_divisions(roots) -> int:
     for r in roots:
         for el in r.iter("divisions"):
             try:
-                d = math.lcm(d, int(float(el.text)))
+                v = int(float(el.text))
             except (TypeError, ValueError):
-                pass
+                continue
+            if v > 0:
+                d = math.lcm(d, v)
     return d
 
 
@@ -65,6 +69,9 @@ def _scale(el: etree._Element, factor: Fraction) -> None:
 
 def _clef(c) -> Clef:
     return (c.findtext("sign", "G"), c.findtext("line", ""), c.findtext("clef-octave-change", ""))
+
+
+LOG = logmod.get("bars")
 
 
 def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> list[Bar]:
@@ -82,7 +89,16 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
         for el in m:
             if el.tag == "attributes":
                 if el.findtext("divisions"):
-                    div = Fraction(el.findtext("divisions").strip())
+                    try:
+                        new_div = Fraction(el.findtext("divisions").strip())
+                    except ValueError:
+                        new_div = Fraction(0)
+                    if new_div > 0:
+                        div = new_div
+                    else:
+                        # Audiveris sometimes exports <divisions>0</divisions>; keep the last
+                        LOG.warning(f"{source}: invalid <divisions>{el.findtext('divisions')}"
+                                    f"</divisions> in measure {m.get('number')}, kept {div}")
                 if el.findtext("staves"):
                     staves = max(staves, int(el.findtext("staves")))
                 mr = el.find("measure-style/multiple-rest")
