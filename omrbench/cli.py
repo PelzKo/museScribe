@@ -5,6 +5,10 @@
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
                [--resume RUN_ID]
+  omrbench transcribe [--engine pipeline] [--samples x,y] [--exclude x,y] [--prefix_matching]
+               [--force]               <pdf>.musicxml next to every PDF + combined.mscz
+  omrbench gen-meta SHOW_YAML [--songs 5,6] [--dry-run]
+                                       song folders (yamls + PDFs) from a songs.xlsx workbook
   omrbench score RUN_DIR               re-score an existing run (e.g. after fixing a GT)
   omrbench report RUN_DIR              regenerate report.md (e.g. after adding correction times)
 """
@@ -86,6 +90,26 @@ def cmd_run(cfg: dict, args) -> int:
     return 0
 
 
+def cmd_transcribe(cfg: dict, args) -> int:
+    from .transcribe import transcribe
+
+    failed = transcribe(cfg, engine=args.engine, samples_only=_csv(args.samples),
+                        samples_exclude=_csv(args.exclude), prefix_matching=args.prefix_matching,
+                        force=args.force, run_id=args.run_id)
+    return 1 if failed else 0
+
+
+def cmd_gen_meta(cfg: dict, args) -> int:
+    from .genmeta import generate
+
+    try:
+        problems = generate(Path(args.show), Path(cfg["data_dir"]), _csv(args.songs), args.dry_run)
+    except (OSError, ValueError) as e:
+        print(f"ERROR {e}")
+        return 1
+    return 1 if problems else 0
+
+
 def cmd_score(cfg: dict, args) -> int:
     from .runner import rescore
 
@@ -123,6 +147,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--resume", metavar="RUN_ID", help="continue a run, re-using successful engine outputs")
     p.add_argument("--jobs", type=int, help="parallel scoring workers")
     p.add_argument("--no-score", action="store_true", help="only run engines")
+    p = sub.add_parser("transcribe", help="transcribe every PDF of the samples to <pdf>.musicxml")
+    p.add_argument("--engine", default="pipeline", help="engine to run (default: pipeline)")
+    p.add_argument("--samples", help="comma-separated sample ids (default: all)")
+    p.add_argument("--exclude", help="comma-separated sample ids to skip")
+    p.add_argument("--prefix_matching", "--prefix-matching", action="store_true",
+                   help="match --samples/--exclude as id prefixes")
+    p.add_argument("--force", action="store_true", help="overwrite existing <pdf>.musicxml")
+    p.add_argument("--run-id", help="name of the work folder in results/ (default: transcribe-<timestamp>)")
+    p = sub.add_parser("gen-meta", help="write song folders from data/_<show>/show.yaml + songs.xlsx")
+    p.add_argument("show", help="show file, e.g. data/_anastasia/show.yaml")
+    p.add_argument("--songs", help="comma-separated sheet names (default: all)")
+    p.add_argument("--dry-run", action="store_true", help="only print what would change")
     p = sub.add_parser("score")
     p.add_argument("run_dir")
     p.add_argument("--jobs", type=int)
@@ -134,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.data:
         cfg["data_dir"] = str(Path(args.data).resolve())
     return {"doctor": cmd_doctor, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+            "transcribe": cmd_transcribe, "gen-meta": cmd_gen_meta, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

@@ -63,8 +63,12 @@ class Pipeline(Engine):
             with Image.open(img_path) as im:
                 sx = im.width / page.width if page.width else 1.0
                 sy_ = im.height / page.height if page.height else 1.0
-                staves = sorted((st for sy in page.systems for st in sy.staves), key=lambda s: s.top)
+                # left-out staves still bound the crops, so none shows up in a neighbour
+                staves = sorted((st for sy in page.systems for st in sy.all_staves), key=lambda s: s.top)
                 for sy in page.systems:
+                    if sy.skip:
+                        k += 1
+                        continue
                     for gi, g in enumerate(sy.groups()):
                         il = g[0].interline
                         above = [s.bottom for s in staves if s.bottom < g[0].top]
@@ -88,6 +92,13 @@ class Pipeline(Engine):
         return jobs
 
     def _run(self, sample: Sample, workdir: Path, res: EngineResult) -> None:
+        # bad meta fails now, not after the engines ran
+        A.parse_transpose(sample.meta.get("transpose"))
+        for it in sample.meta.get("instruments") or []:
+            if isinstance(it, dict):
+                A.parse_transpose(it.get("transpose"))
+                if it.get("clef") and str(it["clef"]).lower() not in A.CLEF_CLASS:
+                    raise ValueError(f"instruments: clef '{it['clef']}' (use {', '.join(A.CLEF_CLASS)})")
         log = workdir / "engine.log"
         if log.exists():
             log.unlink()
@@ -105,6 +116,7 @@ class Pipeline(Engine):
             res.error = f"audiveris step failed: {a_res.error}"
             return
         pages = layout.load(omr_src)
+        self.regroup(sample, pages)
 
         # 2. raster + crops
         t0 = time.perf_counter()
@@ -163,6 +175,18 @@ class Pipeline(Engine):
         if stats.homr_crops_failed:
             res.extras["warning"] = f"homr failed on {stats.homr_crops_failed}/{len(jobs)} crops"
 
+    def split(self, sample: Sample) -> bool:
+        split_cfg = self.cfg.get("split_percussion", "auto")
+        split = sample.score_type == "drums" if split_cfg == "auto" else bool(split_cfg)
+        return bool(sample.meta.get("split_instruments", split))
+
+    def regroup(self, sample: Sample, pages: list[layout.Page]) -> None:
+        """meta keep_staves / skip_systems, and one staff per group when splitting."""
+        m = sample.meta
+        keep = int(m["keep_staves"]) if m.get("keep_staves") else None
+        skip = {int(x) for x in (m.get("skip_systems") or [])}
+        layout.regroup(pages, keep_bottom=keep, singles=self.split(sample) and not keep, skip=skip)
+
     def assemble(self, sample: Sample, pages: list[layout.Page], books: list[Path],
                  roots: dict, stats: A.Stats):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
@@ -178,7 +202,7 @@ class Pipeline(Engine):
                 homr_bars[(k, gi)] = bars
             else:
                 stats.homr_crops_failed += 1
-        aud_bars = A.audiveris_bars(a_roots, systems, D)
+        aud_bars = A.group_bars(A.audiveris_bars(a_roots, systems, D), systems)
         prefer = self.cfg.get("prefer") or "auto"
         if prefer == "auto":
             # homr reads scans better; on born-digital PDFs Audiveris is near perfect
@@ -187,24 +211,27 @@ class Pipeline(Engine):
         prefer = list(prefer)
         self.last_prefer = prefer
         plans = A.plan_systems(pages, aud_bars, homr_bars, D, prefer, stats)
-        split_cfg = self.cfg.get("split_percussion", "auto")
-        split = sample.score_type == "drums" if split_cfg == "auto" else bool(split_cfg)
-        split = bool(sample.meta.get("split_instruments", split))
+        if sample.meta.get("cues") == "drop":
+            A.drop_cues(plans, pages, D, stats)
+        split = self.split(sample)
         # text_onset: bar = at the start of the bar it is printed in (the convention of the
         # ground truths here); estimated = beat estimated from its x position
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
         A.expand_multirests(plans, homr_bars, D, stats)
         names = {}
-        for r in a_roots[:1]:
+        # regrouped tracks are not the Audiveris parts, their names don't apply
+        for r in a_roots[:1] if not any(sy.regrouped for sy in systems) else []:
             for i, sp in enumerate(r.findall("part-list/score-part"), start=1):
                 names[i] = sp.findtext("part-name") or f"Part {i}"
-        parts, times = A.build_parts(plans, split and bool(instruments), instruments, names)
+        parts, times = A.build_parts(plans, split and bool(instruments), instruments, names,
+                                     doubling=bool(sample.meta.get("doubling")),
+                                     transpose=sample.meta.get("transpose"))
         score = A.write_score(parts, times, credits, D)
         self.last_plans = plans
         summary = {**stats.to_dict(), "divisions": D,
                    "systems_bars": [p.n for p in plans],
-                   "instruments": [i["name"] for i in instruments] if split else [],
+                   "instruments": [i["name"] for i in instruments],
                    "parts": [p.name for p in parts]}
         return score, summary
 
@@ -212,6 +239,7 @@ class Pipeline(Engine):
         """Re-run only the assembly on an existing work dir (development aid)."""
         omr_src = workdir / "audiveris" / "out"
         pages = layout.load(omr_src)
+        self.regroup(sample, pages)
         roots = {}
         for f in sorted((workdir / "crops").glob("s*-g*.musicxml")):
             k, g = f.stem[1:].split("-g")

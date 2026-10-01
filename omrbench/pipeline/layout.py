@@ -22,6 +22,9 @@ class Staff:
     left: float
     right: float
     clef: str = ""           # first clef shape in the header, e.g. G_CLEF, PERCUSSION_CLEF
+    header: float = 0.0      # x where the header (clef, key) ends
+    apart: int = 0           # index of the Audiveris part (`part` may be regrouped)
+    pstaff: int = 1          # staff number within that Audiveris part
 
     @property
     def interline(self) -> float:
@@ -42,8 +45,16 @@ class System:
     id: int
     staves: list[Staff]
     stacks: list[Stack]      # measures as exported (cautionary stacks removed)
-    logical: list[int] = field(default_factory=list)  # Audiveris logical part id per part index
+    logical: list[int] = field(default_factory=list)  # output track id per group
     book: int = 0            # index of the Audiveris book (per-sheet fallback = one per sheet)
+    alogical: list[int] = field(default_factory=list)  # Audiveris logical part id per part index
+    dropped: list[Staff] = field(default_factory=list)  # staves left out (meta keep_staves)
+    skip: bool = False       # left out entirely (meta skip_systems)
+    regrouped: bool = False  # groups are not the Audiveris parts
+
+    @property
+    def all_staves(self) -> list[Staff]:
+        return sorted(self.staves + self.dropped, key=lambda s: s.top)
 
     @property
     def top(self) -> float:
@@ -84,12 +95,24 @@ class Text:
 
 
 @dataclass
+class Chord:
+    staff: int               # staff id
+    x: float
+    y: float
+    w: float
+    h: float
+    small: bool              # cue-size heads (Audiveris small-chord)
+    grade: float = 0.0
+
+
+@dataclass
 class Page:
     number: int
     width: int
     height: int
     systems: list[System] = field(default_factory=list)
     texts: list[Text] = field(default_factory=list)
+    chords: list[Chord] = field(default_factory=list)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
         for sy in self.systems:
@@ -147,14 +170,16 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
     for sy_el in root.iter("system"):
         staves = []
         for pi, part in enumerate(sy_el.findall("part")):
-            for st in part.findall("staff"):
+            for si, st in enumerate(part.findall("staff"), start=1):
                 top, bottom = _staff_geometry(st)
                 clef = ""
                 c = st.find("header/clef")
                 if c is not None and c.text:
                     clef = shapes.get(c.text.strip(), "")
+                h = st.find("header")
                 staves.append(Staff(int(st.get("id")), pi, top, bottom,
-                                    _f(st, "left"), _f(st, "right"), clef))
+                                    _f(st, "left"), _f(st, "right"), clef,
+                                    _f(h, "stop") if h is not None else 0.0, pi, si))
         stacks = [Stack(int(s.get("id")), _f(s, "left"), _f(s, "right"), s.get("special"))
                   for s in sy_el.findall("stack") if s.get("special") != "CAUTIONARY"]
         page.systems.append(System(number, int(sy_el.get("id")), staves, stacks))
@@ -176,6 +201,11 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
         lid, role = owner(x, y, w, h)
         page.texts.append(Text(number, int(el.get("staff") or 0), x, y, w, h,
                                el.get("value", ""), "word", role, lid, el.get("font", "")))
+    for tag, small in (("head-chord", False), ("small-chord", True)):
+        for el in root.iter(tag):
+            x, y, w, h = _bounds(el)
+            page.chords.append(Chord(int(el.get("staff") or 0), x, y, w, h, small,
+                                     _f(el, "grade")))
     for el in root.iter("lyric-item"):
         x, y, w, h = _bounds(el)
         lid, role = owner(x, y, w, h)
@@ -202,7 +232,44 @@ def load(omr: Path) -> list[Page]:
                     n_parts = len(sy.groups())
                     sy.logical = ids[i] if i < len(ids) and len(ids[i]) == n_parts \
                         else list(range(1, n_parts + 1))
+                    sy.alogical = list(sy.logical)
                 # after the book.xml mapping (which counts every system): drop empty ones
                 page.systems = [sy for sy in page.systems if sy.staves]
                 pages.append(page)
     return pages
+
+
+def regroup(pages: list[Page], keep_bottom: int | None = None, singles: bool = False,
+            skip: set[int] | None = None) -> None:
+    """Change what the pipeline reads as staff groups, in place.
+
+    keep_bottom: only the lowest n staves of every system, read as one group (a
+        conductor part: reference / vocal staves above the piano); the others are kept
+        in `System.dropped` so text above them can still be placed
+    singles: every staff its own group (condensed percussion: Timpani over a
+        percussion staff are two instruments, not a grand staff)
+    skip: systems (1-based, counted over all pages) to leave out entirely
+    Group k of a system then becomes output track k (not the Audiveris part), so the
+    same group lands in the same part whatever Audiveris made of the staves above it.
+    """
+    k = 0
+    for page in pages:
+        for sy in page.systems:
+            k += 1
+            if skip and k in skip:
+                sy.skip = True
+            staves = sorted(sy.staves, key=lambda s: s.top)
+            if keep_bottom and len(staves) > keep_bottom:
+                sy.dropped = staves[:-keep_bottom]
+                staves = staves[-keep_bottom:]
+            if keep_bottom:
+                for st in staves:
+                    st.part = 0
+            elif singles:
+                for i, st in enumerate(staves):
+                    st.part = i
+            else:
+                continue
+            sy.staves = staves
+            sy.regrouped = True
+            sy.logical = list(range(1, len(sy.groups()) + 1))

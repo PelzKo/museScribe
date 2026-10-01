@@ -262,3 +262,134 @@ def metronome_direction(per_minute: str, unit: str = "quarter") -> etree._Elemen
     etree.SubElement(mm, "per-minute").text = per_minute
     etree.SubElement(d, "sound", tempo=per_minute)
     return d
+
+
+# elements a <note> may have before <staff> (MusicXML order)
+_BEFORE_STAFF = {"grace", "cue", "chord", "pitch", "unpitched", "rest", "duration", "tie",
+                 "instrument", "footnote", "level", "voice", "type", "dot", "accidental",
+                 "time-modification", "stem", "notehead", "notehead-text"}
+
+
+def _set_staff(note: etree._Element, staff: int | None) -> None:
+    for old in note.findall("staff"):
+        note.remove(old)
+    if staff is None:
+        return
+    st = etree.Element("staff")
+    st.text = str(staff)
+    idx = max((i for i, c in enumerate(note) if c.tag in _BEFORE_STAFF), default=-1) + 1
+    note.insert(idx, st)
+
+
+def restaff(sources: list[tuple[Bar, list[int]]]) -> Bar:
+    """One bar from staves of other bars: [(bar, [staff numbers to keep])...], renumbered
+    1..n in that order (voices renumbered per staff). Directions keep their onset."""
+    voices: dict[tuple[int, str], list[tuple[int, etree._Element]]] = {}
+    extras: list[tuple[int, int, etree._Element]] = []   # onset, new staff, direction/attributes
+    clefs: dict[int, Clef] = {}
+    new_no = 0
+    src_name = sources[0][0].source if sources else "rest"
+    key = time = None
+    for bi, (bar, keep) in enumerate(sources):
+        mapping = {}
+        for s in keep:
+            new_no += 1
+            mapping[s] = new_no
+            if s in bar.clefs:
+                clefs[new_no] = bar.clefs[s]
+        key = key if key is not None else bar.key
+        time = time or bar.time
+        cur = last = 0
+        for el in bar.items:
+            if el.tag == "note":
+                s = int(el.findtext("staff", "1") or 1)
+                is_chord = el.find("chord") is not None
+                on = last if is_chord else cur
+                if not is_chord and el.find("grace") is None:
+                    last = cur
+                    cur += int(el.findtext("duration", "0") or 0)
+                if s in mapping:
+                    voices.setdefault((mapping[s], f"{bi}.{el.findtext('voice', '1')}"), []).append((on, el))
+            elif el.tag == "backup":
+                cur -= int(el.findtext("duration", "0") or 0)
+            elif el.tag == "forward":
+                cur += int(el.findtext("duration", "0") or 0)
+            elif el.tag == "direction":
+                st = el.findtext("staff")
+                s = int(st) if st and st.isdigit() else min(mapping, default=1)
+                if s in mapping:
+                    off = el.findtext("offset")
+                    extras.append((cur + (int(off) if off and off.strip().lstrip("-").isdigit() else 0),
+                                   mapping[s], el))
+            elif el.tag == "attributes":
+                a = etree.Element("attributes")
+                for c in el.findall("clef"):
+                    s = int(c.get("number", "1"))
+                    if s in mapping:
+                        c2 = copy.deepcopy(c)
+                        c2.set("number", str(mapping[s]))
+                        a.append(c2)
+                if len(a):
+                    extras.append((cur, mapping[int(a[0].get("number"))], a))
+    n = new_no
+    out = Bar([], src_name, max(n, 1), clefs, key, time,
+              max((b.multirest for b, _ in sources), default=0))
+    per_staff: dict[int, int] = {}
+    pos_total = 0
+    for (staff, _), evs in sorted(voices.items(), key=lambda kv: kv[0][0]):
+        per_staff[staff] = per_staff.get(staff, 0) + 1
+        voice = str(per_staff[staff] + 4 * (staff - 1))
+        if pos_total:
+            b = etree.Element("backup")
+            etree.SubElement(b, "duration").text = str(pos_total)
+            out.items.append(b)
+        pos = 0
+        clef_changes = sorted((on, a) for on, s, a in extras if a.tag == "attributes" and s == staff)
+        for on, el in evs:
+            is_chord = el.find("chord") is not None
+            if not is_chord and on > pos:
+                f = etree.Element("forward")
+                etree.SubElement(f, "duration").text = str(on - pos)
+                etree.SubElement(f, "voice").text = voice
+                if n > 1:
+                    etree.SubElement(f, "staff").text = str(staff)
+                out.items.append(f)
+                pos = on
+            while clef_changes and clef_changes[0][0] <= pos and not is_chord:
+                out.items.append(copy.deepcopy(clef_changes.pop(0)[1]))
+            c = copy.deepcopy(el)
+            for v in c.findall("voice"):
+                v.text = voice
+            _set_staff(c, staff if n > 1 else None)
+            out.items.append(c)
+            if not is_chord and c.find("grace") is None:
+                pos += int(c.findtext("duration", "0") or 0)
+        pos_total = pos
+    for on, staff, el in extras:
+        if el.tag == "direction":
+            add_direction(out, el, on, staff)
+    return out
+
+
+def cues_to_rests(bar: Bar, staff: int, onsets_: set[int]) -> int:
+    """Turn the notes of `staff` starting at the given onsets into rests (cue notes the
+    player doesn't play). Returns the number of notes removed."""
+    removed = 0
+    items = []
+    order = {id(el): on for on, el in onsets(bar)}
+    for el in bar.items:
+        if el.tag != "note" or int(el.findtext("staff", "1") or 1) != staff or \
+                el.find("rest") is not None or order.get(id(el)) not in onsets_:
+            items.append(el)
+            continue
+        removed += 1
+        if el.find("chord") is not None or el.find("grace") is not None:
+            continue            # the chord's first note becomes the rest; graces go
+        r = etree.Element("note")
+        etree.SubElement(r, "rest")
+        for tag in ("duration", "voice", "type", "dot", "time-modification", "staff"):
+            for x in el.findall(tag):
+                r.append(copy.deepcopy(x))
+        items.append(r)
+    bar.items = items
+    return removed

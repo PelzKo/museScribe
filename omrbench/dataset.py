@@ -114,6 +114,26 @@ def _matches(name: str, patterns: list[str], prefix: bool) -> bool:
     return any(name.startswith(p) if prefix else name == p for p in patterns)
 
 
+def select_dirs(data_dir: Path, only: list[str] | None = None, exclude: list[str] | None = None,
+                prefix: bool = False) -> tuple[list[Path], list[str]]:
+    """Sample folders picked by `only` / `exclude` (exact names, or name prefixes if `prefix`).
+
+    Folders starting with "_" are not samples (e.g. data/_anastasia with the gen-meta sources).
+    """
+    warnings = []
+    dirs = sorted(p for p in Path(data_dir).iterdir() if p.is_dir() and not p.name.startswith("_"))
+    for pat in (only or []) + (exclude or []):
+        if not any(_matches(d.name, [pat], prefix) for d in dirs):
+            warnings.append(f"'{pat}' matches no sample folder")
+    dirs = [d for d in dirs if not (only and not _matches(d.name, only, prefix))
+            and not (exclude and _matches(d.name, exclude, prefix))]
+    return dirs, warnings
+
+
+def load_meta(path: Path) -> dict:
+    return (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.exists() else {}
+
+
 def discover(data_dir: Path, only: list[str] | None = None,
              mscore: str | None = None, exclude: list[str] | None = None,
              prefix: bool = False) -> tuple[list[Sample], list[str]]:
@@ -121,25 +141,15 @@ def discover(data_dir: Path, only: list[str] | None = None,
 
     `only` / `exclude` select sample ids by exact name, or by name prefix if `prefix`.
     """
-    samples, warnings = [], []
-    dirs = sorted(p for p in Path(data_dir).iterdir() if p.is_dir())
-    for pat in (only or []) + (exclude or []):
-        if not any(_matches(d.name, [pat], prefix) for d in dirs):
-            warnings.append(f"'{pat}' matches no sample folder")
+    samples = []
+    dirs, warnings = select_dirs(data_dir, only, exclude, prefix)
     for d in dirs:
-        if only and not _matches(d.name, only, prefix):
-            continue
-        if exclude and _matches(d.name, exclude, prefix):
-            continue
         pdfs = sorted(d.glob("*.pdf"))
         if not pdfs:
             warnings.append(f"{d.name}: no PDF, skipped")
             continue
         pdf = next((p for p in pdfs if p.stem == "input"), pdfs[0])
-        meta = {}
-        mp = d / "meta.yaml"
-        if mp.exists():
-            meta = yaml.safe_load(mp.read_text(encoding="utf-8")) or {}
+        meta = load_meta(d / "meta.yaml")
         try:
             gt, gt_warns = _prepare_gt(d, meta, mscore)
         except Exception as e:  # conversion failure is per-sample

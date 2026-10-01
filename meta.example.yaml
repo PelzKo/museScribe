@@ -23,6 +23,10 @@ languages: [deu, lat]
 # Measures (by MusicXML number) that exist in the GT but are not printed, e.g. cuts.
 # gt_drop_measures: [12, 13]
 
+# `omrbench transcribe` only: <name>.yaml next to <name>.pdf is merged over meta.yaml.
+# pages: transcribe only these pages of the PDF (1-based ranges, or a list [2, 3, 4])
+# pages: "2-4,7"
+
 # pipeline engine: instruments of a condensed part (percussion), in score order. A shared
 # staff is split into one part per instrument at the printed labels; aliases are other
 # spellings in the print. Splitting is on for type: drums, or force it:
@@ -31,6 +35,43 @@ languages: [deu, lat]
 #   - Timpani
 #   - Sus Cymbal
 #   - {name: Violin (cue), aliases: ["(Vln)"]}
+# A label "to X" switches at the next bar the staff plays. An unlabeled clef change
+# (percussion <-> pitched) switches to the next unused instrument, or, if the entries
+# give `clef: percussion | pitched`, back to the one that played most bars with that
+# clef on that staff. When splitting, every staff is read on its own; `lower_staff: true`
+# names the instrument of an unlabeled lower staff (percussion under the Timpani):
+#   - {name: Timpani, clef: pitched}
+#   - {name: Cymbal, aliases: ["Ch. Cym"], clef: percussion, lower_staff: true}
+
+# Without "(...)" aliases, parenthesized text ("(Clar)" over cue notes) is no label.
+# A part doubling several instruments (Reed 1: Clarinet/Oboe/Flute): split_instruments
+# gives one part per instrument, each with its transposition. doubling: true instead
+# keeps one part that changes instrument at the labels (a <transpose> change; MuseScore 4
+# ignores that on import, add the Instrument Change there by hand).
+# split_instruments: true   # or doubling: true
+# instruments:
+#   - {name: Clarinet, transpose: Bb}
+#   - Flute
+
+# pipeline engine: transposing instrument, written -> sounding pitch. A key names the
+# pitch below written C (Bb clarinet/trumpet, F horn, Eb alto sax, A clarinet); 8va /
+# 8vb add an octave ("Bb 8vb" tenor sax, "8vb" double bass, "8va" piccolo), or give
+# {diatonic, chromatic, octave_change}. Also per entry of `instruments`.
+# transpose: F
+
+# pipeline engine: cue notes (small heads, needs small_heads: true) -> rests; also drops
+# the "(Clar)" label over them. keep (default) | drop
+# small_heads: true
+# cues: drop
+
+# pipeline engine: read only the lowest n staves of every system as one part (a
+# conductor part: vocal / reference staves above the piano). Tempo and rehearsal marks
+# above the system are kept; lyrics and labels of the left-out staves are not.
+# keep_staves: 2
+
+# pipeline engine: leave out these systems (1-based, counted over the transcribed
+# pages), e.g. the end of the previous piece on the first page.
+# skip_systems: [1]
 
 # Audiveris processing switches for the audiveris-meta variant
 # one_line_percussion: true

@@ -57,6 +57,92 @@ omrbench score results/<run>              # re-score, e.g. after fixing a GT fil
 omrbench report results/<run>             # re-render, e.g. after adding correction times
 ```
 
+### Transcribe only
+
+```bash
+omrbench transcribe                                # pipeline on every PDF of every sample
+omrbench transcribe --samples anastasia --prefix_matching --force
+```
+
+Runs one engine (`--engine`, default `pipeline`) on every `*.pdf` in the selected sample folders
+(same `--samples` / `--exclude` / `--prefix_matching` as `run`) and writes `<name>.musicxml` next to
+`<name>.pdf`. No ground truth needed, nothing is scored, no report. PDFs that already have a
+`<name>.musicxml` are skipped unless `--force`.
+
+`results/transcribe-<timestamp>/` then holds:
+
+- `<sample>--<name>.musicxml`: a copy of every selected PDF's output (new or already existing)
+- `combined.musicxml` / `combined.mscz`: all of them stacked as parts of one score, all starting at
+  bar 1, in folder/PDF order. Parts are named after the PDF (`<folder>/<name>` if the name occurs in
+  several folders; `<name> – <part>` for multi-part outputs such as split percussion). No padding:
+  if parts differ in bar count, MuseScore calls the score corrupted and fills the gaps; it is then
+  saved with `-f`. The `.mscz` needs the MuseScore CLI (`musescore_cli` in `bench.yaml`, `mscore` on
+  PATH, or the default Windows MuseScore 4 install when running in WSL)
+- `<engine>/<sample>--<name>/`: engine work dirs
+
+Per-PDF meta: `<name>.yaml` next to `<name>.pdf`, merged over the folder's `meta.yaml` (its keys
+win). Extra key `pages: "2-4,7"` (1-based; a list `[2, 3, 4]` works too) transcribes only those pages
+of the PDF; the original file is not changed.
+
+For orchestra parts the `pipeline` engine also reads these meta keys (all optional; commented
+examples in `meta.example.yaml`):
+
+| Key | Example | Effect |
+|---|---|---|
+| `pages` | `"2-4,7"` or `[2, 3, 4]` | Transcribe only these PDF pages (1-based). Per-PDF yaml only. |
+| `skip_systems` | `[1, 2, 3, 4, 5]` | Leave these systems out entirely. **A list of system numbers, not a count**: to skip the first 5 systems, list all five. `[5]` skips only the 5th. 1-based, counted over the transcribed pages (after `pages`), so system 1 is the first system of the first selected page. Use it for the end of the previous piece at the top of a page. Skipped systems produce no bars. |
+| `keep_staves` | `2` | Read only the lowest n staves of every system as one part (conductor part: vocal/reference staves above the piano). Tempo and rehearsal marks above the system are kept; lyrics and labels of dropped staves are not. |
+| `transpose` | `F`, `Bb`, `Bb 8vb`, `8vb`, or `{diatonic, chromatic, octave_change}` | Transposing instrument, written to sounding pitch. The key names the pitch below written C. `8va`/`8vb` add an octave. |
+| `instruments` | `[{name: Clarinet, transpose: Bb}, Flute]` | Instruments the part plays. Each entry: `name`, optional `aliases`, `transpose`, `clef` (`pitched` / `percussion`), `lower_staff`. Printed labels in the score select the instrument. |
+| `split_instruments` | `true` | One MusicXML part per instrument (each with its own transposition). Use for Reed 1/2 and percussion. Default: on for `type: drums`. |
+| `doubling` | `true` | Alternative to `split_instruments`: one part that changes instrument at the labels. MuseScore 4 ignores the change on import, so add the Instrument Change by hand. |
+| `small_heads` | `true` | Tell Audiveris to read small note heads (cue notes). Needed for `cues: drop`. |
+| `cues` | `keep` (default) / `drop` | `drop` turns cue-size notes into rests and removes the `(Clar)` label above them. |
+
+Combine as needed, for example a horn part whose first page starts with the tail of the
+previous number:
+
+```yaml
+pages: "1-3"
+transpose: F
+skip_systems: [1, 2]      # the first two systems of page 1
+cues: drop
+small_heads: true
+```
+
+### Song folders from a workbook (`gen-meta`)
+
+For a show transcribed song by song from the same full-book parts, keep everything in
+`data/_<show>/` (folders starting with `_` are not samples):
+
+```
+data/_anastasia/show.yaml    constants: meta.yaml block, per-part defaults, instrument library
+data/_anastasia/songs.xlsx   one sheet per song (sheet name = song id, B1 = title)
+data/_anastasia/pdfs/        the full-book PDFs
+```
+
+```bash
+omrbench gen-meta data/_anastasia/show.yaml --dry-run      # show what would change
+omrbench gen-meta data/_anastasia/show.yaml --songs 5      # write data/anastasia-5/
+```
+
+Each song sheet has a header row `file | pages | skip | instruments | extra | notes`, one row per
+PDF. The generator writes `meta.yaml` and one `<file>.yaml` per row into the song folder and copies
+the PDFs there. Changed files are shown as a diff, then overwritten: the workbook is the source of
+truth.
+
+| Column | Example | Becomes |
+|---|---|---|
+| `pages` | `11-16` | `pages`. Empty: part not in this song, no yaml, no PDF copied. |
+| `skip` | `1-3` | `skip_systems: [1, 2, 3]` |
+| `instruments` | `Clarinet, Flute` | Names looked up in the `instruments` library of `show.yaml` (transpose, aliases, clef). Several on a non-drums part: `split_instruments: true`. A single one only sets the part's `transpose`. |
+| `extra` | `chord_names: false` | Raw YAML keys, win over everything. `lyrics: null` drops a part default. |
+| `notes` | `Bassoon` | Ignored. |
+
+New song: duplicate the previous sheet in Excel, rename it, set the title and pages. The cells
+are formatted as Text so Excel keeps `5-9` from becoming a date (the generator stops with an
+error if that happens anyway).
+
 Engines run one at a time so the resource numbers are clean. Scoring runs in parallel (`scoring.jobs`). A 3-page piano score takes roughly 1–2 minutes per engine to score, mostly in musicdiff.
 
 ## What gets measured

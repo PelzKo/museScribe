@@ -133,22 +133,42 @@ def classify(page: Page) -> PageText:
         res.credits = [ln for ln in lines(page) if ln.text]
         return res
     il = systems[0].staves[0].interline
-    first_top = systems[0].top
+    first_top = systems[0].all_staves[0].top
     last_bottom = systems[-1].bottom
+    # first system that is read when the ones above it are skipped (the end of the
+    # previous piece): the new title above it is a header too
+    first_read = next((s for s in systems if not s.skip), None)
+    if first_read is systems[0]:
+        first_read = None
+
+    def is_header(ln: Line, top: float) -> bool:
+        return ln.bottom < top - 12 * il or (
+            ln.bottom < top and bool(ln.roles & HEADER_ROLES) and is_words(ln.text)
+            and ln.bottom < top - 4 * il)
+
     for ln in lines(page):
         t = ln.text
         if not t:
             continue
-        header = ln.bottom < first_top - 12 * il or (
-            ln.bottom < first_top and ln.roles & HEADER_ROLES and is_words(t)
-            and ln.bottom < first_top - 4 * il)
         footer = ln.top > last_bottom + 8 * il
-        if header or footer:
+        if is_header(ln, first_top) or footer:
             if is_words(t) or NUMBER.match(t):
                 res.credits.append(ln)
             continue
-        staff, above = nearest_staff([st for s in systems for st in s.staves], ln.cy)
-        sy = next(s for s in systems if staff in s.staves)
+        staff, above = nearest_staff([st for s in systems for st in s.all_staves], ln.cy)
+        sy = next(s for s in systems if staff in s.staves or staff in s.dropped)
+        if sy.skip:
+            continue
+        if sy is first_read and is_header(ln, sy.all_staves[0].top):
+            if is_words(t):
+                res.credits.append(ln)
+            continue
+        if staff in sy.dropped:
+            # above the system: tempo, rehearsal marks, labels -> onto the top kept staff;
+            # lyrics and labels of a left-out staff are dropped with it
+            if not (above and staff is sy.all_staves[0]):
+                continue
+            staff = sy.staves[0]
         atoms = sorted(ln.atoms, key=lambda a: a.x)
         if len(atoms) > 1 and NUMBER.match(atoms[0].value) and is_words(t):
             # boxed rehearsal number printed right before a label ("10 Bell Tree")

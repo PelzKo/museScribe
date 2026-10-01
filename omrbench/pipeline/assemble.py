@@ -33,6 +33,8 @@ class SysPlan:
     chosen: dict[int, list[B.Bar]] = field(default_factory=dict)      # group -> bars
     times: list[tuple[str, str] | None] = field(default_factory=list)
     labels: dict[tuple[int, int], str] = field(default_factory=dict)  # (group, bar) -> instrument
+    pending: dict[tuple[int, int], str] = field(default_factory=dict) # "to Flute": from the next played bar
+    cues: set[tuple[int, int]] = field(default_factory=set)           # (group, bar) cue notes removed
     printed: dict[int, int] = field(default_factory=dict)             # bar -> printed bar number
     mr: dict[int, tuple[str, int, int]] = field(default_factory=dict) # bar -> multi-rest evidence
     evidence: list[tuple[float, str, int, int]] = field(default_factory=list)  # x, kind, a, b
@@ -45,6 +47,7 @@ class Stats:
     systems: Counter = field(default_factory=Counter)   # how the bar count was decided
     multirest_bars_added: int = 0
     homr_crops_failed: int = 0
+    cue_notes_removed: int = 0
     words: int = 0
     notes: list[str] = field(default_factory=list)
 
@@ -52,6 +55,7 @@ class Stats:
         return {"bars": dict(self.bars), "systems": dict(self.systems),
                 "multirest_bars_added": self.multirest_bars_added,
                 "homr_crops_failed": self.homr_crops_failed, "words": self.words,
+                "cue_notes_removed": self.cue_notes_removed,
                 "notes": self.notes}
 
 
@@ -86,6 +90,32 @@ def audiveris_bars(books: list[etree._Element], systems: list[System], D: int
             for k, c in zip(idx, counts):
                 out[(k, pi + 1)] = bs[pos:pos + c]
                 pos += c
+    return out
+
+
+def group_bars(aud: dict, systems: list[System]) -> dict[tuple[int, int], list[B.Bar] | None]:
+    """(system, group) -> Audiveris bars of that staff group. Regrouped systems take
+    their staves out of the Audiveris parts (and join them if they span several)."""
+    out: dict[tuple[int, int], list[B.Bar] | None] = {}
+    for k, sy in enumerate(systems):
+        for gi, g in enumerate(sy.groups()):
+            if not sy.regrouped:
+                out[(k, gi)] = aud.get((k, sy.alogical[gi]))
+                continue
+            srcs: list[tuple[list[B.Bar] | None, list[int]]] = []
+            for st in g:
+                bars = aud.get((k, sy.alogical[st.apart])) if st.apart < len(sy.alogical) else None
+                if srcs and srcs[-1][0] is bars:
+                    srcs[-1][1].append(st.pstaff)
+                else:
+                    srcs.append((bars, [st.pstaff]))
+            if any(not b for b, _ in srcs) or len({len(b) for b, _ in srcs}) != 1:
+                out[(k, gi)] = None
+            elif len(srcs) == 1 and srcs[0][1] == list(range(1, srcs[0][0][0].staves + 1)):
+                out[(k, gi)] = srcs[0][0]
+            else:
+                out[(k, gi)] = [B.restaff([(b[i], keep) for b, keep in srcs])
+                                for i in range(len(srcs[0][0]))]
     return out
 
 
@@ -125,11 +155,21 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
     cur_time = None
     for k, sy in enumerate(systems):
         plan = SysPlan(sy, k)
+        if sy.skip:
+            plans.append(plan)
+            continue
         groups = sy.groups()
-        a_bars = {L: aud.get((k, L)) for L in sy.logical}
+        a_bars = {gi: aud.get((k, gi)) for gi in range(len(groups))}
         a_n = max((len(v) for v in a_bars.values() if v), default=0) or None
         h_bars = {gi: homr.get((k, gi)) for gi in range(len(groups))}
         n, how = _vote(a_n, [len(v) for v in h_bars.values() if v])
+        if n == 0 and sy.staves:
+            # neither engine found a bar: a staff of multi-measure rests ("5" over "5-9").
+            # One rest bar; expand_multirests / resegment_rest_systems count it out
+            n, how = 1, "empty"
+            for gi, group in enumerate(groups):
+                bar = B.rest_bar(len(group), B.bar_length(cur_time, D), D)
+                h_bars[gi] = [bar]
         stats.systems[how] += 1
         plan.n = n
         if n == 0:
@@ -154,9 +194,8 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
-            L = sy.logical[gi]
             hb = h_bars.get(gi) if h_bars.get(gi) and len(h_bars[gi]) == n else None
-            ab = a_bars.get(L) if a_bars.get(L) and len(a_bars[L]) == n else None
+            ab = a_bars.get(gi) if a_bars.get(gi) and len(a_bars[gi]) == n else None
             order = prefer
             if all(st.clef == "PERCUSSION_CLEF" for st in group):
                 # homr reads percussion staves as pitched (often with a C clef)
@@ -173,7 +212,7 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                     or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
                     # neither source has this system's bar count: best effort by position
-                    loose = [v for v in (h_bars.get(gi), a_bars.get(L)) if v]
+                    loose = [v for v in (h_bars.get(gi), a_bars.get(gi)) if v]
                     src = next((v for v in loose if i < len(v)), None)
                     pick = ("fallback", src[i]) if src else ("rest", B.rest_bar(len(group), length, D))
                 s, bar = pick
@@ -185,7 +224,7 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                     bar.key = primary[i].key if primary[i].key is not None else bar.key
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
                 if s != "audiveris" and a_n:
-                    src = a_bars.get(L)
+                    src = a_bars.get(gi)
                     if src:
                         j = i if len(src) == n else min(len(src) - 1, round(i * len(src) / n))
                         for on, el in B.onsets(src[j]):
@@ -196,6 +235,62 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             plan.chosen[gi] = chosen
         plans.append(plan)
     return plans
+
+
+def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> None:
+    """Cue notes (small heads, Audiveris small-chord) become rests: they show what another
+    instrument plays, the player doesn't play them. Bars with only cue chords on a staff
+    lose all its notes; in mixed bars the chords are matched to note onsets by x order."""
+    by_page = {p.number: p for p in pages}
+    for plan in plans:
+        if not plan.n or not plan.chosen:
+            continue
+        page = by_page.get(plan.system.page)
+        if page is None:
+            continue
+        for gi, g in enumerate(plan.system.groups()):
+            if gi not in plan.chosen:
+                continue
+            for si, st in enumerate(g, start=1):
+                il = st.interline
+                chords = [c for c in page.chords if c.staff == st.id
+                          and c.x > st.header + 2.5 * il and (not c.small or c.grade >= 0.7)]
+                for i in range(plan.n):
+                    l, r = plan.xs[i]
+                    here = sorted((c for c in chords if l <= c.x + c.w / 2 < r), key=lambda c: c.x)
+                    normal = [c for c in here if not c.small]
+                    # a small chord right before a normal one is a grace note, not a cue
+                    small = [c for c in here if c.small and not any(
+                        0 <= n.x - (c.x + c.w) <= 4 * il for n in normal)]
+                    if not small:
+                        continue
+                    bar = plan.chosen[gi][i]
+                    ons = sorted({on for on, el in B.onsets(bar) if el.tag == "note"
+                                  and el.find("rest") is None and el.find("grace") is None
+                                  and int(el.findtext("staff", "1") or 1) == si})
+                    if not ons:
+                        continue
+                    if not normal:
+                        # Audiveris may miss the real notes too (and read a rest as a
+                        # small chord): the cue chords must account for the bar's notes
+                        if len(small) != len(ons) and not (len(small) >= 2 and 2 * len(small) >= len(ons)):
+                            continue
+                        drop = set(ons)
+                    else:
+                        events: list[tuple[float, bool]] = []
+                        for c in here:
+                            if events and abs(c.x - events[-1][0]) < 0.8 * il:
+                                continue    # same chord
+                            events.append((c.x, c in small))
+                        # only when every chord pairs with a note onset; a guess by x
+                        # would turn played notes into rests
+                        if len(events) != len(ons):
+                            continue
+                        drop = {on for on, (_, sm) in zip(ons, events) if sm}
+                    removed = B.cues_to_rests(bar, si, drop)
+                    if removed:
+                        stats.cue_notes_removed += removed
+                        plan.cues.add((gi, i))
 
 
 def _group_of(sy: System, staff_id: int) -> tuple[int, int]:
@@ -213,7 +308,9 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
     classified = [T.classify(page) for page in pages]
     credits = [ln for pt in classified for ln in pt.credits]
     words = [pl.line.text for pt in classified for pl in pt.words]
-    instruments = instruments_from(meta, credits, words) if split else []
+    instruments = instruments_from(meta, credits, words) if split or meta.get("doubling") else []
+    # without "(Vln)"-style aliases, parenthesized text is never an instrument label
+    paren_aliases = any(a.startswith("(") for i in instruments for a in i["aliases"])
     for pt in classified:
         for pl in pt.words:
             plan = by_sys.get(id(pl.system))
@@ -232,13 +329,19 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             text = T.clean_words(pl.line.text)
             if not T.is_words(text):
                 continue
+            if (gi, i) in plan.cues and text.startswith("("):
+                continue            # "(Clar)": the label of cue notes that were removed
             on = _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)) \
                 if estimate_onset else 0
             d = B.add_direction(bar, B.words_direction(text, "above" if pl.above else "below"),
                                 on, staff_no)
             stats.words += 1
             name = match_instrument(text, instruments) if instruments else None
-            if name:
+            if name and text.startswith("(") and not paren_aliases:
+                name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
+            if name and TO_LABEL.match(text):
+                plan.pending[(gi, i)] = name
+            elif name:
                 plan.labels[(gi, i)] = name
             elif split or (pl.above and pl.staff is min(pl.system.staves, key=lambda s: s.top)
                            and is_system_text(text)):
@@ -446,6 +549,7 @@ def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) ->
             plan.times[i:i + 1] = [plan.times[i]] * count
             plan.xs[i:i + 1] = [plan.xs[i]] * count
             plan.labels = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.labels.items()}
+            plan.pending = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.pending.items()}
             plan.n += count - 1
             stats.multirest_bars_added += count - 1
 
@@ -456,6 +560,7 @@ TEMPO_TERMS = re.compile(
     r"\b(rall|rit|ritard|riten|accel|tempo|poco|mosso|meno|pi[uù]|attacca|segue|maestoso|"
     r"lento|largo|adagio|andante|moderato|allegro|allegretto|presto|vivace|rubato|"
     r"fermata|colla|freely|slowly|broadly|tacet|cresc|dim|decresc|morendo|dolce)\b", re.I)
+TO_LABEL = re.compile(r"^\W*to\s", re.I)     # "to Flute - fast", "[to Drum Set]"
 STAFF_TERMS = re.compile(r"\b(loco|8va|8vb|15ma|pizz|arco|div|unis|solo|tutti|rh|lh|mute|"
                          r"senza|con|sord|ped|pedal)\b", re.I)
 
@@ -498,7 +603,7 @@ def instruments_from(meta: dict, credits: list[T.Line], words: list[str]) -> lis
             if isinstance(it, str):
                 out.append({"name": it, "aliases": []})
             else:
-                out.append({"name": it["name"], "aliases": list(it.get("aliases") or [])})
+                out.append({**it, "aliases": list(it.get("aliases") or [])})
         return out
     # header lines listing the instruments ("Timpani", "Sus Cymbal", ...) that also
     # appear as a label inside the music
@@ -511,9 +616,49 @@ def instruments_from(meta: dict, credits: list[T.Line], words: list[str]) -> lis
     return out
 
 
+CLEF_CLASS = {"percussion": "perc", "perc": "perc", "pitched": "pitched", "treble": "pitched",
+              "bass": "pitched"}
+
+
 def _clef_class(bar: B.Bar) -> str:
     sign = (bar.clefs.get(1) or ("", "", ""))[0]
     return "perc" if sign == "percussion" else ("pitched" if sign else "")
+
+
+TRANSPOSE_KEYS = {"C": (0, 0), "B": (-1, -1), "Bb": (-1, -2), "A": (-2, -3), "Ab": (-2, -4),
+                  "G": (-3, -5), "F#": (-3, -6), "F": (-4, -7), "E": (-5, -8), "Eb": (-5, -9),
+                  "D": (-6, -10), "Db": (-6, -11)}
+
+
+def parse_transpose(spec) -> tuple[int, int, int]:
+    """(diatonic, chromatic, octave-change) from written to sounding pitch.
+
+    "Bb" / "F" / "Eb" / "A": the key's pitch below written C (clarinet, horn, alto sax, ...);
+    "8va" / "8vb" add an octave ("Bb 8vb" tenor sax, "8vb" double bass, "8va" piccolo);
+    or a dict {diatonic, chromatic, octave_change}.
+    """
+    if not spec:
+        return 0, 0, 0
+    if isinstance(spec, dict):
+        return (int(spec.get("diatonic", 0)), int(spec.get("chromatic", 0)),
+                int(spec.get("octave_change", spec.get("octave-change", 0))))
+    d = c = o = 0
+    for tok in str(spec).replace("♭", "b").replace("♯", "#").split():
+        t = tok.lower()
+        if t in ("8va", "8ve"):
+            o += 1
+        elif t == "8vb":
+            o -= 1
+        elif t == "15mb":
+            o -= 2
+        elif t == "15ma":
+            o += 2
+        else:
+            key = next((k for k in TRANSPOSE_KEYS if k.lower() == t), None)
+            if key is None:
+                raise ValueError(f"transpose: unknown '{tok}' (use e.g. Bb, F, Eb, \"Bb 8vb\", 8vb)")
+            d, c = TRANSPOSE_KEYS[key]
+    return d, c, o
 
 
 @dataclass
@@ -521,21 +666,45 @@ class OutPart:
     name: str
     staves: int
     bars: list[B.Bar | None]
+    changes: dict[int, dict] = field(default_factory=dict)   # bar -> instrument (name, transpose)
 
 
 def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
-                part_names: dict[int, str]) -> tuple[list[OutPart], list]:
+                part_names: dict[int, str], doubling: bool = False,
+                transpose=None) -> tuple[list[OutPart], list]:
+    """Tracks (output track id per staff group) -> parts.
+
+    split: single-staff tracks are cut into one part per instrument; doubling: they stay
+    one part that changes instrument. The instrument of a bar: a printed label there;
+    else a pending "to X" once the track plays again; else, if the clef class changes
+    (percussion <-> pitched): with `clef:` given in the instruments, the one that played
+    most bars of that class on this track (the main instrument), else the next unused
+    one; else the current one.
+    A lower track that never had one starts with the `lower_staff` instrument.
+    """
     total = sum(p.n for p in plans)
     times: list = []
     for p in plans:
         times += p.times
+    switching = (split or doubling) and bool(instruments)
     tracks: dict[int, list[B.Bar | None]] = {}
     staves: dict[int, int] = {}
     owner: dict[int, list[str | None]] = {}
     pos = 0
     cur: dict[int, str | None] = {}
-    last_class: dict[int, str] = {}
-    used: list[str] = []
+    pend: dict[int, str] = {}
+    klass: dict[str, str] = {x["name"]: CLEF_CLASS[str(x["clef"]).lower()]
+                             for x in instruments if x.get("clef")}
+    declared = bool(klass)
+    track_cls: dict[int, str] = {}   # clef class of the track's last bar
+    used: list[str] = []             # first-use order
+    played: Counter = Counter()      # (track, instrument) -> bars with notes
+    lower = next((x["name"] for x in instruments if x.get("lower_staff")), None)
+
+    def unused(cls: str | None = None) -> str | None:
+        return next((x["name"] for x in instruments if x["name"] not in used
+                     and (cls is None or klass.get(x["name"], cls) == cls)), None)
+
     for p in plans:
         for gi, g in enumerate(p.system.groups()):
             if gi not in p.chosen:
@@ -544,34 +713,55 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
             tracks.setdefault(L, [None] * total)
             owner.setdefault(L, [None] * total)
             staves[L] = max(staves.get(L, 1), len(g))
-            cls = _clef_class(p.chosen[gi][0]) if p.chosen[gi] else ""
-            if split and len(g) == 1:
-                label0 = p.labels.get((gi, 0))
-                if label0 is None and cls and last_class.get(L) and cls != last_class[L]:
-                    nxt = next((i["name"] for i in instruments if i["name"] not in used), None)
-                    if nxt:
-                        cur[L] = nxt
-                last_class[L] = cls or last_class.get(L, "")
             for i, bar in enumerate(p.chosen[gi]):
                 tracks[L][pos + i] = bar
-                if split and len(g) == 1:
-                    if (gi, i) in p.labels:
-                        cur[L] = p.labels[(gi, i)]
-                    if cur.get(L) is None:
-                        cur[L] = next((x["name"] for x in instruments if x["name"] not in used), None)
-                    owner[L][pos + i] = cur[L]
-                    if cur[L] and cur[L] not in used:
-                        used.append(cur[L])
+                if not (switching and len(g) == 1):
+                    continue
+                cls = _clef_class(bar)
+                label = p.labels.get((gi, i))
+                if label:
+                    cur[L] = label
+                    pend.pop(L, None)
+                elif pend.get(L) and not bar.rest_only:
+                    cur[L] = pend.pop(L)
+                elif cls and track_cls.get(L) and cls != track_cls[L] and cur.get(L):
+                    back = max((n for (t, n) in played if t == L and klass.get(n) == cls),
+                               key=lambda n: played[(L, n)], default=None)
+                    cur[L] = ((back or unused(cls)) if declared else unused()) or cur[L]
+                if cur.get(L) is None:
+                    cur[L] = (lower if L > 1 else None) or unused() or instruments[0]["name"]
+                if (gi, i) in p.pending:
+                    pend[L] = p.pending[(gi, i)]
+                name = cur[L]
+                owner[L][pos + i] = name
+                if name not in used:
+                    used.append(name)
+                if not bar.rest_only:
+                    played[(L, name)] += 1
+                    if cls:
+                        klass.setdefault(name, cls)
+                if cls:
+                    track_cls[L] = cls
         pos += p.n
+    ins = {x["name"]: x for x in instruments}
     parts: list[OutPart] = []
     if not split:
         for L in sorted(tracks):
-            parts.append(OutPart(part_names.get(L, f"Part {L}"), staves[L], tracks[L]))
+            part = OutPart(part_names.get(L, f"Part {L}"), staves[L], tracks[L])
+            if switching and any(owner[L]):
+                prev = None
+                for g, name in enumerate(owner[L]):
+                    if name and name != prev:
+                        part.changes[g] = ins[name]
+                        prev = name
+            elif transpose:
+                part.changes[0] = {"transpose": transpose}
+            parts.append(part)
         return parts, times
     by_name: dict[str, OutPart] = {}
     order = [i["name"] for i in instruments if i["name"] in used]
     for name in order:
-        by_name[name] = OutPart(name, 1, [None] * total)
+        by_name[name] = OutPart(name, 1, [None] * total, {0: ins[name]})
     for L in sorted(tracks):
         if staves[L] > 1 or not any(owner[L]):
             by_name[f"__{L}"] = OutPart(part_names.get(L, f"Part {L}"), staves[L], tracks[L])
@@ -635,6 +825,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
     for k, p in enumerate(parts, start=1):
         part = etree.SubElement(root, "part", id=f"P{k}")
         state_key, state_time, state_clefs = None, None, {}
+        state_tr = (0, 0, 0)
         first_clefs = next((b.clefs for b in p.bars if b is not None and b.clefs), {})
         for g, bar in enumerate(p.bars):
             t = times[g] if g < len(times) else None
@@ -664,6 +855,15 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 if c and c != state_clefs.get(s):
                     _attr_clef(a, s, c, p.staves)
                     state_clefs[s] = c
+            if g in p.changes:
+                tr = parse_transpose(p.changes[g].get("transpose"))
+                if tr != state_tr:
+                    t_el = etree.SubElement(a, "transpose")
+                    etree.SubElement(t_el, "diatonic").text = str(tr[0])
+                    etree.SubElement(t_el, "chromatic").text = str(tr[1])
+                    if tr[2]:
+                        etree.SubElement(t_el, "octave-change").text = str(tr[2])
+                    state_tr = tr
             if len(a):
                 m.append(a)
             for el in bar.items:
