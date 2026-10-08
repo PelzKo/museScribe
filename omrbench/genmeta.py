@@ -13,6 +13,7 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   skip         systems to leave out, "1-3" or "1,4" -> skip_systems: [1, 2, 3]
   instruments  "Clarinet, Flute": looked up in the instrument library. Several on a
                non-drums part -> split_instruments; a single one only adds its transpose.
+               "Triangle (lower_staff)": keys in brackets for this song only.
   extra        raw YAML keys, "chord_names: false, lyrics: true"; "lyrics: null" leaves out a
                part default (the engine's own default applies)
   notes        ignored
@@ -20,6 +21,7 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
 from __future__ import annotations
 
 import difflib
+import re
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -55,8 +57,21 @@ def _fmt(s: str, ctx: dict):
     return s.format(**ctx) if isinstance(s, str) else s
 
 
-def _instrument(name: str, library: dict):
-    extra = library.get(name) or {}
+def split_instruments_cell(cell: str) -> list[tuple[str, dict]]:
+    """"Timpani, Triangle (lower_staff)" -> [("Timpani", {}), ("Triangle", {"lower_staff": True})].
+
+    Brackets hold YAML keys for this song only; a bare key means true."""
+    out = []
+    for m in re.finditer(r"\s*([^,(]+?)\s*(?:\(([^)]*)\))?\s*(?:,|$)", cell):
+        if not m.group(1):
+            continue
+        keys = yaml.safe_load("{" + m.group(2) + "}") if m.group(2) else {}
+        out.append((m.group(1), {k: True if v is None else v for k, v in keys.items()}))
+    return out
+
+
+def _instrument(name: str, library: dict, own: dict | None = None):
+    extra = {**(library.get(name) or {}), **(own or {})}
     return {"name": name, **extra} if extra else name
 
 
@@ -66,15 +81,20 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
     meta.update({k: _fmt(v, ctx) for k, v in (show.get("parts", {}).get(name) or {}).items()})
     if row["skip"]:
         meta["skip_systems"] = expand_range(row["skip"])
-    names = [x.strip() for x in row["instruments"].split(",") if x.strip()]
+    entries = split_instruments_cell(row["instruments"])
     extra = yaml.safe_load("{" + row["extra"].replace("\n", ", ") + "}") if row["extra"] else {}
     library = show.get("instruments", {})
     drums = (extra.get("type") or meta.get("type")) == "drums"
-    if len(names) == 1 and not drums:
-        if t := (library.get(names[0]) or {}).get("transpose"):
+    if any(own.get("lower_staff") for _, own in entries):
+        # the sheet names this song's lower-staff instrument: it replaces the library's
+        library = {k: {f: v for f, v in (x or {}).items() if f != "lower_staff"}
+                   for k, x in library.items()}
+    if len(entries) == 1 and not drums:
+        name, own = entries[0]
+        if t := {**(library.get(name) or {}), **own}.get("transpose"):
             meta["transpose"] = t
-    elif names:
-        meta["instruments"] = [_instrument(n, library) for n in names]
+    elif entries:
+        meta["instruments"] = [_instrument(n, library, own) for n, own in entries]
         if not drums and not extra.get("doubling"):
             meta["split_instruments"] = True
     meta.update(extra)

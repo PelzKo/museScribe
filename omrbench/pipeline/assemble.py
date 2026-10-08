@@ -1064,17 +1064,25 @@ def _norm(s: str) -> list[str]:
 
 
 def match_instrument(text: str, instruments: list[dict]) -> str | None:
+    """The instrument a label names: the text starts with a name/alias ("Glock - soft
+    mallets"), else it holds a 4+ letter word of exactly one instrument ("Sus Cymbal" ->
+    Cymbal; "Tree" is no match when Bell Tree and Mark Tree are both listed)."""
     words = _norm(text)
     if not words:
         return None
+    owners: dict[str, set[str]] = {}
     for ins in instruments:
         for alias in [ins["name"], *ins.get("aliases", [])]:
             aw = _norm(alias)
             if alias.startswith("(") and alias.lower() in text.lower():
                 return ins["name"]
-            if aw and (words[:len(aw)] == aw or any(w in words for w in aw if len(w) >= 4)):
+            if aw and words[:len(aw)] == aw:
                 return ins["name"]
-    return None
+            for w in aw:
+                if len(w) >= 4:
+                    owners.setdefault(w, set()).add(ins["name"])
+    hits = {next(iter(owners[w])) for w in words if len(owners.get(w, ())) == 1}
+    return hits.pop() if len(hits) == 1 else None
 
 
 def instruments_from(meta: dict, credits: list[T.Line], words: list[str]) -> list[dict]:
