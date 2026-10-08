@@ -75,7 +75,8 @@ LOG = logmod.get("bars")
 
 
 def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> list[Bar]:
-    """Split a MusicXML <part> into Bars (durations rescaled to D divisions)."""
+    """Split a MusicXML <part> into Bars (durations rescaled to D divisions). Lyrics are
+    dropped: vocal scores get them from the page layout (lyrics.py)."""
     bars: list[Bar] = []
     div = Fraction(1)
     clefs: dict[int, Clef] = {}
@@ -332,7 +333,8 @@ def restaff(sources: list[tuple[Bar, list[int]]]) -> Bar:
                 cur += int(el.findtext("duration", "0") or 0)
             elif el.tag == "direction":
                 st = el.findtext("staff")
-                s = int(st) if st and st.isdigit() else min(mapping, default=1)
+                # no <staff>: staff 1 of its part (MusicXML default), not every group
+                s = int(st) if st and st.isdigit() else 1
                 if s in mapping:
                     off = el.findtext("offset")
                     extras.append((cur + (int(off) if off and off.strip().lstrip("-").isdigit() else 0),
@@ -385,6 +387,211 @@ def restaff(sources: list[tuple[Bar, list[int]]]) -> Bar:
         if el.tag == "direction":
             add_direction(out, el, on, staff)
     return out
+
+
+def _staff_of(el: etree._Element) -> int:
+    return int(el.findtext("staff", "1") or 1)
+
+
+def sounding(bar: Bar) -> dict[int, list[tuple[int, etree._Element]]]:
+    """staff -> (onset, note) of the first note of every chord (no rests, no graces)."""
+    out: dict[int, list[tuple[int, etree._Element]]] = {}
+    for on, el in onsets(bar):
+        if el.tag == "note" and el.find("rest") is None and el.find("chord") is None \
+                and el.find("grace") is None:
+            out.setdefault(_staff_of(el), []).append((on, el))
+    return out
+
+
+def keep_span(bar: Bar, start: int, end: int | None) -> Bar:
+    """Copy of the bar with only what starts in [start, end): other notes become rests
+    (a staff two singers share), their directions are dropped."""
+    out = copy.deepcopy(bar)
+    on_of = {id(el): on for on, el in onsets(out)}
+    inside = lambda el: start <= on_of.get(id(el), 0) and (end is None or on_of.get(id(el), 0) < end)
+    items = []
+    for el in out.items:
+        if el.tag == "direction" and not inside(el):
+            continue
+        if el.tag == "note" and el.find("rest") is None and not inside(el):
+            if el.find("chord") is not None or el.find("grace") is not None:
+                continue
+            r = etree.Element("note")
+            etree.SubElement(r, "rest")
+            for tag in ("duration", "voice", "type", "dot", "time-modification", "staff"):
+                for x in el.findall(tag):
+                    r.append(copy.deepcopy(x))
+            items.append(r)
+            continue
+        items.append(el)
+    out.items = items
+    return out
+
+
+def dedupe_chord_marks(bar: Bar) -> int:
+    """Articulations / fermatas once per chord, on its first note: the engines put a
+    staccato on every note of a chord, MuseScore then stacks them. Returns the number
+    removed."""
+    removed = 0
+    seen: set[str] = set()
+    for el in bar.items:
+        if el.tag != "note":
+            continue
+        if el.find("chord") is None:
+            seen = set()
+        for nt in el.findall("notations"):
+            for art in nt.findall("articulations"):
+                for a in list(art):
+                    if a.tag in seen:
+                        art.remove(a)
+                        removed += 1
+                    else:
+                        seen.add(a.tag)
+                if not len(art):
+                    nt.remove(art)
+            for f in nt.findall("fermata"):
+                if "fermata" in seen:
+                    nt.remove(f)
+                    removed += 1
+                seen.add("fermata")
+            if not len(nt):
+                el.remove(nt)
+    return removed
+
+
+GRACE_FLAGGED = ("eighth", "16th", "32nd")
+
+
+def fix_graces(bars: list[Bar]) -> tuple[int, int]:
+    """Grace notes are printed with flags (eighth / 16th); the engines often miss them
+    and write quarter. Those get the piece's most common flagged grace type; "graces"
+    of half or whole length are misreads and are dropped. Returns (retyped, dropped)."""
+    graces = [n for b in bars for n in b.notes() if n.find("grace") is not None]
+    flagged = [n.findtext("type") for n in graces if n.findtext("type") in GRACE_FLAGGED]
+    typ = max(set(flagged), key=flagged.count) if flagged else "eighth"
+    retyped = dropped = 0
+    for b in bars:
+        keep = []
+        for el in b.items:
+            if el.tag == "note" and el.find("grace") is not None:
+                t = el.find("type")
+                if t is not None and t.text in ("half", "whole", "breve"):
+                    dropped += 1
+                    continue
+                if t is not None and t.text not in GRACE_FLAGGED + ("64th",):
+                    t.text = typ
+                    retyped += 1
+                for d in el.findall("dot"):
+                    el.remove(d)
+            keep.append(el)
+        if dropped:
+            # a dropped grace that started a chord: its chord notes start the chord now
+            for k, el in enumerate(keep):
+                if el.tag == "note" and el.find("chord") is not None and el.find("grace") is not None:
+                    prev = keep[k - 1] if k else None
+                    if prev is None or prev.tag != "note" or prev.find("grace") is None:
+                        el.remove(el.find("chord"))
+        b.items = keep
+    return retyped, dropped
+
+
+# ----------------------------------------------------------------------------- beams
+
+BEAM_LEVELS = {"eighth": 1, "16th": 2, "32nd": 3, "64th": 4, "128th": 5}
+_AFTER_BEAM = ("notations", "lyric", "play", "listen")
+
+
+def _beat_group(time: tuple[str, str] | None, D: int) -> tuple[int, bool]:
+    """(beam group length in divisions, 4/4-like: two eighth beats may join)."""
+    try:
+        beats, btype = int(time[0]), int(time[1])
+    except (TypeError, ValueError, IndexError):
+        beats, btype = 4, 4
+    unit = 4 * D // btype if btype else D
+    if btype == 8 and beats % 3 == 0:
+        return 3 * unit, False          # 6/8, 9/8, 12/8, 3/8: dotted quarters
+    return unit, beats == 4 and btype == 4
+
+
+def auto_beam(bar: Bar, time: tuple[str, str] | None, D: int) -> int:
+    """Beam runs of unbeamed eighths and shorter by beat (MuseScore shows notes without
+    <beam> with flags). Runs end at rests, longer notes, beat boundaries and notes that
+    already have beams. In 4/4 two beats of plain eighths join (beats 1-2, 3-4).
+    Returns the number of notes beamed."""
+    group, join_halves = _beat_group(time, D)
+    voices: dict[tuple[int, str], list[dict]] = {}
+    cur = last = 0
+    for el in bar.items:
+        if el.tag == "note":
+            chord = el.find("chord") is not None
+            on = last if chord else cur
+            if el.find("grace") is None:
+                key = (_staff_of(el), el.findtext("voice", "1"))
+                evs = voices.setdefault(key, [])
+                if chord and evs and evs[-1]["on"] == on:
+                    evs[-1]["notes"].append(el)
+                else:
+                    dur = int(el.findtext("duration", "0") or 0)
+                    evs.append({"on": on, "dur": dur, "notes": [el],
+                                "rest": el.find("rest") is not None,
+                                "level": BEAM_LEVELS.get(el.findtext("type", ""), 0)})
+                if not chord:
+                    last = cur
+                    cur += int(el.findtext("duration", "0") or 0)
+        elif el.tag == "backup":
+            cur -= int(el.findtext("duration", "0") or 0)
+        elif el.tag == "forward":
+            cur += int(el.findtext("duration", "0") or 0)
+    beamed = 0
+    for evs in voices.values():
+        evs.sort(key=lambda e: e["on"])
+        runs: list[list[dict]] = []
+        for e in evs:
+            ok = (not e["rest"] and e["level"] and e["dur"] > 0
+                  and not any(n.find("beam") is not None for n in e["notes"]))
+            if not ok:
+                runs.append([])
+                continue
+            prev = runs[-1][-1] if runs and runs[-1] else None
+            if prev and prev["on"] + prev["dur"] == e["on"] and prev["on"] // group == e["on"] // group:
+                runs[-1].append(e)
+            else:
+                runs.append([e])
+        runs = [r for r in runs if r]
+        if join_halves:
+            merged: list[list[dict]] = []
+            for r in runs:
+                p = merged[-1] if merged else None
+                plain = lambda rr: len(rr) == 2 and all(x["level"] == 1 for x in rr) \
+                    and rr[0]["on"] % group == 0
+                if p and plain(p) and plain(r) and p[0]["on"] % (2 * group) == 0 \
+                        and r[0]["on"] == p[0]["on"] + group:
+                    p.extend(r)
+                else:
+                    merged.append(r)
+            runs = merged
+        for r in runs:
+            if len(r) < 2:
+                continue
+            for k, e in enumerate(r):
+                for lvl in range(1, e["level"] + 1):
+                    has_prev = k > 0 and r[k - 1]["level"] >= lvl
+                    has_next = k + 1 < len(r) and r[k + 1]["level"] >= lvl
+                    if has_prev and has_next:
+                        kind = "continue"
+                    elif has_next:
+                        kind = "begin"
+                    elif has_prev:
+                        kind = "end"
+                    else:
+                        kind = "forward hook" if k == 0 else "backward hook"
+                    for n in e["notes"]:
+                        b = etree.Element("beam", number=str(lvl))
+                        b.text = kind
+                        idx = next((i for i, c in enumerate(n) if c.tag in _AFTER_BEAM), len(n))
+                        n.insert(idx, b)
+                beamed += 1
+    return beamed
 
 
 def cues_to_rests(bar: Bar, staff: int, onsets_: set[int]) -> int:

@@ -4,7 +4,10 @@
 #   choir            vocal staves only
 #   piano            solo keyboard (grand staff)
 #   piano_reduction  vocal score: piano at the bottom, a varying number of sung /
-#                    spoken lines above it
+#                    spoken lines above it. pipeline engine: the lowest two staves are
+#                    the piano, the voices get one part per printed singer label
+#                    ("DMITRY:", "ALL:"), with lyrics; `transcribe` writes them as
+#                    "<name> - Voices.musicxml" and "<name> - Piano.musicxml"
 #   part             single instrumental part
 #   orchestral | drums | other
 type: choir
@@ -68,6 +71,11 @@ languages: [deu, lat]
 # conductor part: vocal / reference staves above the piano). Tempo and rehearsal marks
 # above the system are kept; lyrics and labels of the left-out staves are not.
 # keep_staves: 2
+
+# pipeline engine, type: piano_reduction: spoken dialogue ("GLEB: (cont.) We hear you,
+# comrades, ...") is dropped, or kept as one text over the voices' staves.
+# drop (default) | text
+# spoken_text: text
 
 # pipeline engine: leave out these systems (1-based, counted over the transcribed
 # pages), e.g. the end of the previous piece on the first page.

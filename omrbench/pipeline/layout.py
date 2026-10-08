@@ -51,10 +51,18 @@ class System:
     dropped: list[Staff] = field(default_factory=list)  # staves left out (meta keep_staves)
     skip: bool = False       # left out entirely (meta skip_systems)
     regrouped: bool = False  # groups are not the Audiveris parts
+    piano_group: int | None = None   # vocal score: index of the piano group (the last)
 
     @property
     def all_staves(self) -> list[Staff]:
         return sorted(self.staves + self.dropped, key=lambda s: s.top)
+
+    @property
+    def vocal_staves(self) -> list[Staff]:
+        """Vocal score: the staves above the piano."""
+        if self.piano_group is None:
+            return []
+        return [st for gi, g in enumerate(self.groups()) if gi != self.piano_group for st in g]
 
     @property
     def top(self) -> float:
@@ -92,6 +100,8 @@ class Text:
     role: str = ""           # sentence role (Direction, Title, UnknownRole, Lyrics, ...)
     line: int = 0            # id of the sentence / lyric line it belongs to
     font: str = ""           # Audiveris font code, e.g. "BIS-35" = bold italic serif 35
+    syllabic: str = ""       # lyric items: single | begin | middle | end
+    verse: int = 1           # lyric items: number of their lyric line
 
 
 @dataclass
@@ -106,6 +116,21 @@ class Chord:
 
 
 @dataclass
+class Mark:
+    kind: str                # dynamics | wedge
+    shape: str               # DYNAMICS_MF, CRESCENDO, DIMINUENDO, ...
+    x: float
+    y: float
+    w: float
+    h: float
+    grade: float = 0.0
+
+    @property
+    def cy(self) -> float:
+        return self.y + self.h / 2
+
+
+@dataclass
 class Page:
     number: int
     width: int
@@ -113,6 +138,7 @@ class Page:
     systems: list[System] = field(default_factory=list)
     texts: list[Text] = field(default_factory=list)
     chords: list[Chord] = field(default_factory=list)
+    marks: list[Mark] = field(default_factory=list)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
         for sy in self.systems:
@@ -186,9 +212,12 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
 
     # text: words live inside sentences, lyric items inside lyric lines (by bounds)
     lines = []
+    verse: dict[int, int] = {}
     for tag in ("sentence", "lyric-line"):
         for el in root.iter(tag):
             lines.append((int(el.get("id")), el.get("role", ""), _bounds(el)))
+            if tag == "lyric-line" and (el.get("number") or "").isdigit():
+                verse[int(el.get("id"))] = int(el.get("number"))
 
     def owner(x, y, w, h):
         for lid, role, (lx, ly, lw, lh) in lines:
@@ -206,12 +235,17 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
             x, y, w, h = _bounds(el)
             page.chords.append(Chord(int(el.get("staff") or 0), x, y, w, h, small,
                                      _f(el, "grade")))
+    for tag in ("dynamics", "wedge"):
+        for el in root.iter(tag):
+            if el.get("shape"):
+                page.marks.append(Mark(tag, el.get("shape"), *_bounds(el), _f(el, "ctx-grade")))
     for el in root.iter("lyric-item"):
         x, y, w, h = _bounds(el)
         lid, role = owner(x, y, w, h)
         page.texts.append(Text(number, int(el.get("staff") or 0), x, y, w, h,
                                el.get("value", ""), (el.get("kind") or "syllable").lower(),
-                               role or "Lyrics", lid, el.get("font", "")))
+                               role or "Lyrics", lid, el.get("font", ""),
+                               (el.get("syllabic") or "single").lower(), verse.get(lid, 1)))
     return page
 
 
@@ -247,8 +281,11 @@ def where(systems: list[System], k: int) -> str:
     return f"page {sy.page} system {on_page} (#{k + 1})"
 
 
+PIANO_TRACK = 1000      # output track of the piano in a vocal score (after the voices)
+
+
 def regroup(pages: list[Page], keep_bottom: int | None = None, singles: bool = False,
-            skip: set[int] | None = None) -> None:
+            skip: set[int] | None = None, piano_bottom: int | None = None) -> None:
     """Change what the pipeline reads as staff groups, in place.
 
     keep_bottom: only the lowest n staves of every system, read as one group (a
@@ -257,6 +294,8 @@ def regroup(pages: list[Page], keep_bottom: int | None = None, singles: bool = F
     singles: every staff its own group (condensed percussion: Timpani over a
         percussion staff are two instruments, not a grand staff)
     skip: systems (1-based, counted over all pages) to leave out entirely
+    piano_bottom: vocal score: the lowest n staves are the piano (track PIANO_TRACK),
+        every staff above it its own group (track = position from the top)
     Group k of a system then becomes output track k (not the Audiveris part), so the
     same group lands in the same part whatever Audiveris made of the staves above it.
     """
@@ -267,6 +306,15 @@ def regroup(pages: list[Page], keep_bottom: int | None = None, singles: bool = F
             if skip and k in skip:
                 sy.skip = True
             staves = sorted(sy.staves, key=lambda s: s.top)
+            if piano_bottom:
+                n_voc = max(0, len(staves) - piano_bottom)
+                for i, st in enumerate(staves):
+                    st.part = i if i < n_voc else n_voc
+                sy.staves = staves
+                sy.regrouped = True
+                sy.piano_group = n_voc
+                sy.logical = list(range(1, n_voc + 1)) + [PIANO_TRACK]
+                continue
             if keep_bottom and len(staves) > keep_bottom:
                 sy.dropped = staves[:-keep_bottom]
                 staves = staves[-keep_bottom:]

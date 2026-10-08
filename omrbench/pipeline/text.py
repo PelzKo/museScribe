@@ -123,6 +123,155 @@ class PageText:
     jumps: list[tuple[Placed, tuple[int, str]]] = field(default_factory=list)  # "[to] 97" -> (97, "")
     lettered: list[tuple[Placed, tuple[int, str]]] = field(default_factory=list)  # "131A"
     rehearsals: list[tuple[Placed, str]] = field(default_factory=list)
+    # vocal scores (classify(vocal=True)); words then holds only the other text
+    singers: list[tuple[Placed, str]] = field(default_factory=list)   # "DMITRY:" -> "Dmitry"
+    spoken: list[tuple[Placed, str]] = field(default_factory=list)    # "GLEB: We hear you, ..."
+    stage: list[Placed] = field(default_factory=list)                 # "(VLAD POPOV enters.)"
+
+
+def running_headers(pages: list[Page]) -> set[str]:
+    """Texts printed at the top or bottom of most pages ("A Rumor In St. Petersburg -
+    pg. 4", "ANASTASIA"), as keys of _run_key. Audiveris gives them varying roles, so
+    position and role alone miss some, and they end up as lyrics or words."""
+    seen: dict[str, set[int]] = {}
+    for page in pages:
+        if not page.height:
+            continue
+        for ln in lines(page):
+            if ln.bottom < 0.12 * page.height or ln.top > 0.92 * page.height:
+                if re.search(r"[:;‘'’]", ln.text):
+                    continue        # "DMITRY:" starts many pages, it is a singer label
+                k = _run_key(ln.text)
+                if len(k) >= 4:
+                    seen.setdefault(k, set()).add(page.number)
+    need = max(2, min(3, len(pages) // 2))
+    return {k for k, ps in seen.items() if len(ps) >= need}
+
+
+def _run_key(text: str) -> str:
+    return re.sub(r"[^a-z]", "", text.lower())
+
+
+RUNNING_PAGE = re.compile(r"\bpg\.?\s*\d+\s*$|\bpage\s+\d+\s*$", re.I)
+
+
+# ------------------------------------------------------------------- vocal scores
+
+# "DMITRY:", "SOLO WOMAN:", "(2nd x:) WOMEN:", "ALL (NO DMITRY):", "BLACK MARKETEER #3:"; OCR
+# often turns the colon into ";", "‘" or a few junk letters ("WOMENtss")
+_LABEL = re.compile(r"^(?:\([^)]*\)\s*)?\(?([A-Z][A-Z'’.+&-]*(?:\s+(?:[A-Z][A-Z'’.+&-]*|#?\d+)){0,2})"
+                    r"\)?\s*(\([^)]*\))?\s*([:;‘'’]|[a-z]{1,3}\b)?\s*(.*)$")
+_NOT_SINGERS = {"PED", "SFZ", "FP", "MP", "MF", "PP", "FF", "SOP", "ALTO", "TACET", "TUTTI"}
+
+
+def parse_label(text: str, bold: bool) -> tuple[str, str] | None:
+    """(singer, rest of the line) of a line starting with a singer label, else None."""
+    m = _LABEL.match(text.strip())
+    if not m:
+        return None
+    name, colon, rest = m.group(1).strip(" .'’"), m.group(3), m.group(4).strip()
+    letters = re.sub(r"[^A-Z]", "", name)
+    if len(letters) < 3 or name.upper() != name or name in _NOT_SINGERS:
+        return None
+    if not colon and not (bold and not rest):
+        return None             # caps words without colon: "ANASTASIA", "SFZ"
+    return name, rest
+
+
+def singer_name(label: str) -> str:
+    """"SOLO WOMAN" -> "Solo Woman", "DMITRY+ALL" -> "Dmitry+All"."""
+    return re.sub(r"[A-Za-z’']+", lambda m: m.group(0).capitalize(), label)
+
+
+def _bold(ln: Line) -> bool:
+    return any(a.font.startswith("B") for a in ln.atoms)
+
+
+def _is_lyrics(ln: Line) -> bool:
+    return all(a.role == "Lyrics" or a.kind in ("syllable", "hyphen") for a in ln.atoms)
+
+
+def _prose(text: str) -> bool:
+    """Dialogue: a sentence, not a direction ("(+1 SOP 8va)", "cresc.")."""
+    t = text.strip()
+    if t.startswith("(") and t.endswith(")"):
+        return False
+    return len(re.findall(r"[^\W\d_]{2,}", t)) >= 3
+
+
+def _rows(page_lines: list[Line]) -> list[Line]:
+    """Lines of one printed row joined (dialogue has wide gaps, lines() splits it)."""
+    rows: list[Line] = []
+    for ln in sorted(page_lines, key=lambda l: (l.top, l.x)):
+        row = next((r for r in rows if min(r.bottom, ln.bottom) - max(r.top, ln.top)
+                    >= 0.5 * min(r.h, ln.h)), None)
+        if row is None:
+            rows.append(Line(ln.page, list(ln.atoms)))
+        else:
+            row.atoms.extend(ln.atoms)
+    return rows
+
+
+def vocal_blocks(page_lines: list[Line]) -> tuple[list[tuple[Line, str, list[Line]]],
+                                                  list[tuple[Line, str, list[Line]]]]:
+    """Singer labels and spoken dialogue of a vocal score page.
+
+    Returns (labels, spoken): (anchor line, text, member lines). A label is a caps name
+    ending in a colon ("DMITRY:"), possibly over two rows ("FIRST" / "WOMAN:"). It
+    starts dialogue when prose follows on its row or right below it ("GLEB: (cont.)" /
+    "We hear you, comrades, ..."); the text is "GLEB: (cont.) We hear you, ...".
+    """
+    lyric = [ln for ln in page_lines if _is_lyrics(ln) and not parse_label(ln.text, _bold(ln))]
+    others = [ln for ln in page_lines if ln not in lyric]
+    used: set[int] = set()
+    labels, spoken = [], []
+    for ln in sorted(others, key=lambda l: (l.top, l.x)):
+        if id(ln) in used:
+            continue
+        lab = parse_label(ln.text, _bold(ln))
+        members = [ln]
+        if lab is None or not lab[1] and not re.search(r"[:;‘'’]\s*$", ln.text) and _bold(ln):
+            # "FIRST" over "WOMAN:", "ALL" over "(NO DMITRY):"
+            below = next((o for o in others if id(o) not in used and o is not ln
+                          and 0 <= o.top - ln.bottom <= 0.8 * ln.h
+                          and abs(o.x - ln.x) <= 3 * ln.h), None)
+            if below is not None and re.fullmatch(r"[A-Z][A-Z'’.+&\s-]*", ln.text.strip()):
+                two = parse_label(f"{ln.text} {below.text}", _bold(ln) or _bold(below))
+                if two:
+                    lab, members = two, [ln, below]
+        if lab is None:
+            continue
+        name, rest = lab
+        # same row to the right ("GLEB:" ... "to raise spirits)"), then rows below
+        row = [o for o in others if o not in members and id(o) not in used
+               and min(o.bottom, ln.bottom) - max(o.top, ln.top) >= 0.5 * min(o.h, ln.h)
+               and 0 <= o.x - ln.right <= 8 * ln.h and not parse_label(o.text, _bold(o))]
+        text_parts = [rest] + [o.text for o in sorted(row, key=lambda o: o.x)]
+        block, last = [], members[-1]
+        while True:
+            nxt = [o for o in others if o not in members and o not in block and id(o) not in used
+                   and 0 <= o.top - last.bottom <= (0.8 if block else 1.2) * last.h
+                   and o.x >= ln.x - 3 * ln.h
+                   and not parse_label(o.text, _bold(o))]
+            if not nxt:
+                break
+            row_lines = _rows(nxt)[0]
+            members_row = [o for o in nxt if min(o.bottom, row_lines.bottom) - max(o.top, row_lines.top)
+                           >= 0.5 * min(o.h, row_lines.h)]
+            if not (_prose(row_lines.text) or block and is_words(row_lines.text)):
+                break
+            block += members_row
+            text_parts.append(Line(ln.page, [a for o in members_row for a in o.atoms]).text)
+            last = max(members_row, key=lambda o: o.bottom)
+        full = " ".join(t for t in text_parts if t).strip()
+        if block or _prose(full):
+            members = members + row + block
+            spoken.append((members[0], f"{name}: {full}".strip(), members))
+        else:
+            labels.append((members[0], name, members))
+        for o in members:
+            used.add(id(o))
+    return labels, spoken
 
 
 def nearest_staff(staves: list[Staff], y: float) -> tuple[Staff, bool]:
@@ -143,12 +292,42 @@ def nearest_staff(staves: list[Staff], y: float) -> tuple[Staff, bool]:
     return above[-1], False
 
 
-def classify(page: Page) -> PageText:
+def _staff_below(systems: list[System], y: float) -> tuple[System, Staff] | None:
+    """The staff right below height y (labels and dialogue sit above their staff)."""
+    cands = [(st.top, sy, st) for sy in systems for st in sy.all_staves if st.top >= y]
+    if not cands:
+        return None
+    _, sy, st = min(cands, key=lambda c: c[0])
+    return sy, st
+
+
+def classify(page: Page, vocal: bool = False, running: set[str] | None = None) -> PageText:
+    """vocal: a vocal score (piano reduction): singer labels and dialogue are picked out,
+    lyric lines are left to the notes (Audiveris attaches them), stage directions above
+    the music go with the voices."""
     res = PageText()
     systems = [s for s in page.systems if s.staves]
     if not systems:
         res.credits = [ln for ln in lines(page) if ln.text]
         return res
+    page_lines = lines(page)
+    is_running = lambda ln: _run_key(ln.text) in (running or ()) or bool(RUNNING_PAGE.search(ln.text))
+    for ln in page_lines:
+        if is_running(ln) and ln.text:
+            res.credits.append(ln)
+    page_lines = [ln for ln in page_lines if not is_running(ln)]
+    taken: set[int] = set()
+    if vocal:
+        labels, spoken = vocal_blocks(page_lines)
+        for found, out in ((labels, res.singers), (spoken, res.spoken)):
+            for anchor, value, members in found:
+                taken.update(id(m) for m in members)
+                sy, st = _staff_below(systems, anchor.top) or (systems[-1], systems[-1].all_staves[-1])
+                if sy.skip:
+                    continue
+                if st not in sy.staves:          # dropped staff: onto the top kept one
+                    st = sy.staves[0]
+                out.append((Placed(anchor, sy, st, True), value))
     il = systems[0].staves[0].interline
     first_top = systems[0].all_staves[0].top
     last_bottom = systems[-1].bottom
@@ -163,9 +342,9 @@ def classify(page: Page) -> PageText:
             ln.bottom < top and bool(ln.roles & HEADER_ROLES) and is_words(ln.text)
             and ln.bottom < top - 4 * il)
 
-    for ln in lines(page):
+    for ln in page_lines:
         t = ln.text
-        if not t:
+        if not t or id(ln) in taken:
             continue
         footer = ln.top > last_bottom + 8 * il
         if is_header(ln, first_top) or footer:
@@ -218,10 +397,20 @@ def classify(page: Page) -> PageText:
                 res.rehearsals.append((pl, t))       # boxed number at the system start
             else:
                 res.numbers.append((pl, int(t)))
+        elif vocal and _is_lyrics(ln):
+            continue            # sung text: Audiveris attaches it to the notes
         elif is_words(t) and (any(a.kind == "word" for a in ln.atoms)
                               or re.search(r"[^\W\d_]{3,}", t)):
             # lines made only of lyric fragments need a real word ('"lf', 'P' are noise)
-            res.words.append(pl)
+            if vocal and len(re.findall(r"[^\W\d_]{2,}", t)) >= 6 and re.search(r"[.?!,]", t) \
+                    and not t.startswith("("):
+                res.spoken.append((pl, t))      # dialogue whose speaker label OCR lost
+            elif vocal and (t.startswith("(") and len(t.split()) >= 2 or t.endswith(")") and "(" not in t) \
+                    and (staff in sy.vocal_staves or above and staff is sy.staves[0]):
+                # "(VLAD POPOV enters.)"; a row ending in ")" continues one
+                res.stage.append(pl)
+            else:
+                res.words.append(pl)
     return res
 
 

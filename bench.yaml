@@ -24,6 +24,8 @@ engines:
   pipeline:               # audiveris-meta layout + homr per staff group + repairs
     type: pipeline
     prefer: auto          # scans: homr bars first; vector PDFs: audiveris bars first
+    # auto_beam: true     # beam unbeamed eighths and shorter by beat (else MuseScore shows flags)
+    # max_wedge_bars: 2   # hairpins longer than this are misread pairings and dropped
     # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run)
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer

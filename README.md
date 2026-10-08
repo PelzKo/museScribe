@@ -224,7 +224,24 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    agrees with most numbers is used; a single stray number shifts nothing. Bars are never
    removed, except empty bars before printed bar 1. Where the output has more bars than the
    numbers say (an extra bar was read), `run.log` says where.
-8. **Percussion split:** for `type: drums` (or `split_instruments: true`), a shared staff is
+8. **Vocal scores** (`type: piano_reduction`): the lowest two staves of every system are the
+   piano, each staff above it a voice. A voice staff belongs to the singer whose label was
+   printed last on it ("DMITRY:", "FIRST WOMAN:", "ALL (NO DMITRY):"), carried over to the
+   staff at the same position in later systems; a label inside a bar splits the bar there.
+   Every distinct label becomes a part. Lyrics, dynamics and hairpins are placed from their
+   position on the page (Audiveris' MusicXML hangs piano dynamics on voices and joins
+   hairpins to far-away stops): a syllable goes to the note above it, a mark between the
+   piano staves is the piano's, one above a vocal staff that voice's. Dialogue (a speaker
+   label followed by prose: "GLEB: (cont.)" / "We hear you, ...") is dropped, or with
+   `spoken_text: text` kept as one text over the voices. Stage directions ("(VLAD POPOV
+   enters.)") go to the voices. The piano gets no sung or spoken text. `transcribe` writes
+   `<name> - Voices.musicxml` and `<name> - Piano.musicxml`; tempo and other system text
+   is in both.
+9. **Clean-up for MuseScore** (all scores): eighths and shorter without beams are beamed by
+   beat (`auto_beam`), hairpins over `max_wedge_bars` (2) bars are dropped, graces whose
+   flag was missed (read as quarters) get the piece's grace type, half/whole "graces" are
+   dropped, articulations are kept once per chord.
+10. **Percussion split:** for `type: drums` (or `split_instruments: true`), a shared staff is
    split into one part per instrument at the printed labels ("Timpani", "Bell Tree", ...).
    Instrument names come from `instruments:` in `meta.yaml`, or else from the header lines that
    also appear as labels. A clef change without a readable label switches to the next listed

@@ -19,6 +19,8 @@ Config (bench.yaml):
     crop_margins: [5, 4, 3]     # interlines above/below a staff group; retried in order
     text_onset: bar             # bar = words at the bar start (as in the GTs); estimated
     align_bar_numbers: true     # rest bars where printed numbers / "[to] 97" cuts skip bars
+    auto_beam: true             # beam unbeamed eighths and shorter by beat
+    max_wedge_bars: 2           # longer hairpins are misread pairings: dropped (0 = keep)
 """
 from __future__ import annotations
 
@@ -40,6 +42,7 @@ from ..rasterize import is_scan, rasterize
 from . import assemble as A
 from . import bars as B
 from . import layout
+from . import vocal as V
 from .layout import where
 
 
@@ -55,6 +58,27 @@ def _last_error(log: Path) -> str:
         if "Error" in ln or "Exception" in ln:
             return ln.strip()[-200:]
     return "no output"
+
+
+def book_roots(mxls: list[Path]) -> list:
+    """The Audiveris MusicXML of every .omr book, in layout.load's book order (None for
+    a book without export). Sheet by sheet, a sheet whose export failed has its .omr
+    but no .mxl: the exports alone would put every later page's bars on the page
+    before. Several movements of a book (book.mvt1.mxl, ...) are concatenated."""
+    if not mxls:
+        return []
+    out_dir = min((p.parent for p in mxls), key=lambda d: len(d.parts))
+    while out_dir.name.startswith("sheet") and out_dir.parent != out_dir:
+        out_dir = out_dir.parent
+    out = []
+    for omr in sorted(out_dir.rglob("*.omr")):
+        mine = sorted(p for p in mxls if p.parent == omr.parent)
+        if not mine:
+            out.append(None)
+            continue
+        roots = [musicxml.load(p) for p in mine]
+        out.append(roots[0] if len(roots) == 1 else musicxml.merge_pages(roots))
+    return out
 
 
 class Pipeline(Engine):
@@ -229,10 +253,18 @@ class Pipeline(Engine):
 
         # 4. assemble
         t1 = time.perf_counter()
-        score, summary = self.assemble(sample, pages, books, roots, stats)
+        score, summary, files = self.assemble(sample, pages, books, roots, stats)
         summary["crops"] = len(jobs)
         res.output = workdir / "output.musicxml"
         musicxml.write(score, res.output)
+        if files:
+            # vocal score: the piano and the voices as files of their own (transcribe
+            # writes them next to the PDF); output.musicxml has both, for scoring
+            res.extras["split_outputs"] = {}
+            for name, root in files.items():
+                path = workdir / f"output-{name.lower()}.musicxml"
+                musicxml.write(root, path)
+                res.extras["split_outputs"][name] = path
         assemble_s = time.perf_counter() - t1
         # assembly runs in this process: count its wall time, CPU is negligible
         total.wall_s += assemble_s
@@ -258,13 +290,22 @@ class Pipeline(Engine):
         m = sample.meta
         keep = int(m["keep_staves"]) if m.get("keep_staves") else None
         skip = {int(x) for x in (m.get("skip_systems") or [])}
+        if self.vocal(sample):
+            layout.regroup(pages, skip=skip, piano_bottom=2)
+            return
         layout.regroup(pages, keep_bottom=keep, singles=self.split(sample) and not keep, skip=skip)
+
+    @staticmethod
+    def vocal(sample: Sample) -> bool:
+        """Vocal score: piano = the lowest two staves, voices split by singer labels,
+        written as two files (transcribe.SPLIT_TYPES)."""
+        return sample.score_type == "piano_reduction"
 
     def assemble(self, sample: Sample, pages: list[layout.Page], books: list[Path],
                  roots: dict, stats: A.Stats):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
-        a_roots = [musicxml.load(p) for p in books]
-        D = B.common_divisions(a_roots + list(roots.values()))
+        a_roots = book_roots(books)
+        D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values()))
         systems = [sy for p in pages for sy in p.systems]
         homr_bars = {}
         for (k, gi), r in roots.items():
@@ -279,6 +320,7 @@ class Pipeline(Engine):
                 LOG.warning(f"homr output of {where(systems, k)} staff group {gi + 1} unusable: "
                             + (f"read {got} staves, expected {n_staves}" if bars else "no bars")
                             + " -> Audiveris bars used")
+        vocal = self.vocal(sample)
         aud_bars = A.group_bars(A.audiveris_bars(a_roots, systems, D), systems)
         for k, gi, n_staves, img, why in stats.failed_crops:
             ab = aud_bars.get((k, gi))
@@ -297,6 +339,9 @@ class Pipeline(Engine):
         prefer = list(prefer)
         self.last_prefer = prefer
         plans = A.plan_systems(pages, aud_bars, homr_bars, D, prefer, stats)
+        if vocal:
+            V.attach_lyrics(plans, pages, D, stats)
+            V.place_marks(plans, pages, D, stats)
         if sample.meta.get("cues") == "drop":
             A.drop_cues(plans, pages, D, stats)
         split = self.split(sample)
@@ -307,15 +352,31 @@ class Pipeline(Engine):
         A.expand_multirests(plans, homr_bars, D, stats)
         if self.cfg.get("align_bar_numbers", True):
             A.align_bars(plans, D, stats, LOG)
-        names = {}
-        # regrouped tracks are not the Audiveris parts, their names don't apply
-        for r in a_roots[:1] if not any(sy.regrouped for sy in systems) else []:
-            for i, sp in enumerate(r.findall("part-list/score-part"), start=1):
-                names[i] = sp.findtext("part-name") or f"Part {i}"
-        parts, times = A.build_parts(plans, split and bool(instruments), instruments, names,
-                                     doubling=bool(sample.meta.get("doubling")),
-                                     transpose=sample.meta.get("transpose"))
-        score = A.write_score(parts, times, credits, D)
+        beam = bool(self.cfg.get("auto_beam", True))
+        max_wedge = int(self.cfg.get("max_wedge_bars", 2))
+        files: dict[str, object] = {}
+        if vocal:
+            voices, piano, times = A.build_vocal_parts(plans, D, stats)
+            A.share_system_text([voices, [piano]], times, D)
+            parts = voices + [piano]
+            if max_wedge:
+                A.limit_wedges(parts, max_wedge, stats)
+            files = {"Voices": A.write_score(voices, times, credits, D, beam, stats),
+                     "Piano": A.write_score([piano], times, credits, D, beam, stats)}
+            score = musicxml.merge_parts([files["Voices"], files["Piano"]])
+        else:
+            names = {}
+            # regrouped tracks are not the Audiveris parts, their names don't apply
+            for r in [r for r in a_roots if r is not None][:1] \
+                    if not any(sy.regrouped for sy in systems) else []:
+                for i, sp in enumerate(r.findall("part-list/score-part"), start=1):
+                    names[i] = sp.findtext("part-name") or f"Part {i}"
+            parts, times = A.build_parts(plans, split and bool(instruments), instruments, names,
+                                         doubling=bool(sample.meta.get("doubling")),
+                                         transpose=sample.meta.get("transpose"))
+            if max_wedge:
+                A.limit_wedges(parts, max_wedge, stats)
+            score = A.write_score(parts, times, credits, D, beam, stats)
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened
                 LOG.info(f"assemble: {note}")
@@ -327,10 +388,11 @@ class Pipeline(Engine):
                    "systems_bars": [p.n for p in plans],
                    "instruments": [i["name"] for i in instruments],
                    "parts": [p.name for p in parts]}
-        return score, summary
+        return score, summary, files
 
     def reassemble(self, sample: Sample, workdir: Path):
-        """Re-run only the assembly on an existing work dir (development aid)."""
+        """Re-run only the assembly on an existing work dir (development aid).
+        Returns (score, summary, split files)."""
         omr_src = workdir / "audiveris" / "out"
         pages = layout.load(omr_src)
         self.regroup(sample, pages)

@@ -43,6 +43,10 @@ class SysPlan:
     mr: dict[int, tuple[str, int, int]] = field(default_factory=dict) # bar -> multi-rest evidence
     evidence: list[tuple[float, str, int, int]] = field(default_factory=list)  # x, kind, a, b
     aud: list[B.Bar] | None = None       # Audiveris bars of the system, if their count is n
+    # vocal score: (group, bar) -> [(onset, singer)] from "DMITRY:" labels; bar -> text
+    # of the voices not on a vocal staff (dialogue, stage directions)
+    singers: dict[tuple[int, int], list[tuple[int, str]]] = field(default_factory=dict)
+    voice_text: dict[int, list[etree._Element]] = field(default_factory=dict)
 
 
 @dataclass
@@ -57,6 +61,18 @@ class Stats:
     notes: list[str] = field(default_factory=list)
     failed_crops: list = field(default_factory=list)   # (system, group, staves, image, reasons)
     homr_crops_expected: int = 0                         # of the failed: rests only, nothing to read
+    lyrics: int = 0                # syllables attached to notes (vocal score)
+    lyrics_unplaced: int = 0       # syllables with no note under them
+    singer_labels: int = 0
+    spoken: int = 0                # dialogue blocks found (kept as text or dropped)
+    beamed: int = 0                # notes beamed by auto_beam
+    dynamics: int = 0              # placed from the layout (vocal score)
+    wedges: int = 0
+    marks_unplaced: int = 0
+    chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
+    graces_retyped: int = 0        # flagless graces given the piece's grace type
+    graces_dropped: int = 0        # half/whole "graces" (misreads)
+    wedges_dropped: int = 0        # hairpins longer than max_wedge_bars / unpaired
 
     def to_dict(self) -> dict:
         return {"bars": dict(self.bars), "systems": dict(self.systems),
@@ -65,6 +81,13 @@ class Stats:
                 "homr_crops_failed": self.homr_crops_failed, "words": self.words,
                 "cue_notes_removed": self.cue_notes_removed,
                 "homr_crops_failed_rest_only": self.homr_crops_expected,
+                "lyrics": self.lyrics, "lyrics_unplaced": self.lyrics_unplaced,
+                "singer_labels": self.singer_labels,
+                "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
+                "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
+                "chord_marks_deduped": self.chord_marks_deduped,
+                "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
+                "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
 
 
@@ -86,6 +109,8 @@ def audiveris_bars(books: list[etree._Element], systems: list[System], D: int
     """(global system index, logical part id) -> Audiveris bars of that system."""
     out: dict[tuple[int, int], list[B.Bar]] = {}
     for bi, root in enumerate(books):
+        if root is None:
+            continue                # this sheet's export failed: homr only there
         idx = [k for k, sy in enumerate(systems) if sy.book == bi and sy.stacks]
         parts = root.findall("part")
         if not parts or not idx:
@@ -160,6 +185,7 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
 def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[str],
                  stats: Stats) -> list[SysPlan]:
     systems = [sy for p in pages for sy in p.systems]
+    chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
     cur_time = None
     for k, sy in enumerate(systems):
@@ -217,6 +243,13 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             for i in range(n):
                 length = B.bar_length(plan.times[i], D)
                 cands = [(s, options[s][i]) for s in order if options.get(s)]
+                l, r = plan.xs[i]
+                ids = {st.id for st in group}
+                if any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ())):
+                    # noteheads are printed: a rest-only reading lost a voice whose rhythm
+                    # didn't add up (Audiveris), the other engine's notes are better
+                    with_notes = [(s, b) for s, b in cands if not b.rest_only]
+                    cands = with_notes + [c for c in cands if c not in with_notes]
                 pick = next(((s, b) for s, b in cands if B.bar_ok(b, length)), None) \
                     or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
@@ -310,11 +343,73 @@ def _group_of(sy: System, staff_id: int) -> tuple[int, int]:
     return 0, 1
 
 
+SPOKEN_TEXT = ("drop", "text")
+
+
+def _label_onset(plan: SysPlan, page: Page, staff_id: int, x: float, D: int) -> tuple[int, int]:
+    """(bar, onset) a singer label printed at x refers to: the first chord at or right of
+    it (labels are left-aligned with their first note). Chords are matched to the bar's
+    note onsets by order when their counts agree, else by position."""
+    i = _bar_at(plan, x + 1)
+    sy = plan.system
+    il = next((s.interline for s in sy.staves if s.id == staff_id), 20.0)
+    gi, staff_no = _group_of(sy, staff_id)
+    bar = plan.chosen[gi][i]
+    length = B.bar_length(plan.times[i], D)
+    l, r = plan.xs[i]
+    chords = sorted((c for c in page.chords if c.staff == staff_id and l <= c.x + c.w / 2 < r),
+                    key=lambda c: c.x)
+    xs: list[float] = []
+    for c in chords:
+        if not xs or c.x - xs[-1] >= 0.8 * il:
+            xs.append(c.x)
+    ons = sorted({on for on, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None
+                  and el.find("grace") is None and int(el.findtext("staff", "1") or 1) == staff_no})
+    after = [k for k, cx in enumerate(xs) if cx >= x - 1.5 * il]
+    if xs and not after:
+        return i, 10 ** 9           # right of the bar's last note: from the next bar on
+    if len(xs) == len(ons) and after:
+        return i, ons[after[0]]
+    return i, _onset_at(plan, bar, i, x, length) if ons else 0
+
+
+def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: dict, D: int,
+                      stats: Stats, meta: dict) -> None:
+    """Singer labels -> SysPlan.singers; dialogue (meta spoken_text: text) and stage
+    directions -> SysPlan.voice_text."""
+    mode = str(meta.get("spoken_text", "drop")).lower()
+    if mode not in SPOKEN_TEXT:
+        raise ValueError(f"spoken_text: '{mode}' (use {' or '.join(SPOKEN_TEXT)})")
+    for page, pt in zip(pages, classified):
+        for pl, label in pt.singers:
+            plan = by_sys.get(id(pl.system))
+            if not plan or not plan.n:
+                continue
+            gi, _ = _group_of(pl.system, pl.staff.id)
+            if gi == pl.system.piano_group or gi not in plan.chosen:
+                continue            # no vocal staff below the label
+            i, on = _label_onset(plan, page, pl.staff.id, pl.line.x, D)
+            plan.singers.setdefault((gi, i), []).append((on, label))
+            stats.singer_labels += 1
+        texts = [(pl, t, True) for pl, t in pt.spoken] + [(pl, pl.line.text, False) for pl in pt.stage]
+        for pl, t, spoken in texts:
+            stats.spoken += spoken
+            plan = by_sys.get(id(pl.system))
+            if not plan or not plan.n or (spoken and mode == "drop"):
+                continue
+            i = _bar_at(plan, pl.line.x + 1)
+            plan.voice_text.setdefault(i, []).append(B.words_direction(t, "above"))
+
+
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                meta: dict, split: bool, estimate_onset: bool = False
                ) -> tuple[list[T.Line], list[dict]]:
     by_sys = {id(p.system): p for p in plans}
-    classified = [T.classify(page) for page in pages]
+    vocal = any(p.system.piano_group is not None for p in plans)
+    running = T.running_headers(pages)
+    classified = [T.classify(page, vocal, running) for page in pages]
+    if vocal:
+        _place_vocal_text(classified, pages, by_sys, D, stats, meta)
     credits = [ln for pt in classified for ln in pt.credits]
     words = [pl.line.text for pt in classified for pl in pt.words]
     instruments = instruments_from(meta, credits, words) if split or meta.get("doubling") else []
@@ -360,14 +455,26 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if not plan or not plan.n or 0 not in plan.chosen:
                 continue
             i = _bar_at(plan, pl.line.x + 1)
+            if vocal and value.isdigit():
+                # vocal scores box the bar number at the system start
+                plan.printed.setdefault(i, int(value))
+                continue
             d = etree.Element("direction", placement="above")
             etree.SubElement(etree.SubElement(d, "direction-type"), "rehearsal").text = value
             B.add_direction(plan.chosen[0][i], d, 0, 1)
         for pl, n in pt.numbers:
             plan = by_sys.get(id(pl.system))
-            if plan and plan.n and not pl.above:
-                # bar numbers are printed below the start of their bar
-                plan.printed.setdefault(_bar_at(plan, pl.line.x + pl.line.h), n)
+            if not plan or not plan.n:
+                continue
+            i = _bar_at(plan, pl.line.x + pl.line.h)
+            il = pl.staff.interline
+            if not pl.above:
+                # bar numbers are printed below the start of their bar (parts)
+                plan.printed.setdefault(i, n)
+            elif vocal and pl.staff is pl.system.staves[0] and abs(pl.line.x - plan.xs[i][0]) <= 3 * il:
+                # vocal scores print them above the bar, at its barline (a centred number
+                # there is a multi-rest count)
+                plan.printed.setdefault(i, n)
         for pl, n in pt.jumps:
             plan = by_sys.get(id(pl.system))
             if plan and plan.n:
@@ -488,6 +595,21 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
     return known
 
 
+def _clamp_vocal(plan: SysPlan) -> None:
+    """After bars at the system end were removed: labels there act from the end of the
+    last bar (i.e. from the next one), text moves onto the last bar."""
+    last = plan.n - 1
+    singers: dict[tuple[int, int], list[tuple[int, str]]] = {}
+    for (g, j), marks in plan.singers.items():
+        marks = marks if j <= last else [(10 ** 9, name) for _, name in marks]
+        singers.setdefault((g, min(j, last)), []).extend(marks)
+    plan.singers = singers
+    text: dict[int, list[etree._Element]] = {}
+    for j, els in plan.voice_text.items():
+        text.setdefault(min(j, last), []).extend(els)
+    plan.voice_text = text
+
+
 def drop_courtesy_bars(plans: list[SysPlan], stats: Stats) -> None:
     """A tiny bar at the end of a system is a page-turn reminder ("3" over a short
     multi-rest, courtesy key signature), not a bar of its own."""
@@ -511,6 +633,7 @@ def drop_courtesy_bars(plans: list[SysPlan], stats: Stats) -> None:
             plan.lettered.pop(plan.n - 1, None)
             plan.n -= 1
             plan.jumps = {min(j, plan.n): v for j, v in plan.jumps.items()}
+            _clamp_vocal(plan)
             stats.notes.append(f"system {k + 1}: dropped {(st.right - st.left) / il:.1f}-interline"
                                " rest bar at the system end")
 
@@ -569,6 +692,8 @@ def resegment_rest_systems(plans: list[SysPlan], D: int, stats: Stats) -> None:
         plan.xs = [(bounds[i], bounds[i + 1]) for i in range(m)]
         plan.jumps = {(m if j >= plan.n else j): v for j, v in plan.jumps.items()}
         plan.lettered = {}
+        plan.singers = {(g, 0): v for (g, _), v in plan.singers.items()}
+        plan.voice_text = {0: [e for v in plan.voice_text.values() for e in v]} if plan.voice_text else {}
         plan.n = m
         plan.mr = {i: ("range", s["number"], s["number"] + s["count"] - 1) if s["kind"] == "range"
                    else ("count", s["count"], s["count"]) for i, s in enumerate(segs) if s["count"]}
@@ -615,6 +740,8 @@ def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) ->
             plan.jumps = _shift(plan.jumps, i + 1, count - 1)
             plan.lettered = _shift(plan.lettered, i + 1, count - 1)
             plan.cues = _shift_set(plan.cues, i + 1, count - 1)
+            plan.singers = _shift(plan.singers, i + 1, count - 1, keyed_by_group=True)
+            plan.voice_text = _shift(plan.voice_text, i + 1, count - 1)
             plan.n += count - 1
             stats.multirest_bars_added += count - 1
 
@@ -658,6 +785,8 @@ def _insert_rests(plan: SysPlan, i: int, count: int, D: int) -> None:
     plan.jumps = _shift(plan.jumps, i, count)
     plan.lettered = _shift(plan.lettered, i, count)
     plan.cues = _shift_set(plan.cues, i, count)
+    plan.singers = _shift(plan.singers, i, count, keyed_by_group=True)
+    plan.voice_text = _shift(plan.voice_text, i, count)
     plan.n += count
 
 
@@ -681,7 +810,19 @@ def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
     plan.jumps = _shift(plan.jumps, i + 1, -1)
     plan.lettered = _shift({j: v for j, v in plan.lettered.items() if j != i}, i + 1, -1)
     plan.cues = _shift_set({c for c in plan.cues if c[1] != i}, i + 1, -1)
+    # labels and text of a dropped (empty) bar act from the next one
+    singers: dict = {}
+    for (g, j), v in plan.singers.items():
+        singers.setdefault((g, j - 1 if j > i else j), []).extend(
+            [(0, name) for _, name in v] if j == i else v)
+    plan.singers = singers
+    text: dict = {}
+    for j, v in plan.voice_text.items():
+        text.setdefault(j - 1 if j > i else j, []).extend(v)
+    plan.voice_text = text
     plan.n -= 1
+    if plan.n:
+        _clamp_vocal(plan)
 
 
 def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
@@ -1113,6 +1254,155 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
     return list(by_name.values()), times
 
 
+def _canonical_singers(plans: list[SysPlan]) -> dict[str, str]:
+    """OCR spellings of one label ("DMITRY", "DMlTRY") -> the most frequent one."""
+    import Levenshtein
+
+    counts = Counter(name for p in plans for v in p.singers.values() for _, name in v)
+    out: dict[str, str] = {}
+    for name, _ in counts.most_common():
+        out[name] = next((c for c in out.values() if c == out.get(c) and
+                          Levenshtein.ratio(c, name) >= 0.85), name)
+    return out
+
+
+def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats
+                      ) -> tuple[list[OutPart], OutPart, list]:
+    """Vocal score -> (one part per singer label, the piano, times).
+
+    The singer of a vocal staff is the last label printed on it ("DMITRY:"), carried
+    over to the staff at the same position in the next systems; a label inside a bar
+    splits the bar there. Before the first label a staff is "Voice <n>". Dialogue and
+    stage directions go to the top voice part.
+    """
+    total = sum(p.n for p in plans)
+    times: list = []
+    for p in plans:
+        times += p.times
+    canon = _canonical_singers(plans)
+    piano = OutPart("Piano", 2, [None] * total)
+    voices: dict[str, OutPart] = {}
+    cur: dict[int, str] = {}
+    texts: dict[int, list[etree._Element]] = {}
+    clashes = 0
+    pos = 0
+    for p in plans:
+        for i, els in p.voice_text.items():
+            g = pos + min(i, p.n - 1) if p.n else pos - 1     # system left empty: previous bar
+            if 0 <= g < total:
+                texts.setdefault(g, []).extend(els)
+        for gi, g in enumerate(p.system.groups()):
+            if gi not in p.chosen:
+                continue
+            if gi == p.system.piano_group:
+                for i, bar in enumerate(p.chosen[gi]):
+                    piano.bars[pos + i] = bar
+                continue
+            L = p.system.logical[gi]
+            for i, bar in enumerate(p.chosen[gi]):
+                length = B.bar_length(p.times[i], D) or 10 ** 9
+                segs: list[tuple[int, str | None]] = [(0, cur.get(L))]
+                for on, name in sorted(p.singers.get((gi, i), [])):
+                    name = canon.get(name, name)
+                    on = min(on, length)
+                    if segs[-1][0] == on:
+                        segs[-1] = (on, name)
+                    elif segs[-1][1] != name:
+                        segs.append((on, name))
+                cur[L] = segs[-1][1] if segs[-1][1] else cur.get(L)
+                for k, (start, name) in enumerate(segs):
+                    end = segs[k + 1][0] if k + 1 < len(segs) else None
+                    if start >= length or end == start:
+                        continue
+                    piece = bar if (start == 0 and end is None) else B.keep_span(bar, start, end)
+                    if name is None:
+                        if piece.rest_only:
+                            continue
+                        name = f"Voice {L}"
+                    part = voices.setdefault(name, OutPart(T.singer_name(name), 1, [None] * total))
+                    old = part.bars[pos + i]
+                    if old is None or old.rest_only:
+                        part.bars[pos + i] = piece
+                    elif not piece.rest_only:
+                        clashes += 1        # two staves with one singer: the first is kept
+        pos += p.n
+    parts = list(voices.values()) or [OutPart("Voice", 1, [None] * total)]
+    for g, els in texts.items():
+        top = parts[0]
+        if top.bars[g] is None:
+            top.bars[g] = B.rest_bar(1, B.bar_length(times[g], D), D)
+        for el in els:
+            B.add_direction(top.bars[g], el, 0, None)
+    if clashes:
+        stats.notes.append(f"vocal: {clashes} bar(s) where two staves had the same singer "
+                           "(the upper one kept)")
+    return parts, piano, times
+
+
+def share_system_text(groups: list[list[OutPart]], times: list, D: int) -> None:
+    """System-wide text and tempo onto the top part of every output score (vocal score:
+    the voices and the piano file each get a copy)."""
+    for g in range(len(times)):
+        found = []
+        for parts in groups:
+            for p in parts:
+                bar = p.bars[g]
+                if bar is None:
+                    continue
+                for el in [e for e in bar.items if e.get("system-text") or
+                           (e.tag == "direction" and e.find("direction-type/metronome") is not None)]:
+                    bar.items.remove(el)
+                    for st in el.findall("staff"):
+                        el.remove(st)
+                    el.set("system-text", "yes")
+                    found.append(el)
+        if not found:
+            continue
+        for parts in groups:
+            if not parts:
+                continue
+            top = parts[0]
+            if top.bars[g] is None:
+                top.bars[g] = B.rest_bar(top.staves, B.bar_length(times[g], D), D)
+            for el in reversed(found):
+                top.bars[g].items.insert(0, copy.deepcopy(el))
+
+
+def limit_wedges(parts: list[OutPart], max_bars: int, stats: Stats) -> None:
+    """Drop hairpins that span more than max_bars bars (a misread pairing: Audiveris
+    joins a start with a far-away stop) and starts/stops without a partner."""
+    for p in parts:
+        open_: dict[tuple[str, str], tuple[int, etree._Element, etree._Element]] = {}
+        bad: list[tuple[int, etree._Element, etree._Element]] = []
+        for g, bar in enumerate(p.bars):
+            if bar is None:
+                continue
+            for el in bar.items:
+                if el.tag != "direction":
+                    continue
+                for w in el.findall("direction-type/wedge"):
+                    key = (w.get("number", "1"), el.findtext("staff", "1"))
+                    if w.get("type") in ("crescendo", "diminuendo"):
+                        if key in open_:
+                            bad.append(open_.pop(key))
+                        open_[key] = (g, el, w)
+                    elif w.get("type") == "stop":
+                        start = open_.pop(key, None)
+                        if start is None:
+                            bad.append((g, el, w))
+                        elif g - start[0] > max_bars:
+                            bad += [start, (g, el, w)]
+        bad += open_.values()
+        for g, el, w in bad:
+            dt = w.getparent()
+            dt.remove(w)
+            if not len(dt):
+                el.remove(dt)
+            if el.find("direction-type") is None and el in p.bars[g].items:
+                p.bars[g].items.remove(el)
+            stats.wedges_dropped += w.get("type") != "stop"
+
+
 # ----------------------------------------------------------------------------- output
 
 def _attr_clef(a, staff: int, clef: B.Clef, staves: int) -> None:
@@ -1126,7 +1416,8 @@ def _attr_clef(a, staff: int, clef: B.Clef, staves: int) -> None:
         etree.SubElement(c, "clef-octave-change").text = clef[2]
 
 
-def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int) -> etree._Element:
+def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int,
+                beam: bool = True, stats: Stats | None = None) -> etree._Element:
     root = etree.Element("score-partwise", version="4.0")
     ident = etree.SubElement(root, "identification")
     etree.SubElement(etree.SubElement(ident, "encoding"), "software").text = "omrbench pipeline"
@@ -1157,10 +1448,23 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     el.remove(st)
                 parts[0].bars[g].items.insert(0, el)
     for p in parts:
-        for bar in p.bars:
+        retyped, dropped = B.fix_graces(p.bars)
+        if stats is not None:
+            stats.graces_retyped += retyped
+            stats.graces_dropped += dropped
+        for g, bar in enumerate(p.bars):
+            n = B.dedupe_chord_marks(bar)
+            if stats is not None:
+                stats.chord_marks_deduped += n
+            if beam:
+                n = B.auto_beam(bar, times[g] if g < len(times) else None, D)
+                if stats is not None:
+                    stats.beamed += n
             for el in bar.items:
                 if "system-text" in el.attrib:
                     del el.attrib["system-text"]
+                    # one copy per output file (vocal score); a merge keeps the first
+                    el.set("system", "only-top")
                 if el.tag == "direction" and p.staves > 1 and el.find("staff") is None:
                     etree.SubElement(el, "staff").text = "1"
     for k, p in enumerate(parts, start=1):
