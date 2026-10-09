@@ -391,6 +391,125 @@ def restaff(sources: list[tuple[Bar, list[int]]]) -> Bar:
     return out
 
 
+_SHARPS = "FCGDAEB"
+
+
+def key_alter(fifths: int, step: str) -> int:
+    if fifths > 0:
+        return 1 if step in _SHARPS[:fifths] else 0
+    return -1 if step in _SHARPS[::-1][:-fifths] else 0
+
+
+def respell(bar: Bar, fifths: int) -> int:
+    """Re-read the notes without a printed accidental in key `fifths` (an accidental
+    holds for its step and octave to the end of the bar). Returns the notes changed."""
+    held: dict[tuple[str, str], int] = {}
+    changed = 0
+    for n in bar.notes():
+        p = n.find("pitch")
+        if p is None:
+            continue
+        step, octave = p.findtext("step"), p.findtext("octave")
+        acc = n.find("accidental")
+        alter_el = p.find("alter")
+        cur = int(float(alter_el.text)) if alter_el is not None and alter_el.text else 0
+        if acc is not None:
+            held[(step, octave)] = cur
+            continue
+        want = held.get((step, octave), key_alter(fifths, step))
+        if want != cur:
+            changed += 1
+            if alter_el is None:
+                alter_el = etree.Element("alter")
+                p.insert(1, alter_el)
+            alter_el.text = str(want)
+            if want == 0:
+                p.remove(alter_el)
+    return changed
+
+
+def dedupe_unison(bar: Bar) -> int:
+    """Two voices of a staff on one shared notehead (choir unison) are read as two
+    notes: the later voice's copy becomes a <forward>. Returns the notes removed."""
+    seen: set[tuple] = set()
+    drop = set()
+    for on, el in onsets(bar):
+        if el.tag != "note" or el.find("rest") is not None or el.find("grace") is not None \
+                or el.find("pitch") is None:
+            continue
+        k = (on, el.findtext("staff", "1"), el.findtext("pitch/step"), el.findtext("pitch/octave"),
+             el.findtext("pitch/alter", "0"), el.findtext("duration"))
+        if k in seen and el.find("chord") is None:
+            drop.add(id(el))
+        seen.add(k)
+    if not drop:
+        return 0
+    items = []
+    for i, el in enumerate(bar.items):
+        if id(el) not in drop:
+            items.append(el)
+            continue
+        nxt = bar.items[i + 1] if i + 1 < len(bar.items) else None
+        if nxt is not None and nxt.tag == "note" and nxt.find("chord") is not None:
+            nxt.remove(nxt.find("chord"))      # the chord's next note takes its place
+            continue
+        f = etree.Element("forward")
+        etree.SubElement(f, "duration").text = el.findtext("duration")
+        items.append(f)
+    bar.items = items
+    return len(drop)
+
+
+def close_voice_gaps(bar: Bar, length: int | None) -> Bar:
+    """homr sometimes places a voice's notes after the other staff's ones (a <backup>
+    short or missing), so the voice runs past the bar end with gaps inside it. Such a
+    voice whose durations fit the bar is laid out note after note; other voices keep their
+    onsets. Returns the bar unchanged when no voice needs it."""
+    if not length or any(el.tag == "attributes" for el in bar.items):
+        return bar          # mid-bar clef changes: left alone
+    voices: dict[tuple[str, str], list[tuple[int, etree._Element]]] = {}
+    for on, el in onsets(bar):
+        if el.tag == "note":
+            voices.setdefault((el.findtext("staff", "1"), el.findtext("voice", "1")), []).append((on, el))
+    fix = set()
+    for k, evs in voices.items():
+        main = [(on, el) for on, el in evs if el.find("chord") is None and el.find("grace") is None]
+        durs = sum(int(el.findtext("duration", "0") or 0) for _, el in main)
+        end = max((on + int(el.findtext("duration", "0") or 0) for on, el in main), default=0)
+        if end > length and durs <= length:
+            fix.add(k)
+    if not fix:
+        return bar
+    out = Bar([], bar.source, bar.staves, dict(bar.clefs), bar.key, bar.time, bar.multirest)
+    pos_total = 0
+    for k, evs in sorted(voices.items(), key=lambda kv: (int(kv[0][0] or 1), kv[0][1])):
+        if pos_total:
+            b = etree.Element("backup")
+            etree.SubElement(b, "duration").text = str(pos_total)
+            out.items.append(b)
+        pos = 0
+        for on, el in evs:
+            is_chord = el.find("chord") is not None
+            main = not is_chord and el.find("grace") is None
+            if main and k not in fix and on > pos:
+                f = etree.Element("forward")
+                etree.SubElement(f, "duration").text = str(on - pos)
+                etree.SubElement(f, "voice").text = k[1]
+                if bar.staves > 1:
+                    etree.SubElement(f, "staff").text = k[0]
+                out.items.append(f)
+                pos = on
+            out.items.append(el)
+            if main:
+                pos += int(el.findtext("duration", "0") or 0)
+        pos_total = pos
+    for on, el in onsets(bar):
+        if el.tag == "direction":
+            st = el.findtext("staff")
+            add_direction(out, el, min(on, length), int(st) if st and st.isdigit() else None)
+    return out
+
+
 def _staff_of(el: etree._Element) -> int:
     return int(el.findtext("staff", "1") or 1)
 

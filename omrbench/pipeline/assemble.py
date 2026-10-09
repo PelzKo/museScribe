@@ -55,6 +55,7 @@ class Stats:
     systems: Counter = field(default_factory=Counter)   # how the bar count was decided
     multirest_bars_added: int = 0
     alignment_bars_added: int = 0
+    keys_respelled: int = 0
     homr_crops_failed: int = 0
     cue_notes_removed: int = 0
     words: int = 0
@@ -151,6 +152,12 @@ def group_bars(aud: dict, systems: list[System]) -> dict[tuple[int, int], list[B
                 out[(k, gi)] = [B.restaff([(b[i], keep) for b, keep in srcs])
                                 for i in range(len(srcs[0][0]))]
     return out
+
+
+def _clef_changed(bars: list[B.Bar], i: int) -> bool:
+    """The clef in force at bar i differs (sign/line, any staff) from the system's first."""
+    first, cur = bars[0].clefs, bars[i].clefs
+    return any(first.get(s, c)[:2] != c[:2] for s, c in cur.items())
 
 
 def _vote(a: int | None, homr_counts: list[int]) -> tuple[int, str]:
@@ -278,7 +285,15 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             chosen = []
             for i in range(n):
                 length = B.bar_length(plan.times[i], D)
-                cands = [(s, options[s][i]) for s in order if options.get(s)]
+                bar_order, clef_src = order, primary
+                seen = [s for s in order if options.get(s) and _clef_changed(options[s], i)]
+                if len(seen) == 1 and len([s for s in order if options.get(s)]) == 2:
+                    # a clef change inside the system that only one engine saw: the other
+                    # one's pitches are read in the old clef there
+                    bar_order = seen + [s for s in order if s != seen[0]]
+                    clef_src = options[seen[0]]
+                cands = [(s, B.close_voice_gaps(options[s][i], length) if s == "homr" else options[s][i])
+                         for s in bar_order if options.get(s)]
                 l, r = plan.xs[i]
                 ids = {st.id for st in group}
                 if any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ())):
@@ -297,9 +312,18 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                 stats.bars[s] += 1
                 bar = copy.deepcopy(bar)
                 bar.staves = max(bar.staves, len(group))
-                if primary is not None:
-                    bar.clefs = dict(primary[i].clefs) or bar.clefs
-                    bar.key = primary[i].key if primary[i].key is not None else bar.key
+                if clef_src is not None:
+                    bar.clefs = dict(clef_src[i].clefs) or bar.clefs
+                    bar.key = clef_src[i].key if clef_src[i].key is not None else bar.key
+                a_key = ab[i].key if ab else None
+                h_key = hb[i].key if hb else None
+                if s == "homr" and str(a_key) == "0" and h_key not in (None, "0"):
+                    # homr reads a key of naturals only (a change to C) as sharps, where
+                    # Audiveris reads no key: homr's notes are re-read in C (elsewhere
+                    # homr's key is the better one: Audiveris drops faint flats)
+                    B.respell(bar, int(a_key))
+                    bar.key = a_key
+                    stats.keys_respelled += 1
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
                 if s != "audiveris" and a_n:
                     src = a_bars.get(gi)
@@ -313,6 +337,28 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             plan.chosen[gi] = chosen
         plans.append(plan)
     return plans
+
+
+def _rested_cues(bar: B.Bar, staff: int, length: int | None) -> set[int]:
+    """Onsets of the notes on `staff` when another voice there rests the whole bar: the
+    player rests, the notes above the rest are a cue (printed full size in these parts)."""
+    voices: dict[str, list] = {}
+    for on, el in B.onsets(bar):
+        if el.tag == "note" and int(el.findtext("staff", "1") or 1) == staff \
+                and el.find("chord") is None and el.find("grace") is None:
+            voices.setdefault(el.findtext("voice", "1"), []).append(el)
+    if len(voices) < 2:
+        return set()
+    def whole_rest(els) -> bool:
+        return len(els) == 1 and els[0].find("rest") is not None and (
+            els[0].find("rest").get("measure") == "yes" or els[0].findtext("type") == "whole"
+            or (length is not None and int(els[0].findtext("duration", "0") or 0) == length))
+    rest_voices = {v for v, els in voices.items() if whole_rest(els)}
+    if not rest_voices or len(rest_voices) == len(voices):
+        return set()
+    return {on for on, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None
+            and int(el.findtext("staff", "1") or 1) == staff
+            and el.findtext("voice", "1") not in rest_voices}
 
 
 def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> None:
@@ -335,6 +381,12 @@ def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> 
                           and c.x > st.header + 2.5 * il and (not c.small or c.grade >= 0.7)]
                 for i in range(plan.n):
                     l, r = plan.xs[i]
+                    rested = _rested_cues(plan.chosen[gi][i], si, B.bar_length(plan.times[i], D))
+                    if rested:
+                        removed = B.cues_to_rests(plan.chosen[gi][i], si, rested)
+                        stats.cue_notes_removed += removed
+                        plan.cues.add((gi, i))
+                        continue
                     here = sorted((c for c in chords if l <= c.x + c.w / 2 < r), key=lambda c: c.x)
                     normal = [c for c in here if not c.small]
                     # a small chord right before a normal one is a grace note, not a cue
@@ -817,6 +869,7 @@ def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) ->
 MAX_GAP = 99            # longest multi-rest / cut taken from printed numbers
 ALIGN_PENALTY = 1.2     # a gap must be backed by more than one printed bar number ...
 JUMP_WEIGHT = 1.5       # ... or by a cut mark ("[to] 97"), which is explicit
+LETTER_NEAR = 12        # a lettered number ("131A") needs a plain number this close (bars, value)
 
 
 @dataclass
@@ -914,9 +967,22 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         pos += p.n
     # lettered bars ("131A": added after 131) shift every later number by one; a cut to
     # "132C" means 132A and 132B exist (in other parts) and were cut here
+    # a lettered number counts only when plain numbers near it agree ("7A" is a misread
+    # "72A"; taken as bar 7A it would shift every bar from 8 on)
+    plain = [(start[k] + i, v) for k, p in enumerate(plans) for i, v in p.printed.items()
+             if i < p.n and 0 < v <= 9999]
+
+    def plausible(j: int, n: int) -> bool:
+        near = sorted(v for jj, v in plain if abs(jj - j) <= LETTER_NEAR)
+        return not near or abs(near[len(near) // 2] - n) <= LETTER_NEAR
+
     extra: set[tuple[int, str]] = set()
-    for p in plans:
-        for n, letter in list(p.lettered.values()) + list(p.jumps.values()):
+    bogus: set[tuple[int, int]] = set()
+    for k, p in enumerate(plans):
+        for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
+            if letter and not plausible(start[k] + i, n):
+                bogus.add((k, i))
+                continue
             for c in range(ord("A"), ord(letter) + 1 if letter else ord("A")):
                 extra.add((n, chr(c)))
 
@@ -929,10 +995,10 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
             if i < p.n and 0 < v <= 9999:
                 obs.append(_Obs(start[k] + i, position(v), 1.0, "number", str(v)))
         for i, (n, letter) in p.lettered.items():
-            if i < p.n and 0 < n <= 9999:
+            if i < p.n and 0 < n <= 9999 and (k, i) not in bogus:
                 obs.append(_Obs(start[k] + i, position(n, letter), 1.0, "number", f"{n}{letter}"))
         for i, (n, letter) in p.jumps.items():
-            if start[k] + i < len(flat) and 0 < n <= 9999:
+            if start[k] + i < len(flat) and 0 < n <= 9999 and (k, i) not in bogus:
                 obs.append(_Obs(start[k] + i, position(n, letter), JUMP_WEIGHT, "jump", f"{n}{letter}"))
     obs.sort(key=lambda o: (o.j, o.kind != "jump"))
     if not obs:
@@ -1340,20 +1406,55 @@ def _canonical_singers(plans: list[SysPlan]) -> dict[str, str]:
     return out
 
 
-def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats
-                      ) -> tuple[list[OutPart], OutPart, list]:
+MALE_VOICES = r"\b(men|male|tenors?|bass(es)?|baritones?)\b"
+
+
+_DUET = re.compile(r"\s*(?:\+|&|\bAND\b)\s*")
+
+
+def _singers_of(label: str, known: set[str]) -> list[str]:
+    """"DOWAGER+ANASTASIA" -> ["DOWAGER EMPRESS", "ANASTASIA"]: each name, or the one
+    single label elsewhere in the score that starts with it; a single label -> [label]."""
+    names = [s.strip() for s in _DUET.split(label) if s.strip()]
+    if len(names) < 2:
+        return [label]
+    out = []
+    for n in names:
+        longer = [k for k in known if k.startswith(n + " ")]
+        out.append(longer[0] if len(longer) == 1 else n)
+    return out
+
+
+def _octave_treble(part: OutPart) -> None:
+    """A male voice printed in treble clef sounds an octave lower: treble-8vb clef with the
+    pitches an octave down (the convention of the ground truths here)."""
+    for bar in part.bars:
+        if bar is None or bar.clefs.get(1, ("G", "2", ""))[:2] != ("G", "2") \
+                or bar.clefs.get(1, ("", "", ""))[2]:
+            continue
+        bar.clefs = {**bar.clefs, 1: ("G", "2", "-1")}
+        for n in bar.notes():
+            o = n.find("pitch/octave")
+            if o is not None and o.text:
+                o.text = str(int(o.text) - 1)
+
+
+def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats,
+                      male: re.Pattern | None = None) -> tuple[list[OutPart], OutPart, list]:
     """Vocal score -> (one part per singer label, the piano, times).
 
     The singer of a vocal staff is the last label printed on it ("DMITRY:"), carried
     over to the staff at the same position in the next systems; a label inside a bar
     splits the bar there. Before the first label a staff is "Voice <n>". Dialogue and
-    stage directions go to the top voice part.
+    stage directions go to the top voice part. Parts whose name matches `male` are
+    written in treble-8vb clef.
     """
     total = sum(p.n for p in plans)
     times: list = []
     for p in plans:
         times += p.times
     canon = _canonical_singers(plans)
+    known = {c for c in canon.values() if len(_DUET.split(c)) == 1}
     piano = OutPart("Piano", 2, [None] * total)
     voices: dict[str, OutPart] = {}
     cur: dict[int, str] = {}
@@ -1393,14 +1494,23 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats
                         if piece.rest_only:
                             continue
                         name = f"Voice {L}"
-                    part = voices.setdefault(name, OutPart(T.singer_name(name), 1, [None] * total))
-                    old = part.bars[pos + i]
-                    if old is None or old.rest_only:
-                        part.bars[pos + i] = piece
-                    elif not piece.rest_only:
-                        clashes += 1        # two staves with one singer: the first is kept
+                    # a duet label ("DOWAGER+ANASTASIA") puts the line into each singer's part
+                    for k, single in enumerate(_singers_of(name, known)):
+                        part = voices.setdefault(single, OutPart(T.singer_name(single), 1,
+                                                                 [None] * total))
+                        old = part.bars[pos + i]
+                        if old is None or old.rest_only:
+                            part.bars[pos + i] = piece if k == 0 else copy.deepcopy(piece)
+                        elif not piece.rest_only:
+                            clashes += 1    # two staves with one singer: the first is kept
         pos += p.n
     parts = list(voices.values()) or [OutPart("Voice", 1, [None] * total)]
+    for part in parts:
+        for bar in part.bars:
+            if bar is not None:
+                B.dedupe_unison(bar)
+        if male and male.search(part.name):
+            _octave_treble(part)
     for g, els in texts.items():
         top = parts[0]
         if top.bars[g] is None:

@@ -119,7 +119,8 @@ examples in `meta.example.yaml`):
 | `split_instruments` | `true` | One MusicXML part per instrument (each with its own transposition). Use for Reed 1/2 and percussion. Default: on for `type: drums`. |
 | `doubling` | `true` | Alternative to `split_instruments`: one part that changes instrument at the labels. MuseScore 4 ignores the change on import, so add the Instrument Change by hand. |
 | `small_heads` | `true` | Tell Audiveris to read small note heads (cue notes). Needed for `cues: drop`. |
-| `cues` | `keep` (default) / `drop` | `drop` turns cue-size notes into rests and removes the `(Clar)` label above them. |
+| `cues` | `keep` (default) / `drop` | `drop` turns cue-size notes into rests and removes the `(Clar)` label above them. Notes over a whole-bar rest in another voice of the staff are cues too (printed full size in these parts). |
+| `male_voices` | `[Dmitry, Vlad]` | Vocal scores: singer parts written in treble-8vb besides Men / Male / Tenor / Bass / Baritone. |
 
 Combine as needed, for example a horn part whose first page starts with the tail of the
 previous number:
@@ -207,9 +208,14 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
 4. **Bar choice:** per staff group and bar, the preferred engine's bar if its voices fill the
    time signature, else the other one. `prefer: auto` puts homr first on scans and Audiveris
    first on vector PDFs (it is near perfect there and, unlike homr, has ties). Percussion
-   staves always prefer Audiveris (homr reads them as pitched).
+   staves always prefer Audiveris (homr reads them as pitched). Where only one engine saw a
+   clef change inside the system, its bar is taken (the other one reads the pitches in the old
+   clef). homr sometimes places a voice's notes after the other staff's (the voice then runs
+   past the bar end with gaps): a voice whose durations fit the bar is laid out note after note.
 5. **Signatures:** time signature from homr where printed (Audiveris misreads 4/4 as 2/4),
    clef and key from the group's preferred engine. Parts not printed in a system follow its key.
+   A key change to C printed as naturals only is read as sharps by homr: where Audiveris reads
+   no key there, homr's notes are re-read in C.
 6. **Directions and text:** dynamics, hairpins and tempo from Audiveris. Words are rebuilt
    from the positioned OCR text, because Audiveris files bar numbers as lyrics and expression
    text as page credits. Header and footer text become credits. Tempo and expression marks go
@@ -224,9 +230,11 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    printed numbers jump ahead of the output, rest bars are inserted, so output bar n is
    printed bar n in every part. A cut mark `[to] 97` (or `[to 16]`) printed at a barline means
    the bar there is bar 97 and the bars before it were cut from this part: they become rests.
+   An arrow before the number (`—> 14`, `→ 14`) is a cut mark too.
    Without a cut mark the rests go after the last rest bar before the number (an unread
    multi-rest count), else right before it. Lettered bars added in a revision (`131A`,
-   `[to] 132C`) count as bars of their own. OCR misreads numbers, so the step function that
+   `[to] 132C`) count as bars of their own, if the plain numbers around them agree (a "7A"
+   among bars 70-73 is a misread "72A" and would shift every bar from 8 on). OCR misreads numbers, so the step function that
    agrees with most numbers is used; a single stray number shifts nothing. Bars are never
    removed, except empty bars before printed bar 1. Where the output has more bars than the
    numbers say (an extra bar was read), `run.log` says where.
@@ -241,7 +249,12 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    piano, each staff above it a voice. A voice staff belongs to the singer whose label was
    printed last on it ("DMITRY:", "FIRST WOMAN:", "ALL (NO DMITRY):"), carried over to the
    staff at the same position in later systems; a label inside a bar splits the bar there.
-   Every distinct label becomes a part. Lyrics, dynamics and hairpins are placed from their
+   Every distinct label becomes a part; a duet label ("DOWAGER+ANASTASIA:", also `&` / `AND`)
+   puts the line into each singer's part (a name that starts a longer label elsewhere, "DOWAGER"
+   -> "DOWAGER EMPRESS", takes that part). Parts named Men / Male / Tenor / Bass / Baritone,
+   and the names in `male_voices`, are written in treble-8vb clef, an octave down (the
+   ground-truth convention for male voices printed in treble clef). Unison notes two voices of
+   a staff share are kept once. Lyrics, dynamics and hairpins are placed from their
    position on the page (Audiveris' MusicXML hangs piano dynamics on voices and joins
    hairpins to far-away stops): a syllable goes to the note above it, a mark between the
    piano staves is the piano's, one above a vocal staff that voice's. Dialogue (a speaker

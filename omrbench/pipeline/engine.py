@@ -379,7 +379,10 @@ class Pipeline(Engine):
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))
         files: dict[str, object] = {}
         if vocal:
-            voices, piano, times = A.build_vocal_parts(plans, D, stats)
+            # male_voices: extra singer names written in treble-8vb ("Dmitry", "Vlad")
+            male = [A.MALE_VOICES] + [re.escape(str(n)) for n in sample.meta.get("male_voices") or []]
+            voices, piano, times = A.build_vocal_parts(
+                plans, D, stats, re.compile("|".join(male), re.I))
             A.share_system_text([voices, [piano]], times, D)
             parts = voices + [piano]
             if max_wedge:

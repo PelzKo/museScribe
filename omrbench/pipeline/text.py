@@ -18,7 +18,8 @@ from .layout import Page, Staff, System, Text
 
 RANGE = re.compile(r"^\[?(\d{1,4})\s*[-–—]\s*(\d{1,4})\]?$")
 NUMBER = re.compile(r"^\d{1,4}$")
-TO_BAR = re.compile(r"^\[?\s*to\s*\]?\s*(\d[\d ]{0,6})\s*([A-E])?\s*\]?$", re.I)  # "[to] 97", "[to 16]"
+# "[to] 97", "[to 16]", or an arrow "—> 14" / "→ 14"
+TO_BAR = re.compile(r"^(?:\[?\s*to\s*\]?|[-–—=]+\s*>|→)\s*(\d[\d ]{0,6})\s*([A-E])?\s*\]?$", re.I)
 # "131A": a bar added after bar 131 (A-E: later letters are OCR noise, "120V")
 LETTERED = re.compile(r"^(\d{1,4})([A-E])$")
 
