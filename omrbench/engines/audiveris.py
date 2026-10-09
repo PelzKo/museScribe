@@ -6,6 +6,7 @@ section 7 of the research notes.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -25,6 +26,7 @@ LANG = "org.audiveris.omr.text.Language.defaultSpecification"
 # ("this.parameters" is null NPEs) that drops symbols (an accent in a test) and kills some
 # books; opt-in (parallel_sheets: true), a failed parallel run is redone serially
 PARALLEL = "org.audiveris.omr.sheet.Book.processAllStubsInParallel"
+LEGACY_SORT = "-Djava.util.Arrays.useLegacyMergeSort=true"
 
 # meta.yaml boolean key -> Audiveris processing switch
 META_SWITCHES = {
@@ -84,6 +86,13 @@ class Audiveris(Engine):
         tess = self.home / "tools" / "tessdata"
         if tess.is_dir():
             env.setdefault("TESSDATA_PREFIX", str(tess))
+        # Audiveris 5.11's stem comparator is not transitive: TimSort throws "Comparison
+        # method violates its general contract!" on some sheets, which kills the whole
+        # book ("Error in reaching step PAGE"); the legacy merge sort doesn't check
+        opts = [env.get("JAVA_TOOL_OPTIONS") or os.environ.get("JAVA_TOOL_OPTIONS", "")]
+        if LEGACY_SORT not in opts[0]:
+            opts.append(LEGACY_SORT)
+        env["JAVA_TOOL_OPTIONS"] = " ".join(o for o in opts if o)
         return env
 
     def check(self) -> tuple[bool, str]:

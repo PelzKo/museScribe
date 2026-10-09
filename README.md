@@ -69,6 +69,11 @@ Runs one engine (`--engine`, default `pipeline`) on every `*.pdf` in the selecte
 `<name>.pdf`. No ground truth needed, nothing is scored, no report. PDFs that already have a
 `<name>.musicxml` are skipped unless `--force`.
 
+`--keep-awake` keeps Windows (also when running in WSL) from going to sleep until the run ends,
+so long overnight runs don't pause; the screen may still turn off. Off by default; when on, the
+log says so at the start and end. It holds a PowerShell `SetThreadExecutionState` request that
+ends with the run, also if it crashes.
+
 Several PDFs run at once (`--jobs N`, default `transcribe_jobs: 2` in `bench.yaml`), longest
 first, so Audiveris on one PDF overlaps homr on another. All homr crops go to one pool of
 persistent homr workers (default 8 workers x 2 ONNX threads on a 16-thread CPU, ~1 GB RAM each;
@@ -83,8 +88,9 @@ off; a parallel run that exports nothing is redone serially.
 
 - `<sample>--<name>.musicxml`: a copy of every selected PDF's output (new or already existing)
 - `combined.musicxml` / `combined.mscz`: all of them stacked as parts of one score, all starting at
-  bar 1, in folder/PDF order. Parts are named after the PDF (`<folder>/<name>` if the name occurs in
-  several folders; `<name> – <part>` for multi-part outputs such as split percussion). No padding:
+  bar 1, in PDF order. With several sample folders (e.g. one per song) there is one per folder
+  instead: `<folder>--combined.musicxml` / `.mscz`. Parts are named after the PDF (`<name> – <part>`
+  for multi-part outputs such as split percussion). No padding:
   if parts differ in bar count, MuseScore calls the score corrupted and fills the gaps; it is then
   saved with `-f`. The `.mscz` needs the MuseScore CLI (`musescore_cli` in `bench.yaml`, `mscore` on
   PATH, or the default Windows MuseScore 4 install when running in WSL)

@@ -500,6 +500,8 @@ def _multirest_evidence(pt: T.PageText, by_sys: dict) -> None:
         plan = by_sys.get(id(pl.system))
         if plan:
             kind = "count" if pl.above else "number"
+            if kind == "count" and not 2 <= n <= MAX_GAP:
+                continue    # a boxed rehearsal number ("238") above a rest is no count
             x = (pl.line.x + pl.line.right) / 2 if pl.above else pl.line.x
             plan.evidence.append((x, kind, n, n))
     for pl, a, b in pt.ranges:

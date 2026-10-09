@@ -97,8 +97,10 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
                     if new_div > 0:
                         div = new_div
                     else:
-                        # Audiveris sometimes exports <divisions>0</divisions>; keep the last
-                        LOG.warning(f"{source}: invalid <divisions>{el.findtext('divisions')}"
+                        # Audiveris exports <divisions>0</divisions> for a bar whose rhythm
+                        # it gave up on (seen on bar 1); keep the last. That bar's length is
+                        # off, but the bar-length checks pick the other engine's bar there
+                        LOG.debug(f"{source}: invalid <divisions>{el.findtext('divisions')}"
                                     f"</divisions> in measure {m.get('number')}, kept {div}")
                 if el.findtext("staves"):
                     staves = max(staves, int(el.findtext("staves")))

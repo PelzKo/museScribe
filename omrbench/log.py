@@ -21,6 +21,10 @@ LOG = logging.getLogger("omrbench")
 class _SampleFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.sample = getattr(record, "sample", None) or _sample.get()
+        # console: "[sample] " unless the message names it already ("song/Part.pdf: ...")
+        s = record.sample
+        named = s == "-" or record.getMessage().startswith(s.replace("--", "/", 1))
+        record.tag = "" if named else f"[{s}] "
         return True
 
 
@@ -31,7 +35,7 @@ def setup(run_dir: Path | None = None, console: bool = True) -> Path | None:
     if console and not any(getattr(h, "_omr_console", False) for h in LOG.handlers):
         h = logging.StreamHandler(sys.stdout)
         h.setLevel(logging.INFO)
-        h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-7s %(message)s", "%H:%M:%S"))
+        h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-7s %(tag)s%(message)s", "%H:%M:%S"))
         h.addFilter(_SampleFilter())
         h._omr_console = True
         LOG.addHandler(h)

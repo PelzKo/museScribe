@@ -13,7 +13,9 @@ Into ``results/transcribe-<timestamp>/``:
 
     <sample>--<name>.musicxml   copy of every selected PDF's <name>.musicxml (new or existing)
     combined.musicxml / .mscz   all of them stacked as parts of one score, all from bar 1;
-                                parts named after the PDF (.mscz needs the MuseScore CLI)
+                                parts named after the PDF (.mscz needs the MuseScore CLI);
+                                with several sample folders one per folder instead:
+                                <sample>--combined.musicxml / .mscz
     <engine>/<sample>--<name>/  engine work dirs
 """
 from __future__ import annotations
@@ -22,6 +24,7 @@ import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -104,6 +107,50 @@ def to_mscz(src: Path, out: Path, exe: str) -> bool:
     raise RuntimeError(f"MuseScore exit {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}")
 
 
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED for as long as this PowerShell runs; it blocks reading
+# stdin, so it exits (and Windows may sleep again) when transcribe ends or dies
+_AWAKE_PS = (
+    "Add-Type -Name P -Namespace W -MemberDefinition '[DllImport(\"kernel32.dll\")] public static "
+    "extern uint SetThreadExecutionState(uint f);'; "
+    "if ([W.P]::SetThreadExecutionState([uint32]2147483649) -eq 0) { exit 1 }; "
+    "[void][Console]::In.ReadToEnd()"
+)
+
+
+@contextmanager
+def keep_awake(enabled: bool):
+    """Keep Windows (also from WSL) from sleeping while the block runs; the screen may
+    still turn off."""
+    if not enabled:
+        yield
+        return
+    ps = shutil.which("powershell.exe")
+    if not ps:
+        LOG.warning("--keep-awake: powershell.exe not found (only Windows / WSL supported); "
+                    "the PC may sleep during the run")
+        yield
+        return
+    proc = subprocess.Popen([ps, "-NoProfile", "-NonInteractive", "-Command", _AWAKE_PS],
+                            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    if proc.poll() is not None:
+        LOG.warning(f"--keep-awake: PowerShell exited (code {proc.returncode}); "
+                    "the PC may sleep during the run")
+        yield
+        return
+    LOG.info("keep-awake on: Windows won't sleep until the run ends (the screen may turn off)")
+    try:
+        yield
+    finally:
+        proc.stdin.close()
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        LOG.info("keep-awake off: Windows may sleep again")
+
+
 def combine(files: list[tuple[str, Path]], out: Path) -> Path:
     """Stack the parts of every (name, musicxml) into one score, named after `name`."""
     roots = [musicxml.load(p) for _, p in files]
@@ -145,11 +192,18 @@ def output_paths(pdf: Path, meta: dict) -> list[Path]:
 
 
 def transcribe(cfg: dict, *, engine: str = "pipeline", samples_only=None, samples_exclude=None,
-               prefix_matching=False, force=False, run_id=None, jobs=None) -> int:
-    """Return the number of failed PDFs."""
+               prefix_matching=False, force=False, run_id=None, jobs=None, awake=False) -> int:
+    """Return the number of failed PDFs. awake: keep Windows from sleeping meanwhile."""
     run_dir = Path(cfg["results_dir"]) / (run_id or f"transcribe-{datetime.now():%Y%m%d-%H%M%S}")
     log_path = logmod.setup(run_dir)
     LOG.info(f"transcribe run {run_dir.name}; log: {log_path}")
+    with keep_awake(awake):
+        return _transcribe(cfg, run_dir, engine, samples_only, samples_exclude, prefix_matching,
+                           force, jobs)
+
+
+def _transcribe(cfg: dict, run_dir: Path, engine: str, samples_only, samples_exclude,
+                prefix_matching: bool, force: bool, jobs) -> int:
     engines = config_mod.engines(cfg, set(), [engine])
     if not engines:
         raise SystemExit(f"unknown engine '{engine}' (configured: {', '.join(cfg.get('engines') or {})})")
@@ -259,31 +313,33 @@ def transcribe(cfg: dict, *, engine: str = "pipeline", samples_only=None, sample
 
 
 def _combine(outputs: list[tuple[Path, Path]], run_dir: Path, cfg: dict) -> None:
+    """Copy every file into run_dir and stack them per sample folder: one folder ->
+    combined.musicxml, several (one per song) -> <folder>--combined.musicxml each."""
     run_dir.mkdir(parents=True, exist_ok=True)
-    stems = [out.stem for _, out in outputs]
-    files = []
+    groups: dict[Path, list[tuple[str, Path]]] = {}
     for pdf, out in outputs:
-        sid = f"{pdf.parent.name}--{out.stem}"
-        shutil.copyfile(out, run_dir / f"{sid}.musicxml")
-        # same PDF name in several folders (input.pdf): add the folder
-        name = out.stem if stems.count(out.stem) == 1 else f"{pdf.parent.name}/{out.stem}"
-        files.append((name, out))
-    try:
-        combined = combine(files, run_dir / "combined.musicxml")
-    except Exception as e:  # noqa: BLE001 - the individual files are still there
-        LOG.error(f"combine FAILED {type(e).__name__}: {e}", exc_info=True)
-        return
-    LOG.info(f"combined {len(files)} files -> {combined.name}")
+        shutil.copyfile(out, run_dir / f"{pdf.parent.name}--{out.stem}.musicxml")
+        groups.setdefault(pdf.parent, []).append((out.stem, out))
     exe = find_musescore(cfg.get("musescore_cli"))
     if not exe:
-        LOG.warning("MuseScore CLI not found (set musescore_cli in bench.yaml); no combined.mscz")
-        return
-    try:
-        clean = to_mscz(combined, combined.with_suffix(".mscz"), exe)
-        if clean:
-            LOG.info("-> combined.mscz")
-        else:
-            LOG.warning("-> combined.mscz (MuseScore flagged differing bar counts/lengths "
-                        "between parts and filled them; saved with -f)")
-    except Exception as e:  # noqa: BLE001
-        LOG.error(f"combined.mscz FAILED {type(e).__name__}: {e}")
+        LOG.warning("MuseScore CLI not found (set musescore_cli in bench.yaml); no .mscz written")
+    for folder, files in groups.items():
+        name = "combined" if len(groups) == 1 else f"{folder.name}--combined"
+        with logmod.context(folder.name):
+            try:
+                combined = combine(files, run_dir / f"{name}.musicxml")
+            except Exception as e:  # noqa: BLE001 - the individual files are still there
+                LOG.error(f"combine FAILED {type(e).__name__}: {e}", exc_info=True)
+                continue
+            LOG.info(f"combined {len(files)} files -> {combined.name}")
+            if not exe:
+                continue
+            mscz = combined.with_suffix(".mscz")
+            try:
+                if to_mscz(combined, mscz, exe):
+                    LOG.info(f"-> {mscz.name}")
+                else:
+                    LOG.warning(f"-> {mscz.name} (MuseScore flagged differing bar counts/lengths "
+                                "between parts and filled them; saved with -f)")
+            except Exception as e:  # noqa: BLE001
+                LOG.error(f"{mscz.name} FAILED {type(e).__name__}: {e}")

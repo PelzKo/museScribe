@@ -6,7 +6,8 @@
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
                [--resume RUN_ID]
   omrbench transcribe [--engine pipeline] [--samples x,y] [--exclude x,y] [--prefix_matching]
-               [--force] [--jobs N]    <pdf>.musicxml next to every PDF + combined.mscz
+               [--force] [--jobs N] [--keep-awake]
+                                       <pdf>.musicxml next to every PDF + combined.mscz
   omrbench gen-meta SHOW_YAML [--songs 5,6] [--dry-run]
                                        song folders (yamls + PDFs) from a songs.xlsx workbook
   omrbench score RUN_DIR               re-score an existing run (e.g. after fixing a GT)
@@ -95,7 +96,8 @@ def cmd_transcribe(cfg: dict, args) -> int:
 
     failed = transcribe(cfg, engine=args.engine, samples_only=_csv(args.samples),
                         samples_exclude=_csv(args.exclude), prefix_matching=args.prefix_matching,
-                        force=args.force, run_id=args.run_id, jobs=args.jobs)
+                        force=args.force, run_id=args.run_id, jobs=args.jobs,
+                        awake=args.keep_awake)
     return 1 if failed else 0
 
 
@@ -157,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jobs", type=int,
                    help="PDFs transcribed at the same time (default: transcribe_jobs in bench.yaml, 2)")
     p.add_argument("--run-id", help="name of the work folder in results/ (default: transcribe-<timestamp>)")
+    p.add_argument("--keep-awake", "--keep_awake", action="store_true",
+                   help="keep Windows (also from WSL) from sleeping until the run ends")
     p = sub.add_parser("gen-meta", help="write song folders from data/_<show>/show.yaml + songs.xlsx")
     p.add_argument("show", help="show file, e.g. data/_anastasia/show.yaml")
     p.add_argument("--songs", help="comma-separated sheet names (default: all)")
