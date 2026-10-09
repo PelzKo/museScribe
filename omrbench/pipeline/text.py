@@ -346,20 +346,27 @@ def classify(page: Page, vocal: bool = False, running: set[str] | None = None) -
         t = ln.text
         if not t or id(ln) in taken:
             continue
-        footer = ln.top > last_bottom + 8 * il
+        # a number well below the last staff is the page number, not a bar number
+        footer = ln.top > last_bottom + (4 if NUMBER.match(t) else 8) * il
         if is_header(ln, first_top) or footer:
             if is_words(t) or NUMBER.match(t):
                 res.credits.append(ln)
             continue
         all_staves = [st for s in systems for st in s.all_staves]
         staff, above = nearest_staff(all_staves, ln.cy)
-        if above and (to_bar(t) is not None or LETTERED.match(t.replace(" ", ""))):
+        if above:
             # printed like a bar number, below the staff it belongs to: often nearer to the
             # next system than the 1.5 rule allows
             up = [s for s in all_staves if s.bottom < ln.cy]
             if up:
                 st_up = max(up, key=lambda s: s.bottom)
-                if ln.top - st_up.bottom <= 8 * st_up.interline:
+                gap_up, gap_down = ln.top - st_up.bottom, staff.top - ln.bottom
+                if to_bar(t) is not None or LETTERED.match(t.replace(" ", "")):
+                    if gap_up <= 8 * st_up.interline:
+                        staff, above = st_up, False
+                elif NUMBER.match(t) and ln.h < 1.4 * st_up.interline and gap_up <= gap_down:
+                    # a plain bar number (small print) nearer the staff above; a multi-rest
+                    # count over the staff below is twice as tall and sits right on it
                     staff, above = st_up, False
         sy = next(s for s in systems if staff in s.staves or staff in s.dropped)
         if sy.skip:
@@ -388,7 +395,12 @@ def classify(page: Page, vocal: bool = False, running: set[str] | None = None) -
             continue
         m = RANGE.match(t.replace(" ", ""))
         if m:
-            if int(m.group(1)) < int(m.group(2)):
+            # "184-192" closing a text line ("Poco agitato J = 184-192") is a tempo range;
+            # OCR sometimes returns it as a line of its own as well
+            in_words = any(o is not ln and re.search(r"[^\W\d_]{3,}", o.text)
+                           and o.top < ln.bottom and ln.top < o.bottom
+                           and o.x < ln.right + il and ln.x < o.right + il for o in page_lines)
+            if int(m.group(1)) < int(m.group(2)) and not in_words:
                 res.ranges.append((pl, int(m.group(1)), int(m.group(2))))
         elif lm := LETTERED.match(t.replace(" ", "")):
             res.lettered.append((pl, (int(lm.group(1)), lm.group(2))))

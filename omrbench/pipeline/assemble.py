@@ -171,6 +171,19 @@ def _bar_at(plan: SysPlan, x: float) -> int:
     return max(plan.n - 1, 0)
 
 
+def _numbered_stacks(sy: System, labels: list[T.Placed]) -> int:
+    """Audiveris stacks whose left barline has a bar number printed below it."""
+    il = sy.staves[0].interline
+    return sum(1 for st in sy.stacks
+               if any(abs((pl.line.x + pl.line.right) / 2 - st.left) <= 2 * il for pl in labels))
+
+
+def _number_x(line: T.Line) -> float:
+    """x that falls into the bar a printed bar number belongs to: numbers start at the
+    barline or are centred on it ("244" under the barline, its left half in the bar before)."""
+    return max(line.x + line.h, (line.x + line.right) / 2 + 0.3 * line.h)
+
+
 def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -> int:
     l, r = plan.xs[i]
     if not length or r <= l:
@@ -188,6 +201,13 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
     cur_time = None
+    # bar numbers printed below each system (one per bar in parts that number every bar)
+    labels: dict[int, list[T.Placed]] = {}
+    for p in pages:
+        pt = T.classify(p)
+        for pl, _ in pt.numbers + pt.lettered + pt.jumps:
+            if not pl.above:
+                labels.setdefault(id(pl.system), []).append(pl)
     for k, sy in enumerate(systems):
         plan = SysPlan(sy, k)
         if sy.skip:
@@ -197,7 +217,23 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
         a_bars = {gi: aud.get((k, gi)) for gi in range(len(groups))}
         a_n = max((len(v) for v in a_bars.values() if v), default=0) or None
         h_bars = {gi: homr.get((k, gi)) for gi in range(len(groups))}
-        n, how = _vote(a_n, [len(v) for v in h_bars.values() if v])
+        il = sy.staves[0].interline
+        if sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
+            # homr reads the courtesy key/time signature after the last barline as a rest
+            # bar of its own; Audiveris leaves that space out of its stacks
+            for gi, v in h_bars.items():
+                if v and len(v) == len(sy.stacks) + 1 and v[-1].rest_only:
+                    h_bars[gi] = v[:-1]
+        h_ns = [len(v) for v in h_bars.values() if v]
+        n, how = _vote(a_n, h_ns)
+        sy_labels = labels.get(id(sy), [])
+        if a_n and how == "homr" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
+                and a_n == len(sy.stacks) >= 2 and len(sy_labels) <= a_n \
+                and _numbered_stacks(sy, sy_labels) >= max(a_n - 1, 2):
+            # one homr reading against Audiveris is a tie: parts that number every bar
+            # decide it (homr splits bars at dashed barlines / long notes); more numbers
+            # than stacks means Audiveris missed a barline
+            n, how = a_n, "audiveris"
         if n == 0 and sy.staves:
             # neither engine found a bar: a staff of multi-measure rests ("5" over "5-9").
             # One rest bar; expand_multirests / resegment_rest_systems count it out
@@ -466,7 +502,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             plan = by_sys.get(id(pl.system))
             if not plan or not plan.n:
                 continue
-            i = _bar_at(plan, pl.line.x + pl.line.h)
+            i = _bar_at(plan, _number_x(pl.line))
             il = pl.staff.interline
             if not pl.above:
                 # bar numbers are printed below the start of their bar (parts)
@@ -486,7 +522,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
         for pl, n in pt.lettered:
             plan = by_sys.get(id(pl.system))
             if plan and plan.n:
-                plan.lettered.setdefault(_bar_at(plan, pl.line.x + pl.line.h), n)
+                plan.lettered.setdefault(_bar_at(plan, _number_x(pl.line)), n)
         _multirest_evidence(pt, by_sys)
     return credits, instruments
 
@@ -551,7 +587,9 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
                     stats.notes.append(f"system {k + 1}: range {a}-{b} ignored (over {MAX_GAP} bars)")
                     continue
                 nxt = printed.get((k, i + 1)) or (printed.get((k + 1, 0)) if i + 1 >= p.n else None)
-                if nxt is not None and a < nxt <= a + 99 and nxt - a != count:
+                # a next number inside the range ("124-131" then "131" for 131A whose
+                # letter OCR lost) contradicts it: the printed range wins
+                if nxt is not None and b < nxt <= a + 99 and nxt - a != count:
                     stats.notes.append(f"system {k + 1}: range {a}-{b}, next bar number {nxt}"
                                        f" -> {nxt - a} bars")
                     count = nxt - a
@@ -567,13 +605,34 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
                 unknown.add((k, i))
                 if len(counts) == 1:
                     homr_count[(k, i)] = counts.pop()
+    size = lambda j: known.get(glob[j], 1)
+
+    def agrees(j: int) -> bool:
+        """The printed number at j fits the nearest printed number before or after it
+        (OCR drops digits: "26" read as "2" would make the next rest 27 bars long)."""
+        for rng in (range(j - 1, -1, -1), range(j + 1, len(glob))):
+            for i in rng:
+                if glob[i] in unknown:
+                    break
+                if glob[i] in printed:
+                    a, b = sorted((i, j))
+                    if printed[glob[b]] - printed[glob[a]] == sum(size(x) for x in range(a, b)):
+                        return True
+                    break
+        return False
+
+    def anchor(rng) -> tuple[int, int] | None:
+        """Nearest printed number in rng that agrees with its neighbours, else the nearest."""
+        cands = [j for j in rng if glob[j] in printed]
+        j = next((j for j in cands if agrees(j)), cands[0] if cands else None)
+        return (j, printed[glob[j]]) if j is not None else None
+
     # bar-number gaps: number at the rest = previous printed + bars since; count = next - it
     for pos, key in enumerate(glob):
         if key not in unknown:
             continue
-        prev = next(((j, printed[glob[j]]) for j in range(pos - 1, -1, -1) if glob[j] in printed), None)
-        nxt = next(((j, printed[glob[j]]) for j in range(pos + 1, len(glob)) if glob[j] in printed), None)
-        size = lambda j: known.get(glob[j], 1)
+        prev = anchor(range(pos - 1, -1, -1))
+        nxt = anchor(range(pos + 1, len(glob)))
         if prev and nxt and not any(glob[j] in unknown for j in range(prev[0] + 1, nxt[0]) if j != pos):
             here = prev[1] + sum(size(j) for j in range(prev[0], pos))
             count = nxt[1] - here - sum(size(j) for j in range(pos + 1, nxt[0]))
@@ -717,11 +776,16 @@ def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) ->
     drop_courtesy_bars(plans, stats)
     resegment_rest_systems(plans, D, stats)
     counts = _multirest_counts(plans, homr, stats)
-    for plan in plans:
+    for k, plan in enumerate(plans):
         # "15-17" over a rest: its first bar is printed bar 15
-        for i, (kind, a, _) in plan.mr.items():
+        for i, (kind, a, b) in plan.mr.items():
             if kind == "range" and i < plan.n:
                 plan.printed.setdefault(i, a)
+                # "124-131" then "131": that is 131A with the letter lost to OCR
+                nk, ni = (k, i + 1) if i + 1 < plan.n else (k + 1, 0)
+                if nk < len(plans) and plans[nk].printed.get(ni) == b and ni not in plans[nk].lettered:
+                    del plans[nk].printed[ni]
+                    plans[nk].lettered[ni] = (b, "A")
     for k, plan in enumerate(plans):
         for i in sorted((i for (kk, i) in counts if kk == k), reverse=True):
             count = counts[(k, i)]

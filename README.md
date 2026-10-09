@@ -230,6 +230,13 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    agrees with most numbers is used; a single stray number shifts nothing. Bars are never
    removed, except empty bars before printed bar 1. Where the output has more bars than the
    numbers say (an extra bar was read), `run.log` says where.
+   **Second OCR pass** (`ocr_bar_numbers: true`): Audiveris' OCR misses whole pages of bar
+   numbers now and then, so Tesseract reads the strips above and below every staff (one call
+   per page, about 1 s) and adds the numbers, ranges, counts and cut marks Audiveris has no
+   text for. A count-sized number only counts when a multi-measure rest bar is printed under
+   it (notes are often read as "4"). The Tesseract binary bundled in Audiveris' jars is
+   extracted into `$OMRBENCH_HOME/tools/tesseract` on first use (a `tesseract` on PATH wins);
+   results are cached in the work dir's `ocr/`.
 8. **Vocal scores** (`type: piano_reduction`): the lowest two staves of every system are the
    piano, each staff above it a voice. A voice staff belongs to the singer whose label was
    printed last on it ("DMITRY:", "FIRST WOMAN:", "ALL (NO DMITRY):"), carried over to the

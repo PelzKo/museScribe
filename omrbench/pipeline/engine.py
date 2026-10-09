@@ -3,7 +3,8 @@
 Steps (all timed into the engine's runtime):
 1. Audiveris (meta.yaml switches) -> MusicXML + .omr (layout, text, directions)
 2. rasterise the PDF; crop every staff group (a single staff, or a piano's grand staff)
-   of every system using the Audiveris staff positions
+   of every system using the Audiveris staff positions; Tesseract reads bar numbers,
+   ranges and cut marks around the staves where Audiveris' OCR found none (ocr.py)
 3. homr on each crop (homr only reads 1-2 staff systems, crops make it usable on
    vocal scores and condensed parts)
 4. assemble (see assemble.py): per-bar source choice, directions, printed text,
@@ -21,14 +22,17 @@ Config (bench.yaml):
     align_bar_numbers: true     # rest bars where printed numbers / "[to] 97" cuts skip bars
     auto_beam: true             # beam unbeamed eighths and shorter by beat
     max_wedge_bars: 2           # longer hairpins are misread pairings: dropped (0 = keep)
+    ocr_bar_numbers: true       # second OCR pass (Tesseract) for bar numbers / ranges
 """
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 from pathlib import Path
 
+from lxml import etree
 from PIL import Image
 
 from .. import log as logmod
@@ -42,6 +46,7 @@ from ..rasterize import is_scan, rasterize
 from . import assemble as A
 from . import bars as B
 from . import layout
+from . import ocr
 from . import vocal as V
 from .layout import where
 
@@ -72,11 +77,25 @@ def book_roots(mxls: list[Path]) -> list:
         out_dir = out_dir.parent
     out = []
     for omr in sorted(out_dir.rglob("*.omr")):
-        mine = sorted(p for p in mxls if p.parent == omr.parent)
+        # book.mvt2.mxl before book.mvt10.mxl
+        mine = sorted((p for p in mxls if p.parent == omr.parent),
+                      key=lambda p: [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", p.name)])
         if not mine:
             out.append(None)
             continue
         roots = [musicxml.load(p) for p in mine]
+        for r in roots[1:]:
+            # a movement starts a new system, but its first <print> doesn't say so
+            for part in r.findall("part"):
+                m = part.find("measure")
+                if m is None:
+                    continue
+                pr = m.find("print")
+                if pr is None:
+                    pr = etree.Element("print")
+                    m.insert(0, pr)
+                if pr.get("new-page") != "yes":
+                    pr.set("new-system", "yes")
         out.append(roots[0] if len(roots) == 1 else musicxml.merge_pages(roots))
     return out
 
@@ -212,6 +231,10 @@ class Pipeline(Engine):
         crop_dir.mkdir(parents=True)
         margins = [float(m) for m in self.cfg.get("crop_margins", [5, 4, 3])]
         jobs = self._crop_jobs(pages, images, crop_dir, margins[0])
+        ocr_dir = workdir / "ocr"
+        if ocr_dir.exists():
+            shutil.rmtree(ocr_dir)
+        self.add_ocr_text(pages, images, ocr_dir)
         res.prep_s = time.perf_counter() - t0
 
         # 3. homr per crop; homr is sensitive to the crop (e.g. "No noteheads found" at one
@@ -390,12 +413,30 @@ class Pipeline(Engine):
                    "parts": [p.name for p in parts]}
         return score, summary, files
 
+    def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path) -> None:
+        """Tesseract bar numbers where Audiveris' OCR has no text (cached in ocr_dir)."""
+        if not self.cfg.get("ocr_bar_numbers", True):
+            return
+        tess = ocr.find_tesseract(self.home)
+        if tess is None:
+            LOG.warning("tesseract not found (PATH or Audiveris jars): no second OCR pass for bar numbers")
+            return
+        t0 = time.perf_counter()
+        words = ocr.read_pages(pages, images, tess, ocr_dir)
+        added = sum(ocr.supplement(p, w) for p, w in zip(pages, words))
+        LOG.info(f"bar-number OCR: {added} text items added on {len(words)} pages "
+                 f"in {time.perf_counter() - t0:.0f}s")
+
     def reassemble(self, sample: Sample, workdir: Path):
         """Re-run only the assembly on an existing work dir (development aid).
         Returns (score, summary, split files)."""
         omr_src = workdir / "audiveris" / "out"
         pages = layout.load(omr_src)
         self.regroup(sample, pages)
+        if self.cfg.get("ocr_bar_numbers", True):
+            dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
+            images = rasterize(sample.pdf, workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi", dpi=dpi)
+            self.add_ocr_text(pages, images, workdir / "ocr")
         roots = {}
         for f in sorted((workdir / "crops").glob("s*-g*.musicxml")):
             k, g = f.stem[1:].split("-g")
