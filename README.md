@@ -6,8 +6,8 @@ Runs several OMR engines on your own sample PDFs, scores their MusicXML against 
 |---|---|---|
 | `audiveris` | Audiveris 5.11 batch CLI (`-batch -transcribe -export`) | stock settings |
 | `audiveris-meta` | same, with switches from `meta.yaml` | drums, OCR languages, small heads, ... |
-| `homr` | `homr page.png`, one call per page | CPU or CUDA |
-| `oemer` | `oemer page.png`, one call per page | CPU or CUDA; disabled by default |
+| `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
+| `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
 | `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
 | *external* | `data/<sample>/external/<tool>.musicxml` | Soundslice, Newzik, PlayScore, ...; scored, not timed |
 
@@ -30,14 +30,28 @@ omrbench doctor
 
 To smoke-test the setup, `omrbench demo` engraves two corpus pieces with Verovio into `data/demo-*`. Engraved PDFs are much easier than scans, so don't draw conclusions from them.
 
+## Data and results
+
+`data/` is input only: the tool never writes there. Everything it makes goes to `results/`.
+
+```
+data/<show>/                 a show transcribed song by song (see "Shows" below)
+  show.yaml  songs.xlsx  pdfs/  truth/
+data/samples/<sample>/       single-PDF benchmark samples (omrbench run)
+results/<show>/<song>/       latest transcription of every part + combined.mscz + manifest.json
+results/<show>/runs/<ts>/    one transcribe run: its outputs, work dirs, run.log
+results/samples/...          the same for samples
+results/<ts>/                omrbench run (benchmark): report.md, scores.json, engine outputs
+```
+
 ## Your samples
 
 ```bash
-omrbench new-sample choir-01      # creates data/choir-01/ with meta.yaml template
+omrbench new-sample choir-01      # creates data/samples/choir-01/ with meta.yaml template
 ```
 
 ```
-data/choir-01/
+data/samples/choir-01/
   input.pdf          2-3 pages, scan or phone photo
   gt.musicxml        hand-corrected in MuseScore (File > Export > MusicXML); gt.mxl/gt.mscz also OK
   meta.yaml          type (choir|piano|piano_reduction|part|orchestral|drums|other), languages, switches, correction times
@@ -60,14 +74,18 @@ omrbench report results/<run>             # re-render, e.g. after adding correct
 ### Transcribe only
 
 ```bash
-omrbench transcribe                                # pipeline on every PDF of every sample
-omrbench transcribe --samples anastasia --prefix_matching --force
+omrbench transcribe anastasia --songs 1,2              # every part of songs 1 and 2
+omrbench transcribe anastasia --songs 4A --parts Horn --force
+omrbench transcribe                                    # every PDF of every sample in data/samples
+omrbench transcribe --samples demo --prefix_matching
 ```
 
-Runs one engine (`--engine`, default `pipeline`) on every `*.pdf` in the selected sample folders
-(same `--samples` / `--exclude` / `--prefix_matching` as `run`) and writes `<name>.musicxml` next to
-`<name>.pdf`. No ground truth needed, nothing is scored, no report. PDFs that already have a
-`<name>.musicxml` are skipped unless `--force`.
+Runs one engine (`--engine`, default `pipeline`) on every part of the selected songs of a show
+(pages read straight from the full-book PDFs, see "Shows" below), or on every `*.pdf` of the
+selected sample folders (same `--samples` / `--exclude` / `--prefix_matching` as `run`). No ground
+truth needed, nothing is scored, no report. A PDF is skipped when its inputs (PDF, resolved meta,
+engine settings) are unchanged since its last output, as recorded in `manifest.json`; a code
+change alone doesn't redo it, so use `--force` after changing the pipeline.
 
 `--keep-awake` keeps Windows (also when running in WSL) from going to sleep until the run ends,
 so long overnight runs don't pause; the screen may still turn off. Off by default; when on, the
@@ -84,17 +102,21 @@ settings) processes the sheets of a PDF in parallel, ~2x faster, but Audiveris 5
 there that drops symbols (`"this.parameters" is null` in its log) and kills some PDFs, so it is
 off; a parallel run that exports nothing is redone serially.
 
-`results/transcribe-<timestamp>/` then holds:
+`results/<show>/<song>/` (or `results/samples/<sample>/`) then holds the latest output of every part:
 
-- `<sample>--<name>.musicxml`: a copy of every selected PDF's output (new or already existing)
-- `combined.musicxml` / `combined.mscz`: all of them stacked as parts of one score, all starting at
-  bar 1, in PDF order. With several sample folders (e.g. one per song) there is one per folder
-  instead: `<folder>--combined.musicxml` / `.mscz`. Parts are named after the PDF (`<name> – <part>`
-  for multi-part outputs such as split percussion). No padding:
+- `<name>.musicxml` (`<name> - Voices.musicxml` / `<name> - Piano.musicxml` for a piano reduction)
+- `combined.musicxml` / `combined.mscz`: all of the folder's files stacked as parts of one score,
+  all starting at bar 1, in sheet (PDF) order, rebuilt whenever a part changes. Parts are named
+  after the PDF (`<name> – <part>` for multi-part outputs such as split percussion). No padding:
   if parts differ in bar count, MuseScore calls the score corrupted and fills the gaps; it is then
   saved with `-f`. The `.mscz` needs the MuseScore CLI (`musescore_cli` in `bench.yaml`, `mscore` on
   PATH, or the default Windows MuseScore 4 install when running in WSL)
-- `<engine>/<sample>--<name>/`: engine work dirs
+- `manifest.json`: per PDF the run, engine, code version and input key of its latest output
+
+and `results/<show>/runs/<timestamp>/` the run itself:
+
+- `<song>/<name>.musicxml`: this run's outputs
+- `<engine>/<show>-<song>--<name>/`: engine work dirs (`subset.pdf`, crops, `pipeline.json`)
 - `run.log`: everything the run reported, one line each:
   `2026-10-01 10:39:12 | WARNING | anastasia-4--Horn | homr failed on page 3 system 2 (#12) ...`
   (time, level DEBUG/INFO/WARNING/ERROR, the PDF it is about, message). Every failed homr crop
@@ -102,8 +124,8 @@ off; a parallel run that exports nothing is redone serially.
   alignment (rest bars added, numbers ignored as misread, places where an extra bar was read),
   engine crashes with traceback. The console shows INFO and up. `omrbench run` writes one too.
 
-Per-PDF meta: `<name>.yaml` next to `<name>.pdf`, merged over the folder's `meta.yaml` (its keys
-win). Extra key `pages: "2-4,7"` (1-based; a list `[2, 3, 4]` works too) transcribes only those pages
+Per-PDF meta (samples): `<name>.yaml` next to `<name>.pdf`, merged over the folder's `meta.yaml` (its keys
+win). Shows get the same keys from their workbook. Extra key `pages: "2-4,7"` (1-based; a list `[2, 3, 4]` works too) transcribes only those pages
 of the PDF; the original file is not changed.
 
 For orchestra parts the `pipeline` engine also reads these meta keys (all optional; commented
@@ -133,38 +155,42 @@ cues: drop
 small_heads: true
 ```
 
-### Song folders from a workbook (`gen-meta`)
+### Shows: songs from a workbook
 
 For a show transcribed song by song from the same full-book parts, keep everything in
-`data/_<show>/` (folders starting with `_` are not samples):
+`data/<show>/` (any folder of `data/` with a `show.yaml`):
 
 ```
-data/_anastasia/show.yaml    constants: meta.yaml block, per-part defaults, instrument library
-data/_anastasia/songs.xlsx   one sheet per song (sheet name = song id, B1 = title)
-data/_anastasia/pdfs/        the full-book PDFs
+data/anastasia/show.yaml    constants: meta block, per-part defaults, instrument library
+data/anastasia/songs.xlsx   one sheet per song (sheet name = song id, B1 = title, B2 = truth file)
+data/anastasia/pdfs/        the full-book PDFs (read in place, never copied)
+data/anastasia/truth/       ground-truth MuseScore files, linked from the workbook
 ```
 
 ```bash
-omrbench gen-meta data/_anastasia/show.yaml --dry-run      # show what would change
-omrbench gen-meta data/_anastasia/show.yaml --songs 5      # write data/anastasia-5/
+omrbench check anastasia                 # validate the workbook: pages vs PDFs, truth files, ...
+omrbench check anastasia --songs 5 -v    # also print every part's resolved meta
+omrbench transcribe anastasia --songs 5
 ```
 
-Each song sheet has a header row `file | pages | skip | instruments | extra | notes`, one row per
-PDF. The generator writes `meta.yaml` and one `<file>.yaml` per row into the song folder and copies
-the PDFs there. Changed files are shown as a diff, then overwritten: the workbook is the source of
-truth.
+Each song sheet has `title` (A1/B1) and optionally `truth` (A2/B2, path relative to the show
+folder) above a header row `file | pages | skip | instruments | extra | truth | notes`, one row
+per PDF. Nothing is generated on disk: `transcribe` builds every part's meta from the workbook
+when it runs, so the workbook is the only place to edit (`check --export DIR` writes the
+resolved yamls for inspection).
 
 | Column | Example | Becomes |
 |---|---|---|
-| `pages` | `11-16` | `pages`. Empty: part not in this song, no yaml, no PDF copied. Also leave it empty for a TACET part when the show uses `cues: drop` (it would come out as rests only). |
+| `pages` | `11-16` | `pages`. Empty: part not in this song. Also leave it empty for a TACET part when the show uses `cues: drop` (it would come out as rests only). |
 | `skip` | `1-3` | `skip_systems: [1, 2, 3]` |
 | `instruments` | `Clarinet, Flute` | Names looked up in the `instruments` library of `show.yaml` (transpose, aliases, clef). Several on a non-drums part: `split_instruments: true`. A single one only sets the part's `transpose`. Keys in brackets apply to this song only and win over the library: `Triangle (lower_staff)` (a bare key means `true`), `Clarinet (transpose: A)`. Marking one instrument `lower_staff` takes it off every other instrument of that song. |
 | `extra` | `chord_names: false` | Raw YAML keys, win over everything. `lyrics: null` drops a part default. |
+| `truth` | `Piccolo, Flöte 1` | Part name(s) in the song's truth score this row is compared with, in `instruments` order. Optional. |
 | `notes` | `Bassoon` | Ignored. |
 
 New song: duplicate the previous sheet in Excel, rename it, set the title and pages. The cells
 are formatted as Text so Excel keeps `5-9` from becoming a date (the generator stops with an
-error if that happens anyway).
+error if that happens anyway). `omrbench check` then shows what the new sheet resolves to.
 
 Engines run one at a time so the resource numbers are clean. Scoring runs in parallel (`scoring.jobs`). A 3-page piano score takes roughly 1–2 minutes per engine to score, mostly in musicdiff.
 

@@ -7,6 +7,8 @@ set -euo pipefail
 
 OMRBENCH_HOME="${OMRBENCH_HOME:-$HOME/.local/share/omrbench}"
 AUDIVERIS_VERSION="${AUDIVERIS_VERSION:-5.11.0}"
+# pinned: homr main changes ProcessingConfig and its MusicXML output; re-run the truth bench before bumping
+HOMR_VERSION="${HOMR_VERSION:-0.7.0}"
 TESS_LANGS="${TESS_LANGS:-deu lat eng ita}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -74,8 +76,8 @@ fi
 
 # ---------------------------------------------------------------- homr
 if [ "$SKIP_HOMR" = 0 ]; then
-  echo "==> homr"
-  mkvenv homr homr psutil
+  echo "==> homr $HOMR_VERSION"
+  mkvenv homr "homr==$HOMR_VERSION" psutil
   if [ "$GPU" = 1 ]; then
     "$OMRBENCH_HOME/venvs/homr/bin/pip" uninstall -q -y onnxruntime || true
     "$OMRBENCH_HOME/venvs/homr/bin/pip" install -q --force-reinstall --no-deps onnxruntime-gpu

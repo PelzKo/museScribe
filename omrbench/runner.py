@@ -164,10 +164,10 @@ def load_results(run_dir: Path) -> list[EngineResult]:
 
 def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None,
         prefix_matching=False, run_id=None, resume=False, do_score=True) -> Path:
-    samples, warnings = dataset.discover(Path(cfg["data_dir"]), samples_only, cfg.get("musescore_cli"),
+    samples, warnings = dataset.discover(Path(cfg["samples_dir"]), samples_only, cfg.get("musescore_cli"),
                                          exclude=samples_exclude, prefix=prefix_matching)
     if not samples:
-        raise SystemExit(f"no samples in {cfg['data_dir']}")
+        raise SystemExit(f"no samples in {cfg['samples_dir']}")
     ext = {n for s in samples for n in s.external}
     engines = config_mod.engines(cfg, ext, engines_only)
     run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -206,7 +206,7 @@ def rescore(run_dir: Path, cfg: dict | None = None) -> None:
     logmod.setup(run_dir)
     manifest = json.loads((run_dir / "manifest.json").read_text())
     cfg = cfg or manifest["config"]
-    samples, _ = dataset.discover(Path(cfg["data_dir"]), None, cfg.get("musescore_cli"))
+    samples, _ = dataset.discover(Path(cfg["samples_dir"]), None, cfg.get("musescore_cli"))
     results = load_results(run_dir)
     (run_dir / "scores.json").unlink(missing_ok=True)
     scores = score_all(results, samples, cfg, run_dir)

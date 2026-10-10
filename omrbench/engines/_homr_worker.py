@@ -53,8 +53,10 @@ gpu = cuda_available()
 segnet_gpu = gpu or coreml_available()
 download_weights(segnet_gpu, gpu, False)
 ort.set_default_logger_severity(3)
-CONFIG = ProcessingConfig(False, False, False, False, -1, gpu, segnet_gpu, False)
-XML_ARGS = XmlGeneratorArguments(False, None, None)
+CONFIG = ProcessingConfig(enable_debug=False, enable_cache=False, write_staff_positions=False,
+                          read_staff_positions=False, selected_staff=-1, transformer_use_gpu=gpu,
+                          segnet_use_gpu=segnet_gpu, coreml_encoder=False)
+XML_ARGS = XmlGeneratorArguments(large_page=False, metronome=None, tempo=None)
 from homr.main import process_image  # noqa: E402
 
 proto.write(json.dumps({"ready": True, "gpu": gpu}) + "\n")

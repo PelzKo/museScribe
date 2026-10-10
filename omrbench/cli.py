@@ -1,15 +1,16 @@
 """omrbench command line.
 
-  omrbench doctor                      check engines, GPU and data folder
-  omrbench new-sample NAME             create data/NAME with a meta.yaml template
+  omrbench doctor                      check engines, GPU, shows and samples
+  omrbench transcribe SHOW [--songs 1,2] [--parts Horn,Bass] [--force] [--jobs N] [--keep-awake]
+                                       songs of data/SHOW -> results/SHOW/<song>/*.musicxml
+  omrbench transcribe [--samples x,y] [--exclude x,y] [--prefix_matching] [--force]
+                                       every PDF of data/samples/* -> results/samples/<sample>/
+  omrbench check SHOW [--songs 1,2] [-v] [--export DIR]
+                                       validate songs.xlsx, show what every part resolves to
+  omrbench new-sample NAME             create data/samples/NAME with a meta.yaml template
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
-               [--resume RUN_ID]
-  omrbench transcribe [--engine pipeline] [--samples x,y] [--exclude x,y] [--prefix_matching]
-               [--force] [--jobs N] [--keep-awake]
-                                       <pdf>.musicxml next to every PDF + combined.mscz
-  omrbench gen-meta SHOW_YAML [--songs 5,6] [--dry-run]
-                                       song folders (yamls + PDFs) from a songs.xlsx workbook
+               [--resume RUN_ID]       benchmark engines on data/samples
   omrbench score RUN_DIR               re-score an existing run (e.g. after fixing a GT)
   omrbench report RUN_DIR              regenerate report.md (e.g. after adding correction times)
 """
@@ -40,7 +41,16 @@ def cmd_doctor(cfg: dict, _args) -> int:
         print("         WARNING device=cuda but no GPU visible; install the NVIDIA Windows driver "
               "with WSL support and check `nvidia-smi` inside WSL")
     print(f"home   : {cfg['home']}")
-    data = Path(cfg["data_dir"])
+    from . import project
+
+    for folder in project.projects(Path(cfg["data_dir"])):
+        try:
+            p = project.load(folder)
+            print(f"show   : {folder} -> {len(p.songs)} songs, "
+                  f"truth for {', '.join(s.id for s in p.songs.values() if s.truth) or 'none'}")
+        except Exception as e:  # noqa: BLE001
+            print(f"show   : {folder} ERROR {type(e).__name__}: {e}")
+    data = Path(cfg["samples_dir"])
     ext: set[str] = set()
     if data.is_dir():
         samples, warns = dataset.discover(data, None, cfg.get("musescore_cli"))
@@ -60,7 +70,7 @@ def cmd_doctor(cfg: dict, _args) -> int:
 
 
 def cmd_new_sample(cfg: dict, args) -> int:
-    d = Path(cfg["data_dir"]) / args.name
+    d = Path(cfg["samples_dir"]) / args.name
     d.mkdir(parents=True, exist_ok=True)
     (d / "external").mkdir(exist_ok=True)
     if not (d / "meta.yaml").exists():
@@ -73,7 +83,7 @@ def cmd_new_sample(cfg: dict, args) -> int:
 def cmd_demo(cfg: dict, _args) -> int:
     from .demo import make_demos
 
-    for d in make_demos(Path(cfg["data_dir"])):
+    for d in make_demos(Path(cfg["samples_dir"])):
         print(f"created {d}")
     return 0
 
@@ -94,21 +104,32 @@ def cmd_run(cfg: dict, args) -> int:
 def cmd_transcribe(cfg: dict, args) -> int:
     from .transcribe import transcribe
 
-    failed = transcribe(cfg, engine=args.engine, samples_only=_csv(args.samples),
+    if args.show and (args.samples or args.exclude):
+        raise SystemExit("--samples/--exclude are for data/samples; with a show use --songs/--parts")
+    if not args.show and (args.songs or args.parts):
+        raise SystemExit("--songs/--parts need a show, e.g. `omrbench transcribe anastasia --songs 1`")
+    failed = transcribe(cfg, project=args.show, songs=_csv(args.songs), parts=_csv(args.parts),
+                        engine=args.engine, samples_only=_csv(args.samples),
                         samples_exclude=_csv(args.exclude), prefix_matching=args.prefix_matching,
                         force=args.force, run_id=args.run_id, jobs=args.jobs,
                         awake=args.keep_awake)
     return 1 if failed else 0
 
 
-def cmd_gen_meta(cfg: dict, args) -> int:
-    from .genmeta import generate
+def cmd_check(cfg: dict, args) -> int:
+    from . import project
 
+    folder = project.find(Path(cfg["data_dir"]), args.show)
+    if folder is None:
+        print(f"ERROR no show '{args.show}' (a folder with show.yaml in {cfg['data_dir']})")
+        return 1
     try:
-        problems = generate(Path(args.show), Path(cfg["data_dir"]), _csv(args.songs), args.dry_run)
+        problems = project.check(project.load(folder), _csv(args.songs), args.verbose,
+                                 Path(args.export) if args.export else None)
     except (OSError, ValueError) as e:
         print(f"ERROR {e}")
         return 1
+    print(f"{problems} problem(s)" if problems else "ok")
     return 1 if problems else 0
 
 
@@ -149,22 +170,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--resume", metavar="RUN_ID", help="continue a run, re-using successful engine outputs")
     p.add_argument("--jobs", type=int, help="parallel scoring workers")
     p.add_argument("--no-score", action="store_true", help="only run engines")
-    p = sub.add_parser("transcribe", help="transcribe every PDF of the samples to <pdf>.musicxml")
+    p = sub.add_parser("transcribe", help="transcribe the songs of a show (or the samples) to results/")
+    p.add_argument("show", nargs="?", help="show in data/ (e.g. anastasia); omit for data/samples")
+    p.add_argument("--songs", help="comma-separated song ids = sheet names (default: all)")
+    p.add_argument("--parts", help="comma-separated part names = PDF stems (default: all)")
     p.add_argument("--engine", default="pipeline", help="engine to run (default: pipeline)")
     p.add_argument("--samples", help="comma-separated sample ids (default: all)")
     p.add_argument("--exclude", help="comma-separated sample ids to skip")
     p.add_argument("--prefix_matching", "--prefix-matching", action="store_true",
                    help="match --samples/--exclude as id prefixes")
-    p.add_argument("--force", action="store_true", help="overwrite existing <pdf>.musicxml")
+    p.add_argument("--force", action="store_true", help="redo PDFs whose inputs are unchanged")
     p.add_argument("--jobs", type=int,
                    help="PDFs transcribed at the same time (default: transcribe_jobs in bench.yaml, 2)")
-    p.add_argument("--run-id", help="name of the work folder in results/ (default: transcribe-<timestamp>)")
+    p.add_argument("--run-id", help="name of the run folder in results/<show>/runs/ (default: timestamp)")
     p.add_argument("--keep-awake", "--keep_awake", action="store_true",
                    help="keep Windows (also from WSL) from sleeping until the run ends")
-    p = sub.add_parser("gen-meta", help="write song folders from data/_<show>/show.yaml + songs.xlsx")
-    p.add_argument("show", help="show file, e.g. data/_anastasia/show.yaml")
+    p = sub.add_parser("check", help="validate data/<show>/songs.xlsx and show the resolved parts")
+    p.add_argument("show", help="show in data/ (e.g. anastasia) or its folder")
     p.add_argument("--songs", help="comma-separated sheet names (default: all)")
-    p.add_argument("--dry-run", action="store_true", help="only print what would change")
+    p.add_argument("-v", "--verbose", action="store_true", help="print every part's resolved meta")
+    p.add_argument("--export", metavar="DIR", help="also write <DIR>/<song>/<part>.yaml (inspection only)")
     p = sub.add_parser("score")
     p.add_argument("run_dir")
     p.add_argument("--jobs", type=int)
@@ -177,8 +202,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = config_mod.load(Path(args.config))
     if args.data:
         cfg["data_dir"] = str(Path(args.data).resolve())
+        cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
     return {"doctor": cmd_doctor, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "transcribe": cmd_transcribe, "gen-meta": cmd_gen_meta, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+            "transcribe": cmd_transcribe, "check": cmd_check, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

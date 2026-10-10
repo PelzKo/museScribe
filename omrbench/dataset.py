@@ -2,7 +2,7 @@
 
 Layout::
 
-    data/
+    data/samples/
       <sample-id>/
         input.pdf                 # 2-3 page score (any *.pdf; first one wins)
         gt.musicxml               # ground truth (gt.mxl / gt.xml / gt.mscz also accepted)
@@ -118,7 +118,7 @@ def select_dirs(data_dir: Path, only: list[str] | None = None, exclude: list[str
                 prefix: bool = False) -> tuple[list[Path], list[str]]:
     """Sample folders picked by `only` / `exclude` (exact names, or name prefixes if `prefix`).
 
-    Folders starting with "_" are not samples (e.g. data/_anastasia with the gen-meta sources).
+    Folders starting with "_" are skipped (parked samples).
     """
     warnings = []
     dirs = sorted(p for p in Path(data_dir).iterdir() if p.is_dir() and not p.name.startswith("_"))

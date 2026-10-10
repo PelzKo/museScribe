@@ -10,6 +10,7 @@ from .engines import Engine, build
 DEFAULTS = {
     "home": "~/.local/share/omrbench",
     "data_dir": "data",
+    "samples_dir": "data/samples",
     "results_dir": "results",
     "dpi": 300,
     "device": "cpu",
@@ -28,7 +29,7 @@ def load(path: Path | None) -> dict:
     if os.environ.get("OMRBENCH_HOME"):
         cfg["home"] = os.environ["OMRBENCH_HOME"]
     cfg["home"] = str(Path(cfg["home"]).expanduser())
-    for k in ("data_dir", "results_dir"):
+    for k in ("data_dir", "samples_dir", "results_dir"):
         p = Path(cfg[k]).expanduser()
         cfg[k] = str(p if p.is_absolute() else base / p)
     return cfg

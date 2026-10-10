@@ -1,6 +1,7 @@
 # omrbench configuration. Paths are relative to this file.
 home: ~/.local/share/omrbench     # where setup.sh put venvs/tools (or $OMRBENCH_HOME)
-data_dir: data
+data_dir: data            # shows: data/<show>/show.yaml (+ songs.xlsx, pdfs/, truth/)
+samples_dir: data/samples # single-PDF benchmark samples (omrbench run)
 results_dir: results
 dpi: 300                  # rasterisation for page-image engines (homr, oemer)
 device: cpu               # cpu | cuda  (cuda needs `setup.sh --gpu` and a CUDA-visible GPU)

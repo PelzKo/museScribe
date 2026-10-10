@@ -58,7 +58,7 @@ class Data:
         cfg = self.manifest["config"]
         # re-read samples so correction times entered after the run are picked up
         try:
-            samples, _ = dataset.discover(Path(cfg["data_dir"]), None, cfg.get("musescore_cli"))
+            samples, _ = dataset.discover(Path(cfg["samples_dir"]), None, cfg.get("musescore_cli"))
             self.samples = {s.id: s for s in samples}
         except Exception:
             self.samples = {}
