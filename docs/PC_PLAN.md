@@ -123,12 +123,17 @@ Done (smoke test passed on PC and laptop):
 - P3: on vector pages the bar-number pass reads the PDF text layer instead of Tesseract (`pipeline/ocr.py`,
   `text_layer_pages`); pages without fonts (scans) skip the check. Run reports have a `PDF` (pdfkind) column.
 
-On the PC after pulling: `omrbench images build audiveris oemer`, then `omrbench run --engines oemer --samples demo-violin-part`
-with `device: auto` (cuda) to check oemer on the GPU.
+- P4: `clarity`, `transcoda`, `smt-fp`, `mozart` images and engines (all CPU-capable, none `requires_gpu`).
+  Page-image engines share `KernPages` (one container call per sample, `batch_cmd`); converters
+  `convert/kern.py` (header/terminator, bekern separators, spine-count repair) and `convert/mozart.py`.
+  Demo note F1 on the laptop CPU: see `docs/engine-benchmark.md` and the run reports.
 
-Next: P4 page-level engines, one at a time (clarity, transcoda, smt-fp, mozart), each with image, adapter, converter
-and test. P2 converters land with the engine that needs them (`semantic.py` with tromr/tfe2e, `mozart.py` with mozart;
-Zeus writes MusicXML). GPU-only engines get `requires_gpu: true` in `bench.yaml`.
+On the PC after pulling: `omrbench images build clarity transcoda smt-fp mozart`, then
+`omrbench run --engines clarity,transcoda,smt-fp,mozart --samples demo-*` (`--prefix-matching` if needed) on the GPU.
+
+Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (manual approval + token).
+Next: P5 (pluggable crop recognizer; refactor `homr` -> generic `crop` source first, parity via `reassemble()`).
+P2's remaining converters land with their recognizers (`semantic.py` with tromr/tfe2e; Zeus writes MusicXML).
 Not done: vector pages at a higher render dpi (P3), split of the report by pdfkind.
 
 ## 7. Data facts (from this machine's survey)

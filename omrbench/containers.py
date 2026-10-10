@@ -30,6 +30,8 @@ IMAGES = {
     "oemer": ("omrbench/oemer:0.1.8", "oemer", {"BASE_IMAGE": "omrbench/base:cuda"}),
     "clarity": ("omrbench/clarity:c6bb8a4", "clarity", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "transcoda": ("omrbench/transcoda:b529f8a", "transcoda", {"BASE_IMAGE": "omrbench/base:cpu"}),
+    "smt-fp": ("omrbench/smt:fp-grandstaff", "smt", {"BASE_IMAGE": "omrbench/base:cpu"}),
+    "mozart": ("omrbench/mozart:a51c9d7", "mozart", {"BASE_IMAGE": "omrbench/base:cpu"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi
 GPU_PROBE_IMAGE = "nvidia/cuda:12.6.3-base-ubuntu24.04"

@@ -35,6 +35,11 @@ engines:
   transcoda:              # Transcoda 59M: full-page pianoform image -> **kern (container only)
     type: transcoda
     # beams: 3              # beam width (paper setting); 1 = greedy, faster
+  smt-fp:                 # Sheet Music Transformer, full-page pianoform (PRAIG/smt-fp-grandstaff), bekern
+    type: smt-fp
+  mozart:                 # classic-CV floor (treble staves only, no rests/barlines)
+    type: mozart
+    dpi: 150                # its classifier was trained on ~150 dpi excerpts; 300 dpi pages read as empty
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
     enabled: false

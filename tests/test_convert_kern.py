@@ -33,3 +33,11 @@ def test_bare_body_gets_header_and_terminator(tmp_path):
     body = "*clefG2\t*clefF4\n*M2/4\t*M2/4\n4c\t4C\n4e\t4E\n=\t=\n2g\t2G\n"
     out = kern_to_musicxml(body, tmp_path / "out.musicxml")
     assert len(converter.parse(out).parts) == 2
+
+
+def test_rows_fitted_to_spine_count(tmp_path):
+    # SMT-style: after the merge (*v *v) a row still has three columns
+    body = "*clefF4\t*clefG2\n*M2/4\t*M2/4\n*\t*^\n4C\t4e\t4g\n*\t*v\t*v\n4D\t4f\t4a\n=\t=\n2E\t2g\n"
+    score = converter.parse(kern_to_musicxml(body, tmp_path / "out.musicxml"))
+    assert len(score.parts) == 2
+    assert {str(p) for n in score.recurse().notes for p in n.pitches} >= {"C3", "E4", "G4", "D3", "F4", "E3", "G4"}

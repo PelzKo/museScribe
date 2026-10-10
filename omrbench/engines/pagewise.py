@@ -15,6 +15,7 @@ from .. import containers
 from .. import log as logmod
 from .. import musicxml
 from ..convert.kern import kern_to_musicxml
+from ..convert.mozart import mozart_to_musicxml
 from ..dataset import Sample
 from ..monitor import RunStats
 from ..rasterize import rasterize
@@ -183,22 +184,47 @@ class Oemer(PagewiseEngine):
         return p if p.exists() else None
 
 
-class Transcoda(PagewiseEngine):
-    """Full-page pianoform image -> **kern (container only); all pages in one call, converted here."""
+class KernPages(PagewiseEngine):
+    """Full-page image -> text adapter in a container (default **kern); all pages in one call, converted here."""
+    suffix, convert = ".krn", staticmethod(kern_to_musicxml)
+
+    def batch_cmd(self, images, out_dir):
+        return [self.container_exe, "--out", out_dir, "--device", self.bench.get("device", "cpu"),
+                *self.adapter_args(), *images]
+
+    def adapter_args(self) -> list[str]:
+        return []
+
+    def find_output(self, image, out_dir):
+        krn = out_dir / f"{image.stem}{self.suffix}"
+        if not krn.exists():
+            return None
+        try:
+            return self.convert(krn, krn.with_suffix(".musicxml"))
+        except Exception as e:  # unparsable kern = a failed page, not a crashed run
+            LOG.warning(f"{self.kind}: {krn.name} does not convert to MusicXML: {type(e).__name__}: {e}")
+            return None
+
+
+class Transcoda(KernPages):
     kind = "transcoda"
     container_image = "transcoda"
     container_exe = "transcoda"
 
-    def batch_cmd(self, images, out_dir):
-        return ["transcoda", "--out", out_dir, "--device", self.bench.get("device", "cpu"),
-                "--beams", str(int(self.cfg.get("beams", 3))), *images]
+    def adapter_args(self):
+        return ["--beams", str(int(self.cfg.get("beams", 3)))]
 
-    def find_output(self, image, out_dir):
-        krn = out_dir / f"{image.stem}.krn"
-        if not krn.exists():
-            return None
-        try:
-            return kern_to_musicxml(krn, krn.with_suffix(".musicxml"))
-        except Exception as e:  # unparsable kern = a failed page, not a crashed run
-            LOG.warning(f"{self.kind}: {krn.name} does not convert to MusicXML: {type(e).__name__}: {e}")
-            return None
+
+class SmtFp(KernPages):
+    """Sheet Music Transformer, full-page pianoform model (bekern)."""
+    kind = "smt-fp"
+    container_image = "smt-fp"
+    container_exe = "smt"
+
+
+class Mozart(KernPages):
+    """Classic-CV floor: one treble staff at a time, its own text format."""
+    kind = "mozart"
+    container_image = "mozart"
+    container_exe = "mozart"
+    suffix, convert = ".txt", staticmethod(mozart_to_musicxml)
