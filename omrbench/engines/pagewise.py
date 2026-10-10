@@ -14,6 +14,7 @@ from pathlib import Path
 from .. import containers
 from .. import log as logmod
 from .. import musicxml
+from ..convert.kern import kern_to_musicxml
 from ..dataset import Sample
 from ..monitor import RunStats
 from ..rasterize import rasterize
@@ -49,6 +50,10 @@ class PagewiseEngine(Engine):
 
     def page_cmd(self, image: Path, out_dir: Path) -> list:
         raise NotImplementedError
+
+    def batch_cmd(self, images: list[Path], out_dir: Path) -> list | None:
+        """One command for all pages (model loaded once), or None for one page_cmd per page."""
+        return None
 
     def use_pool(self) -> bool:
         return False
@@ -92,6 +97,11 @@ class PagewiseEngine(Engine):
                                peak_single_rss_mb=rss, exit_code=0,
                                timed_out=any(r.timed_out for r in results)))
             timed_out = {r.image.name for r in results if r.timed_out}
+        elif (cmd := self.batch_cmd(locals_, pdir)) is not None:
+            st = self.exec_cmd(cmd, workdir, log, env=self.env(), cwd=pdir,
+                               timeout_s=self.timeout_s * len(locals_))   # timeout_s is per page
+            total.add(st)
+            timed_out = {p.name for p in locals_} if st.timed_out else set()
         else:
             timed_out = set()
             for local in locals_:
@@ -171,3 +181,24 @@ class Oemer(PagewiseEngine):
     def find_output(self, image, out_dir):
         p = out_dir / f"{image.stem}.musicxml"
         return p if p.exists() else None
+
+
+class Transcoda(PagewiseEngine):
+    """Full-page pianoform image -> **kern (container only); all pages in one call, converted here."""
+    kind = "transcoda"
+    container_image = "transcoda"
+    container_exe = "transcoda"
+
+    def batch_cmd(self, images, out_dir):
+        return ["transcoda", "--out", out_dir, "--device", self.bench.get("device", "cpu"),
+                "--beams", str(int(self.cfg.get("beams", 3))), *images]
+
+    def find_output(self, image, out_dir):
+        krn = out_dir / f"{image.stem}.krn"
+        if not krn.exists():
+            return None
+        try:
+            return kern_to_musicxml(krn, krn.with_suffix(".musicxml"))
+        except Exception as e:  # unparsable kern = a failed page, not a crashed run
+            LOG.warning(f"{self.kind}: {krn.name} does not convert to MusicXML: {type(e).__name__}: {e}")
+            return None

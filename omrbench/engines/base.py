@@ -83,16 +83,17 @@ class Engine:
         return {k: v for k, v in env.items() if str(self.home) not in str(v)}
 
     def exec_cmd(self, cmd: list, workdir: Path, log_path: Path, *, env: dict | None = None,
-                 cwd: Path | None = None) -> RunStats:
+                 cwd: Path | None = None, timeout_s: float | None = None) -> RunStats:
         """Run one tool command natively or in its container (identical paths, workdir mounted)."""
+        timeout_s = timeout_s or self.timeout_s
         if not self.container:
-            return run_monitored(cmd, log_path=log_path, cwd=cwd, env=env, timeout_s=self.timeout_s)
+            return run_monitored(cmd, log_path=log_path, cwd=cwd, env=env, timeout_s=timeout_s)
         from .. import containers
         gpu = self.bench.get("device", "cpu") == "cuda"
         return containers.run_in_container(
             containers.IMAGES[self.container][0], [self.container_exe, *cmd[1:]], workdir=workdir,
             log_path=log_path, gpu=gpu, env=self.container_env(env or {}), cwd=cwd,
-            timeout_s=self.timeout_s)
+            timeout_s=timeout_s)
 
     def run(self, sample: Sample, workdir: Path) -> EngineResult:
         workdir.mkdir(parents=True, exist_ok=True)

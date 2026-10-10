@@ -28,6 +28,8 @@ IMAGES = {
     "audiveris": ("omrbench/audiveris:5.11.0", "audiveris", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "homr": ("omrbench/homr:0.7.0", "homr", {"BASE_IMAGE": "omrbench/base:cuda"}),
     "oemer": ("omrbench/oemer:0.1.8", "oemer", {"BASE_IMAGE": "omrbench/base:cuda"}),
+    "clarity": ("omrbench/clarity:c6bb8a4", "clarity", {"BASE_IMAGE": "omrbench/base:cpu"}),
+    "transcoda": ("omrbench/transcoda:b529f8a", "transcoda", {"BASE_IMAGE": "omrbench/base:cpu"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi
 GPU_PROBE_IMAGE = "nvidia/cuda:12.6.3-base-ubuntu24.04"

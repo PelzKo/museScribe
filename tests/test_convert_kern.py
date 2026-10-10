@@ -27,3 +27,9 @@ def test_single_spine_pitches_in_order(tmp_path):
     out = kern_to_musicxml(kern, tmp_path / "out.musicxml")
     pitches = [str(n.pitch) for n in converter.parse(out).recurse().notes]
     assert pitches == ["C4", "E4", "G4", "B4"]
+
+
+def test_bare_body_gets_header_and_terminator(tmp_path):
+    body = "*clefG2\t*clefF4\n*M2/4\t*M2/4\n4c\t4C\n4e\t4E\n=\t=\n2g\t2G\n"
+    out = kern_to_musicxml(body, tmp_path / "out.musicxml")
+    assert len(converter.parse(out).parts) == 2

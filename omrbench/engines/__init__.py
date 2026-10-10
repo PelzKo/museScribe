@@ -1,11 +1,14 @@
 from .audiveris import Audiveris
 from .base import Engine, EngineResult
-from .pagewise import Homr, Oemer
+from .clarity import Clarity
+from .pagewise import Homr, Oemer, Transcoda
 
 KINDS: dict[str, type[Engine]] = {
     "audiveris": Audiveris,
     "homr": Homr,
     "oemer": Oemer,
+    "clarity": Clarity,
+    "transcoda": Transcoda,
 }
 
 

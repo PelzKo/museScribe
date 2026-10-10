@@ -29,6 +29,12 @@ engines:
     # auto_beam: true     # beam unbeamed eighths and shorter by beat (else MuseScore shows flags)
     # max_wedge_bars: 2   # hairpins longer than this are misread pairings and dropped
     # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run)
+  clarity:                # Clarity-OMR, whole PDF -> MusicXML; piano-tuned (container only)
+    type: clarity
+    # beam_width: 5         # default 5; 2 is ~2x faster on CPU
+  transcoda:              # Transcoda 59M: full-page pianoform image -> **kern (container only)
+    type: transcoda
+    # beams: 3              # beam width (paper setting); 1 = greedy, faster
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
     enabled: false
