@@ -29,6 +29,10 @@ benchmarks, P7 routing + ensemble.
 | Harness venv | `~/.local/share/omrbench/venvs/harness`, activate with `source ~/.local/share/omrbench/env.sh` |
 | Path rule | Keep paths identical to the original machine. The repo is on the WSL ext4 filesystem, not `/mnt/c` (I/O is much slower there). |
 
+Second machine (laptop, dev box): `DESKTOP-606ME4E`, Ryzen 7 7840U (16 threads), 27 GB RAM, Radeon 780M iGPU (no CUDA),
+Docker Desktop 29.8.2 with WSL integration. Same user, same paths (`~/museScribe`, same harness venv). Runs CPU-only;
+`omrbench doctor` shows `docker gpu: skipped`.
+
 Access from Windows: Explorer `\\wsl$\Ubuntu-24.04\home\konstantin\museScribe`, or PowerShell `wsl -d Ubuntu-24.04`.
 
 ## 3. What is already verified on the PC
@@ -79,8 +83,10 @@ Design rules that the code follows:
 4. **One worker script.** The homr image copies `omrbench/engines/_homr_worker.py` to `/opt/homr/worker.py`
    at build time; the native pool uses the same file.
 5. **Host tool paths are not passed in.** `TESSDATA_PREFIX` and other host paths are filtered out; the image sets its own.
-6. **Devices.** `bench.yaml` `device: cpu` sets `CUDA_VISIBLE_DEVICES=` and runs without `--gpus`.
-   `device: cuda` runs with `--gpus all`. The GPU is never used when `device: cpu`.
+6. **Devices.** `bench.yaml` `device: auto` (default) resolves to `cuda` when host `nvidia-smi -L` works, else `cpu`.
+   `cpu` sets `CUDA_VISIBLE_DEVICES=` and runs without `--gpus`; `cuda` runs with `--gpus all`.
+   Engines with `requires_gpu: true` in `bench.yaml` are skipped (warning) when the device is `cpu`.
+   Same repo and `bench.yaml` on PC and laptop; no per-machine config.
 
 ## 5. Known issues and fixes to check
 

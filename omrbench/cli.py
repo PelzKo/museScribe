@@ -36,15 +36,18 @@ def _csv(s: str | None) -> list[str] | None:
     return [x.strip() for x in s.split(",") if x.strip()] if s else None
 
 
-def _doctor_docker() -> None:
+def _doctor_docker(device: str) -> None:
     from . import containers as C
 
     ok, ver = C.docker_ok()
     print(f"docker : {'OK ' if ok else 'MISSING'} {ver}")
     if not ok:
         return
-    ok, info = C.gpu_ok()
-    print(f"docker gpu: {'OK ' if ok else 'FAILED'} {info}")
+    if device == "cuda":
+        ok, info = C.gpu_ok()
+        print(f"docker gpu: {'OK ' if ok else 'FAILED'} {info}")
+    else:
+        print("docker gpu: skipped (device cpu, requires_gpu engines are skipped)")
     for name, (tag, _, _) in C.IMAGES.items():
         print(f"image  : {name:<10} {'OK ' if C.image_present(tag) else 'MISSING'} {tag}")
 
@@ -79,7 +82,7 @@ def cmd_doctor(cfg: dict, _args) -> int:
         print("         WARNING device=cuda but no GPU visible; install the NVIDIA Windows driver "
               "with WSL support and check `nvidia-smi` inside WSL")
     print(f"home   : {cfg['home']}")
-    _doctor_docker()
+    _doctor_docker(cfg["device"])
     from . import project
 
     for folder in project.projects(Path(cfg["data_dir"])):

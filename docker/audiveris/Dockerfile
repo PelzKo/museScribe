@@ -6,8 +6,9 @@ FROM ${BASE_IMAGE}
 ARG AUDIVERIS_VERSION=5.11.0
 ARG TESS_LANGS="deu lat eng ita"
 
+# libgtk-3: Audiveris loads it via JNA at startup (HiDPI probe), even in -batch mode
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
+ && apt-get install -y --no-install-recommends curl libgtk-3-0t64 \
  && rm -rf /var/lib/apt/lists/*
 
 # the .deb bundles its own JRE under opt/audiveris; extract it instead of installing

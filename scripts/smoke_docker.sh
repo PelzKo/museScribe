@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke test for the containerised engines on the synthetic demo sample.
-#   1. homr image sees the GPU (CUDAExecutionProvider)
+#   1. homr image sees the GPU (CUDAExecutionProvider); skipped without nvidia-smi
 #   2. demo samples exist (creates them with `omrbench demo` if not)
 #   3. audiveris and homr run in their containers on demo-violin-part
 #   4. output files are owned by the calling user, not root
@@ -14,10 +14,14 @@ ok()   { echo "    OK   $*"; }
 bad()  { echo "    FAIL $*"; fail=1; }
 
 step "1. homr image: onnxruntime providers"
-providers="$(docker run --rm --gpus all omrbench/homr:0.7.0 /opt/homr/bin/python \
-  -c 'import onnxruntime as o; print(o.get_available_providers())' 2>&1)"
-echo "    $providers"
-if grep -q CUDAExecutionProvider <<<"$providers"; then ok "GPU provider available"; else bad "no CUDAExecutionProvider"; fi
+if nvidia-smi -L >/dev/null 2>&1; then
+  providers="$(docker run --rm --gpus all omrbench/homr:0.7.0 /opt/homr/bin/python \
+    -c 'import onnxruntime as o; print(o.get_available_providers())' 2>&1)"
+  echo "    $providers"
+  if grep -q CUDAExecutionProvider <<<"$providers"; then ok "GPU provider available"; else bad "no CUDAExecutionProvider"; fi
+else
+  ok "no GPU on this machine, skipped (device auto -> cpu)"
+fi
 
 step "2. demo sample $SAMPLE"
 if [ ! -f "data/samples/$SAMPLE/input.pdf" ]; then

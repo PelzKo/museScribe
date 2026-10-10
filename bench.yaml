@@ -4,7 +4,8 @@ data_dir: data            # shows: data/<show>/show.yaml (+ songs.xlsx, pdfs/, t
 samples_dir: data/samples # single-PDF benchmark samples (omrbench run)
 results_dir: results
 dpi: 300                  # rasterisation for page-image engines (homr, oemer)
-device: cpu               # cpu | cuda  (cuda needs `setup.sh --gpu` and a CUDA-visible GPU)
+device: auto              # auto (cuda if nvidia-smi works, else cpu) | cpu | cuda
+                          # engines with `requires_gpu: true` are skipped when device is cpu
 timeout_s: 1800           # per engine call (per page for homr/oemer)
 transcribe_jobs: 2        # PDFs transcribed at once (omrbench transcribe --jobs overrides)
 musescore_cli: null       # only needed if you drop gt.mscz instead of gt.musicxml
