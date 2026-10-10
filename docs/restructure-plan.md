@@ -46,7 +46,9 @@ truth part names are not validated against the score yet -> Phase 3)
    `instruments` (comma list, same order as instruments; single name otherwise; PianoReduction
    rows: `Piano=Klavierauszug; Voices=auto`).
 
-## Phase 2 – transcribe writes only to results/  — DONE 2026-10-10 except item 5 (cache), deferred
+## Phase 2 – transcribe writes only to results/  — DONE 2026-10-10; item 5 (shared render cache) dropped:
+rendering takes ~0.27 s/page (~19 s of a 20 min run for songs 1/2/4A) and only happens for parts that are
+transcribed again anyway; per-run _pages keeps a run deletable as a whole
 (sample transcribe writes to results/samples/<sample>/; folders renamed: data/anastasia, data/ghost,
 data/anastasia/truth, data/samples/ — part of Phase 5 already done)
 1. `omrbench transcribe anastasia --songs 1,2,4A [--parts Horn,Bass] [--force] [--keep-awake]`.
@@ -80,7 +82,8 @@ data/anastasia/truth, data/samples/ — part of Phase 5 already done)
 1. `run` stays for data/samples; GT conversion writes to results/cache, not data/.
 2. Reuse truth.py + notef1 so both commands share metrics.
 
-## Phase 5 – data/results migration (manual, after phases 1-3 work)
+## Phase 5 – data/results migration (manual, after phases 1-3 work)  — DONE 2026-10-10
+(Theresa's files in data/anastasia/truth/wip/ as 04_theresa_*; data 1.2 GB -> 135 MB, results 2.9 GB -> 198 MB)
 1. Move `_anastasia`->`anastasia`, `_ghost`->`ghost`, `_truth/*`->`anastasia/truth/`,
    demos + threelittlewords -> `samples/`.
 2. Song 4 truth: skipped for now (Theresa's not finished). Before deleting, move her files
@@ -89,7 +92,8 @@ data/anastasia/truth, data/samples/ — part of Phase 5 already done)
 4. Prune results/ (2.9 GB): all old runs, zips, transcribe-v2, a12-base, dev-baseline.
 5. Fill truth cells in songs.xlsx for 1, 2, 4A.
 
-## Phase 6 – docs
+## Phase 6 – docs  — DONE 2026-10-10
+(README = quickstart + commands; docs/shows.md, docs/pipeline.md, docs/engine-benchmark.md)
 README -> quickstart (setup, transcribe, bench); move pipeline internals to docs/pipeline.md,
 workbook format to docs/workbook.md.
 

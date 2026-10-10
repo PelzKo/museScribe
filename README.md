@@ -1,24 +1,21 @@
-# museScribe – OMR engine benchmark (`omrbench`)
+# museScribe (`omrbench`)
 
-Runs several OMR engines on your own sample PDFs, scores their MusicXML against hand-corrected ground truth, measures runtime / CPU / memory / GPU and writes a Markdown report. Implements the evaluation protocol (section 12) from the OMR research notes.
+Transcribes printed sheet music (scanned orchestra parts, vocal scores) to MusicXML / MuseScore,
+and benchmarks the result against hand-corrected ground truth.
 
-| Engine | How it runs | Notes |
-|---|---|---|
-| `audiveris` | Audiveris 5.11 batch CLI (`-batch -transcribe -export`) | stock settings |
-| `audiveris-meta` | same, with switches from `meta.yaml` | drums, OCR languages, small heads, ... |
-| `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
-| `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
-| `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
-| *external* | `data/<sample>/external/<tool>.musicxml` | Soundslice, Newzik, PlayScore, ...; scored, not timed |
+- **Transcribe** a show song by song: `omrbench transcribe anastasia --songs 1`
+- **Benchmark** it against MuseScore truth scores: `omrbench bench anastasia`
 
-Every engine is a subprocess from the same harness, measured the same way.
+The default engine, `pipeline`, combines Audiveris (layout, text, OCR) with homr on cropped
+staff groups plus repairs ([docs/pipeline.md](docs/pipeline.md)). Audiveris, homr and oemer can
+also be compared on their own ([docs/engine-benchmark.md](docs/engine-benchmark.md)).
 
 ## Setup (WSL / Ubuntu)
 
 ```bash
 bash setup.sh            # add --gpu for onnxruntime-gpu (needs an NVIDIA GPU visible in WSL)
 source ~/.local/share/omrbench/env.sh
-omrbench doctor
+omrbench doctor          # engines, GPU, shows and samples found
 ```
 
 `setup.sh` needs no root. It puts everything under `~/.local/share/omrbench` (venvs on `/mnt/c` are slow):
@@ -28,318 +25,69 @@ omrbench doctor
 - Tesseract data for `deu lat eng ita`, from the full `tessdata` repo, since Audiveris needs the legacy models
 - the homr and oemer model downloads, so they don't count towards the first run's time
 
-To smoke-test the setup, `omrbench demo` engraves two corpus pieces with Verovio into `data/demo-*`. Engraved PDFs are much easier than scans, so don't draw conclusions from them.
+Engine versions: Audiveris 5.11.0 and homr 0.7.0 (both pinned in `setup.sh`; newer homr
+changes its API and output, so re-run `omrbench bench` after bumping it), oemer 0.1.8
+(unmaintained since 2024, off by default). MuseScore 4 is needed for `.mscz` output and to
+read truth `.mscz` files (`musescore_cli` in `bench.yaml`, `mscore` on PATH, or the default
+Windows install when running in WSL).
 
 ## Data and results
 
 `data/` is input only: the tool never writes there. Everything it makes goes to `results/`.
 
 ```
-data/<show>/                 a show transcribed song by song (see "Shows" below)
-  show.yaml  songs.xlsx  pdfs/  truth/
-data/samples/<sample>/       single-PDF benchmark samples (omrbench run)
+data/<show>/                 a show (docs/shows.md)
+  show.yaml                  constants: meta, per-part defaults, instrument library
+  songs.xlsx                 one sheet per song: parts, pages, instruments, truth mapping
+  pdfs/                      full-book PDFs, read in place
+  truth/                     ground-truth MuseScore full scores
+data/samples/<sample>/       single-PDF samples for the engine benchmark
 results/<show>/<song>/       latest transcription of every part + combined.mscz + manifest.json
 results/<show>/runs/<ts>/    one transcribe run: its outputs, work dirs, run.log
-results/samples/...          the same for samples
 results/<show>/bench/<ts>/   omrbench bench: report.md, scores.json, metrics.csv
-results/samples/bench/<ts>/  omrbench run (engine benchmark): report.md, scores.json, engine outputs
+results/samples/...          the same for samples; bench/<ts>/ = omrbench run
 results/cache/               truth exports, generated sample GT
 ```
 
-## Your samples
+## Quickstart
 
 ```bash
-omrbench new-sample choir-01      # creates data/samples/choir-01/ with meta.yaml template
+omrbench check anastasia                       # validate songs.xlsx against the PDFs and truth
+omrbench transcribe anastasia --songs 1,2      # -> results/anastasia/1/, results/anastasia/2/
+omrbench bench anastasia                       # note F1 of the latest outputs vs the truth
+omrbench bench anastasia --songs 1 --transcribe --force   # after changing the pipeline
 ```
 
-```
-data/samples/choir-01/
-  input.pdf          2-3 pages, scan or phone photo
-  gt.musicxml        hand-corrected in MuseScore (File > Export > MusicXML); gt.mxl/gt.mscz also OK
-  meta.yaml          type (choir|piano|piano_reduction|part|orchestral|drums|other), languages, switches, correction times
-  external/          optional: soundslice.musicxml, playscore.mxl, ...
-```
+Open `results/<show>/<song>/combined.mscz` in MuseScore to see a whole song. A part is only
+transcribed again when its PDF, workbook row or engine settings changed; use `--force` after
+changing the code. `--keep-awake` keeps Windows from sleeping during long runs.
 
-The ground truth must cover exactly the pages in `input.pdf`. See `meta.example.yaml` for all keys.
+**New song:** duplicate the previous sheet in `songs.xlsx`, rename it to the song id, set
+title, pages, skipped systems and instruments, then `omrbench check anastasia --songs <id> -v`.
+To benchmark it, put the corrected MuseScore score in `truth/`, link it in B2 and fill the
+`truth` column ([docs/shows.md](docs/shows.md#benchmark-against-the-truth-bench)).
 
-## Running
+**New show:** a folder `data/<show>/` with `show.yaml` (copy one), `songs.xlsx` and `pdfs/`.
 
-```bash
-omrbench run                              # all engines, all samples -> results/samples/bench/<ts>/report.md
-omrbench run --engines audiveris,homr --samples choir-01
-omrbench run --exclude demo --prefix_matching   # skip every demo-* sample
-omrbench run --resume 20260927-1300       # re-use finished engine outputs, retry failures
-omrbench score results/samples/bench/<run>            # re-score, e.g. after fixing a GT file
-omrbench report results/samples/bench/<run>            # re-render, e.g. after adding correction times
-```
+## Commands
 
-### Transcribe only
-
-```bash
-omrbench transcribe anastasia --songs 1,2              # every part of songs 1 and 2
-omrbench transcribe anastasia --songs 4A --parts Horn --force
-omrbench transcribe                                    # every PDF of every sample in data/samples
-omrbench transcribe --samples demo --prefix_matching
-```
-
-Runs one engine (`--engine`, default `pipeline`) on every part of the selected songs of a show
-(pages read straight from the full-book PDFs, see "Shows" below), or on every `*.pdf` of the
-selected sample folders (same `--samples` / `--exclude` / `--prefix_matching` as `run`). No ground
-truth needed, nothing is scored, no report. A PDF is skipped when its inputs (PDF, resolved meta,
-engine settings) are unchanged since its last output, as recorded in `manifest.json`; a code
-change alone doesn't redo it, so use `--force` after changing the pipeline.
-
-`--keep-awake` keeps Windows (also when running in WSL) from going to sleep until the run ends,
-so long overnight runs don't pause; the screen may still turn off. Off by default; when on, the
-log says so at the start and end. It holds a PowerShell `SetThreadExecutionState` request that
-ends with the run, also if it crashes.
-
-Several PDFs run at once (`--jobs N`, default `transcribe_jobs: 2` in `bench.yaml`), longest
-first, so Audiveris on one PDF overlaps homr on another. All homr crops go to one pool of
-persistent homr workers (default 8 workers x 2 ONNX threads on a 16-thread CPU, ~1 GB RAM each;
-`workers` / `threads` under the `homr` settings). On the 8-core laptop this was tuned on, a
-crop takes ~0.9 s instead of ~3.5 s. Measured on 4 anastasia-4 parts (25 pages): 1380 s
-before, 554 s now; 3 PDFs at once or niced workers were slower. `parallel_sheets: true` (Audiveris
-settings) processes the sheets of a PDF in parallel, ~2x faster, but Audiveris 5.11 has a race
-there that drops symbols (`"this.parameters" is null` in its log) and kills some PDFs, so it is
-off; a parallel run that exports nothing is redone serially.
-
-`results/<show>/<song>/` (or `results/samples/<sample>/`) then holds the latest output of every part:
-
-- `<name>.musicxml` (`<name> - Voices.musicxml` / `<name> - Piano.musicxml` for a piano reduction)
-- `combined.musicxml` / `combined.mscz`: all of the folder's files stacked as parts of one score,
-  all starting at bar 1, in sheet (PDF) order, rebuilt whenever a part changes. Parts are named
-  after the PDF (`<name> – <part>` for multi-part outputs such as split percussion). No padding:
-  if parts differ in bar count, MuseScore calls the score corrupted and fills the gaps; it is then
-  saved with `-f`. The `.mscz` needs the MuseScore CLI (`musescore_cli` in `bench.yaml`, `mscore` on
-  PATH, or the default Windows MuseScore 4 install when running in WSL)
-- `manifest.json`: per PDF the run, engine, code version and input key of its latest output
-
-and `results/<show>/runs/<timestamp>/` the run itself:
-
-- `<song>/<name>.musicxml`: this run's outputs
-- `<engine>/<show>-<song>--<name>/`: engine work dirs (`subset.pdf`, crops, `pipeline.json`)
-- `run.log`: everything the run reported, one line each:
-  `2026-10-01 10:39:12 | WARNING | anastasia-4--Horn | homr failed on page 3 system 2 (#12) ...`
-  (time, level DEBUG/INFO/WARNING/ERROR, the PDF it is about, message). Every failed homr crop
-  with its reason and crop image, Audiveris errors (its warnings at DEBUG), bar-number
-  alignment (rest bars added, numbers ignored as misread, places where an extra bar was read),
-  engine crashes with traceback. The console shows INFO and up. `omrbench run` writes one too.
-
-Per-PDF meta (samples): `<name>.yaml` next to `<name>.pdf`, merged over the folder's `meta.yaml` (its keys
-win). Shows get the same keys from their workbook. Extra key `pages: "2-4,7"` (1-based; a list `[2, 3, 4]` works too) transcribes only those pages
-of the PDF; the original file is not changed.
-
-For orchestra parts the `pipeline` engine also reads these meta keys (all optional; commented
-examples in `meta.example.yaml`):
-
-| Key | Example | Effect |
-|---|---|---|
-| `pages` | `"2-4,7"` or `[2, 3, 4]` | Transcribe only these PDF pages (1-based). Per-PDF yaml only. |
-| `skip_systems` | `[1, 2, 3, 4, 5]` | Leave these systems out entirely. **A list of system numbers, not a count**: to skip the first 5 systems, list all five. `[5]` skips only the 5th. 1-based, counted over the transcribed pages (after `pages`), so system 1 is the first system of the first selected page. Use it for the end of the previous piece at the top of a page. Skipped systems produce no bars. |
-| `keep_staves` | `2` | Read only the lowest n staves of every system as one part (conductor part: vocal/reference staves above the piano). Tempo and rehearsal marks above the system are kept; lyrics and labels of dropped staves are not. |
-| `transpose` | `F`, `Bb`, `Bb 8vb`, `8vb`, or `{diatonic, chromatic, octave_change}` | Transposing instrument, written to sounding pitch. The key names the pitch below written C. `8va`/`8vb` add an octave. |
-| `instruments` | `[{name: Clarinet, transpose: Bb}, Flute]` | Instruments the part plays. Each entry: `name`, optional `aliases`, `transpose`, `clef` (`pitched` / `percussion`), `lower_staff`. Printed labels in the score select the instrument. A label matches an instrument when it starts with its name or an alias ("Glock - soft mallets"), or else contains a word of 4+ letters that belongs to only one listed instrument ("Sus Cymbal" -> Cymbal; "Tree" alone matches nothing when Bell Tree and Mark Tree are both listed). `lower_staff: true` names the instrument of an unlabeled lower staff: when a system has two single-line staves (e.g. Timpani above, cymbal below) and the lower one has no label yet, it starts as this instrument instead of the next unused one in the list. It has no effect on the top staff, so it is harmless on songs where the instrument shares one staff with the others. |
-| `split_instruments` | `true` | One MusicXML part per instrument (each with its own transposition). Use for Reed 1/2 and percussion. Default: on for `type: drums`. |
-| `doubling` | `true` | Alternative to `split_instruments`: one part that changes instrument at the labels. MuseScore 4 ignores the change on import, so add the Instrument Change by hand. |
-| `small_heads` | `true` | Tell Audiveris to read small note heads (cue notes). Needed for `cues: drop`. |
-| `cues` | `keep` (default) / `drop` | `drop` turns cue-size notes into rests and removes the `(Clar)` label above them. Notes over a whole-bar rest in another voice of the staff are cues too (printed full size in these parts). |
-| `male_voices` | `[Dmitry, Vlad]` | Vocal scores: singer parts written in treble-8vb besides Men / Male / Tenor / Bass / Baritone. |
-
-Combine as needed, for example a horn part whose first page starts with the tail of the
-previous number:
-
-```yaml
-pages: "1-3"
-transpose: F
-skip_systems: [1, 2]      # the first two systems of page 1
-cues: drop
-small_heads: true
-```
-
-### Shows: songs from a workbook
-
-For a show transcribed song by song from the same full-book parts, keep everything in
-`data/<show>/` (any folder of `data/` with a `show.yaml`):
-
-```
-data/anastasia/show.yaml    constants: meta block, per-part defaults, instrument library
-data/anastasia/songs.xlsx   one sheet per song (sheet name = song id, B1 = title, B2 = truth file)
-data/anastasia/pdfs/        the full-book PDFs (read in place, never copied)
-data/anastasia/truth/       ground-truth MuseScore files, linked from the workbook
-```
-
-```bash
-omrbench check anastasia                 # validate the workbook: pages vs PDFs, truth files, ...
-omrbench check anastasia --songs 5 -v    # also print every part's resolved meta
-omrbench transcribe anastasia --songs 5
-```
-
-Each song sheet has `title` (A1/B1) and optionally `truth` (A2/B2, path relative to the show
-folder) above a header row `file | pages | skip | instruments | extra | truth | notes`, one row
-per PDF. Nothing is generated on disk: `transcribe` builds every part's meta from the workbook
-when it runs, so the workbook is the only place to edit (`check --export DIR` writes the
-resolved yamls for inspection).
-
-| Column | Example | Becomes |
-|---|---|---|
-| `pages` | `11-16` | `pages`. Empty: part not in this song. Also leave it empty for a TACET part when the show uses `cues: drop` (it would come out as rests only). |
-| `skip` | `1-3` | `skip_systems: [1, 2, 3]` |
-| `instruments` | `Clarinet, Flute` | Names looked up in the `instruments` library of `show.yaml` (transpose, aliases, clef). Several on a non-drums part: `split_instruments: true`. A single one only sets the part's `transpose`. Keys in brackets apply to this song only and win over the library: `Triangle (lower_staff)` (a bare key means `true`), `Clarinet (transpose: A)`. Marking one instrument `lower_staff` takes it off every other instrument of that song. |
-| `extra` | `chord_names: false` | Raw YAML keys, win over everything. `lyrics: null` drops a part default. |
-| `truth` | `Piccolo, Flöte 1` | Part name(s) in the song's truth score this row is compared with, in `instruments` order. Optional. |
-| `notes` | `Bassoon` | Ignored. |
-
-New song: duplicate the previous sheet in Excel, rename it, set the title and pages. The cells
-are formatted as Text so Excel keeps `5-9` from becoming a date (the generator stops with an
-error if that happens anyway). `omrbench check` then shows what the new sheet resolves to.
-
-### Benchmark a show against its truth (`bench`)
-
-```bash
-omrbench bench anastasia                       # latest outputs of every song with a truth file
-omrbench bench anastasia --songs 1 --transcribe   # transcribe song 1 first (unchanged parts skipped)
-omrbench bench anastasia --run 20261010-1530   # the outputs of one transcribe run instead
-omrbench bench anastasia --full                # also OMR-NED and TEDn per part (minutes)
-```
-
-The truth is a full score made in MuseScore, as it is: `data/<show>/truth/<song>.mscz`, linked
-from the song's sheet (A2 `truth`, B2 the path). It is exported once with the MuseScore CLI to
-`results/cache/truth/` (again when the file changes). Each row's `truth` cell names the truth
-part(s) its output is compared with:
-
-| `truth` cell | Meaning |
+| Command | Does |
 |---|---|
-| `Violine 1` | the row's only output part |
-| `Piccolo, Flöte 1` | one name per instrument, in `instruments` order (split parts); `-` leaves one out |
-| `Piano=Klavierauszug, Men=Männer` | by output part name; for piano reductions (parts of both files, singers named after the printed label); `Voice=-` ignores an output part |
+| `omrbench doctor` | check engines, GPU, shows, samples |
+| `omrbench check SHOW [--songs] [-v] [--export DIR]` | validate the workbook, show every part's resolved meta |
+| `omrbench transcribe SHOW [--songs] [--parts] [--force] [--jobs N] [--keep-awake]` | transcribe songs to `results/SHOW/<song>/` |
+| `omrbench bench SHOW [--songs] [--run TS] [--transcribe] [--full]` | score against the truth |
+| `omrbench transcribe [--samples] [--exclude] [--prefix_matching]` | transcribe every PDF of `data/samples/*` |
+| `omrbench run / score / report / new-sample / demo` | engine benchmark on samples ([docs](docs/engine-benchmark.md)) |
 
-Output parts that name the same truth part are compared together. `omrbench check` checks the
-names against the truth score and lists truth parts with notes that no row names.
+## Docs
 
-The metric is note F1 per truth part: a note is (bar, staff, onset, sounding pitch, duration),
-bars matched by index, sounding pitch = written + `<transpose>` (so transposing parts compare
-fine either way); cue and grace notes are left out. Variants: `pitch` (no duration), `pc` (pitch
-class: octave conventions of singer parts), `rhythm` (no pitch: percussion). Per song the
-counts are summed (micro F1). A bench takes seconds.
+- [docs/shows.md](docs/shows.md): workbook format, transcribe outputs and logs, truth mapping and metrics
+- [docs/pipeline.md](docs/pipeline.md): how the pipeline engine works, all meta keys
+- [docs/engine-benchmark.md](docs/engine-benchmark.md): samples, `omrbench run`, metrics, engine quirks
+- [docs/restructure-plan.md](docs/restructure-plan.md): the 2026-10 restructure
 
-`results/<show>/bench/<timestamp>/` holds `report.md` (also printed: per part F1, precision,
-recall, bar counts, change since the previous bench; the bars that differ; what wasn't
-compared), `scores.json` and `metrics.csv`; with `--full` also the per-part files compared.
-
-### Benchmark engines on samples (`run`)
-
-Engines run one at a time so the resource numbers are clean. Scoring runs in parallel (`scoring.jobs`). A 3-page piano score takes roughly 1–2 minutes per engine to score, mostly in musicdiff.
-
-## What gets measured
-
-| Metric | Source | Meaning |
-|---|---|---|
-| OMR-NED `all` / `notes` | musicdiff | symbol edit distance / (GT + output symbols); `notes` = notes and rests only, which is fairer to homr/oemer, since they don't read lyrics or dynamics |
-| TEDn | OLiMPiC (vendored, MIT) | tree edit distance on MusicXML; large parts are scored measure by measure after alignment |
-| Per-element P/R/F1 | own | notes, pitch, rhythm, rests, clefs, keys, times, dynamics, hairpins, articulations, slurs, ties, lyrics, words (tempo/expression text), metronome; LCS-matched per staff |
-| Measure error rate | own | share of output measures whose notes/rests differ from the aligned GT measure |
-| Flag precision/recall | own | how well `validator` (duration ≠ time signature) and Audiveris `.omr` abnormal/excess measures predict the wrong measures |
-| Wall / CPU / RAM / GPU | psutil + NVML | whole process tree, sampled every 0.1 s; also per page |
-| Correction time | you | `correction_minutes` in `meta.yaml`; the report applies the 70 % rule |
-
-Outputs go to `results/samples/bench/<run>/`:
-- `report.md`
-- `scores.json`, with every number plus the flagged measures and the per-category musicdiff breakdown
-- `metrics.csv`
-- `<engine>/<sample>/output.musicxml`, which you can open in MuseScore to time corrections
-- `engine.log`
-
-## Known engine behaviour
-
-- **Audiveris** OCRs the part label on every system. If the label changes (for example "Soprano" becomes "S.", or an OCR slip turns "Voice" into "Voico"), it opens a new part. The Structure table in the report shows this. The fix is post-processing with the known instrument list, not the benchmark.
-- **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs the pinned old `numpy`, `opencv` and `onnxruntime` that `setup.sh` installs. Because of the cost it is disabled in `bench.yaml`; run it with `--engines oemer` (or set `enabled: true`).
-- **homr** reads notes only: no lyrics, dynamics or text. The `notes` OMR-NED variant is the fair comparison for it.
-- **GPU:** `--gpu` and `device: cuda` only help with an NVIDIA GPU that is visible inside WSL (`nvidia-smi` works). AMD iGPUs (Radeon 780M, for example) can't be used from WSL by these engines, so they run on CPU.
-
-## The `pipeline` engine
-
-One engine that combines the others (`omrbench/pipeline/`); its runtime is the sum of its steps.
-
-1. **Audiveris** (with the `meta.yaml` switches) gives the page layout: systems, staves, bar
-   positions, the parts of each system, and all OCR'd text with positions (`.omr` project).
-2. **homr on crops:** every staff group (a single staff, or a piano's grand staff) of every
-   system is cut out and read by homr. That makes homr usable on vocal scores and condensed
-   parts, which it cannot read as whole pages. homr sometimes fails on one crop and works on
-   a slightly different one, so failed crops are retried with other margins (`crop_margins`).
-3. **Bar count per system** by vote between Audiveris and the homr crops.
-4. **Bar choice:** per staff group and bar, the preferred engine's bar if its voices fill the
-   time signature, else the other one. `prefer: auto` puts homr first on scans and Audiveris
-   first on vector PDFs (it is near perfect there and, unlike homr, has ties). Percussion
-   staves always prefer Audiveris (homr reads them as pitched). Where only one engine saw a
-   clef change inside the system, its bar is taken (the other one reads the pitches in the old
-   clef). homr sometimes places a voice's notes after the other staff's (the voice then runs
-   past the bar end with gaps): a voice whose durations fit the bar is laid out note after note.
-5. **Signatures:** time signature from homr where printed (Audiveris misreads 4/4 as 2/4),
-   clef and key from the group's preferred engine. Parts not printed in a system follow its key.
-   A key change to C printed as naturals only is read as sharps by homr: where Audiveris reads
-   no key there, homr's notes are re-read in C.
-6. **Directions and text:** dynamics, hairpins and tempo from Audiveris. Words are rebuilt
-   from the positioned OCR text, because Audiveris files bar numbers as lyrics and expression
-   text as page credits. Header and footer text become credits. Tempo and expression marks go
-   to the top part (the full-score convention), labels and dialogue stay on their staff.
-   `text_onset: bar` puts words at the start of their bar, as in the ground truths here.
-7. **Multi-measure rests** are expanded from the printed evidence: the count above the rest,
-   printed ranges ("15-17"), and gaps in the printed bar numbers. Systems of rests only are
-   rebuilt from that evidence (neither engine finds their barlines reliably). A tiny bar at
-   the end of a page (page-turn reminder) is dropped. Ranges over 99 bars are OCR slips and
-   ignored; a homr rest count the printed numbers leave no room for is not used.
-   **Bar numbers line up with the printed ones** (`align_bar_numbers: true`): wherever the
-   printed numbers jump ahead of the output, rest bars are inserted, so output bar n is
-   printed bar n in every part. A cut mark `[to] 97` (or `[to 16]`) printed at a barline means
-   the bar there is bar 97 and the bars before it were cut from this part: they become rests.
-   An arrow before the number (`—> 14`, `→ 14`) is a cut mark too.
-   Without a cut mark the rests go after the last rest bar before the number (an unread
-   multi-rest count), else right before it. Lettered bars added in a revision (`131A`,
-   `[to] 132C`) count as bars of their own, if the plain numbers around them agree (a "7A"
-   among bars 70-73 is a misread "72A" and would shift every bar from 8 on). OCR misreads numbers, so the step function that
-   agrees with most numbers is used; a single stray number shifts nothing. Bars are never
-   removed, except empty bars before printed bar 1. Where the output has more bars than the
-   numbers say (an extra bar was read), `run.log` says where.
-   **Second OCR pass** (`ocr_bar_numbers: true`): Audiveris' OCR misses whole pages of bar
-   numbers now and then, so Tesseract reads the strips above and below every staff (one call
-   per page, about 1 s) and adds the numbers, ranges, counts and cut marks Audiveris has no
-   text for. A count-sized number only counts when a multi-measure rest bar is printed under
-   it (notes are often read as "4"). The Tesseract binary bundled in Audiveris' jars is
-   extracted into `$OMRBENCH_HOME/tools/tesseract` on first use (a `tesseract` on PATH wins);
-   results are cached in the work dir's `ocr/`.
-8. **Vocal scores** (`type: piano_reduction`): the lowest two staves of every system are the
-   piano, each staff above it a voice. A voice staff belongs to the singer whose label was
-   printed last on it ("DMITRY:", "FIRST WOMAN:", "ALL (NO DMITRY):"), carried over to the
-   staff at the same position in later systems; a label inside a bar splits the bar there.
-   Every distinct label becomes a part; a duet label ("DOWAGER+ANASTASIA:", also `&` / `AND`)
-   puts the line into each singer's part (a name that starts a longer label elsewhere, "DOWAGER"
-   -> "DOWAGER EMPRESS", takes that part). Parts named Men / Male / Tenor / Bass / Baritone,
-   and the names in `male_voices`, are written in treble-8vb clef, an octave down (the
-   ground-truth convention for male voices printed in treble clef). Unison notes two voices of
-   a staff share are kept once. Lyrics, dynamics and hairpins are placed from their
-   position on the page (Audiveris' MusicXML hangs piano dynamics on voices and joins
-   hairpins to far-away stops): a syllable goes to the note above it, a mark between the
-   piano staves is the piano's, one above a vocal staff that voice's. Dialogue (a speaker
-   label followed by prose: "GLEB: (cont.)" / "We hear you, ...") is dropped, or with
-   `spoken_text: text` kept as one text over the voices. Stage directions ("(VLAD POPOV
-   enters.)") go to the voices. The piano gets no sung or spoken text. `transcribe` writes
-   `<name> - Voices.musicxml` and `<name> - Piano.musicxml`; tempo and other system text
-   is in both.
-9. **Clean-up for MuseScore** (all scores): eighths and shorter without beams are beamed by
-   beat (`auto_beam`), hairpins over `max_wedge_bars` (2) bars are dropped, graces whose
-   flag was missed (read as quarters) get the piece's grace type, half/whole "graces" are
-   dropped, articulations are kept once per chord.
-10. **Percussion split:** for `type: drums` (or `split_instruments: true`), a shared staff is
-   split into one part per instrument at the printed labels ("Timpani", "Bell Tree", ...).
-   Instrument names come from `instruments:` in `meta.yaml`, or else from the header lines that
-   also appear as labels. A clef change without a readable label switches to the next listed
-   instrument.
-
-`<run>/pipeline/<sample>/pipeline.json` records what was taken from where (bars per source,
-multi-rest expansions, alignment rest bars, crops that failed); `<run>/run.log` has the details.
-
-## Layout
+## Code layout
 
 ```
 omrbench/
