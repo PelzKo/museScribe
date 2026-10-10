@@ -1,5 +1,5 @@
 # Audiveris batch CLI with its bundled JRE, same release as setup.sh (no root needed on the host).
-# Build: docker build -t omrbench/audiveris:5.11.0 docker/audiveris
+# Build context is the repo root (`omrbench images build audiveris`).
 ARG BASE_IMAGE=omrbench/base:cpu
 FROM ${BASE_IMAGE}
 

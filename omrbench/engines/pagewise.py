@@ -11,10 +11,11 @@ import subprocess
 import time
 from pathlib import Path
 
+from .. import containers
 from .. import log as logmod
 from .. import musicxml
 from ..dataset import Sample
-from ..monitor import RunStats, run_monitored
+from ..monitor import RunStats
 from ..rasterize import rasterize
 from .base import Engine, EngineResult
 
@@ -92,8 +93,7 @@ class PagewiseEngine(Engine):
         else:
             timed_out = set()
             for local in locals_:
-                st = run_monitored(self.page_cmd(local, pdir), log_path=log,
-                                   cwd=pdir, env=self.env(), timeout_s=self.timeout_s)
+                st = self.exec_cmd(self.page_cmd(local, pdir), workdir, log, env=self.env(), cwd=pdir)
                 total.add(st)
                 if st.timed_out:
                     timed_out.add(local.name)
@@ -122,6 +122,13 @@ class Homr(PagewiseEngine):
     venv_name = "homr"
     cli_name = "homr"
     package = "homr"
+    container_image = "homr"
+    container_exe = "homr"
+
+    def check(self) -> tuple[bool, str]:
+        if self.container:
+            return containers.check_image(self.container)
+        return super().check()
 
     def page_cmd(self, image, out_dir):
         return [self.exe, *(self.cfg.get("extra_args") or []), image]
@@ -131,9 +138,18 @@ class Homr(PagewiseEngine):
         return bool(self.cfg.get("pool", True)) and not self.cfg.get("extra_args")
 
     def pool(self):
-        from .homr_pool import get_pool
-        return get_pool(self.venv / "bin" / "python", self.cfg.get("workers", "auto"),
-                        int(self.cfg.get("threads", 2)), self.env(), int(self.cfg.get("nice", 0)))
+        from .homr_pool import WORKER, get_pool
+        env = self.env()
+        if self.container:
+            # the crops live under results/, so the image sees results/ at the same path
+            results = Path(self.bench["results_dir"])
+            launch = containers.pool_cmd(containers.IMAGES[self.container][0], mounts={results: str(results)},
+                                         gpu=self.bench.get("device", "cpu") == "cuda",
+                                         env=self.container_env(env))
+        else:
+            launch = [str(self.venv / "bin" / "python"), str(WORKER)]
+        return get_pool(launch, self.cfg.get("workers", "auto"), int(self.cfg.get("threads", 2)),
+                        env, int(self.cfg.get("nice", 0)))
 
     def find_output(self, image, out_dir):
         p = image.with_suffix(".musicxml")

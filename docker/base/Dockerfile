@@ -1,6 +1,5 @@
 # Shared base: Ubuntu 24.04 (same as the WSL host), Python venv with the in-container monitor.
-# Build the CPU variant:  docker build -t omrbench/base:cpu --build-arg BASE_IMAGE=ubuntu:24.04 docker/base
-# Build the CUDA variant: docker build -t omrbench/base:cuda --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04 docker/base
+# Build context is the repo root (see omrbench/containers.py build_cmd); `omrbench images build` runs it.
 ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 
@@ -12,7 +11,7 @@ RUN apt-get update \
 RUN python3 -m venv /opt/monitor \
  && /opt/monitor/bin/pip install --no-cache-dir psutil pynvml
 
-COPY omr_run.py /opt/monitor/omr_run.py
+COPY docker/base/omr_run.py /opt/monitor/omr_run.py
 RUN printf '#!/bin/sh\nexec /opt/monitor/bin/python /opt/monitor/omr_run.py "$@"\n' > /usr/local/bin/omr-run \
  && chmod +x /usr/local/bin/omr-run
 
