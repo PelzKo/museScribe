@@ -7,16 +7,16 @@ Layout::
         input.pdf                 # 2-3 page score (any *.pdf; first one wins)
         gt.musicxml               # ground truth (gt.mxl / gt.xml / gt.mscz also accepted)
         gt-<part>.musicxml        #   ...or one file per part, stacked in meta `gt_parts` order
-        gt.prepared.musicxml      # generated: merged parts / gt_drop_measures applied
         meta.yaml                 # optional, see meta.example.yaml
         external/                 # optional: outputs of tools the harness can't run
           soundslice.musicxml     #   engine name = file stem
           playscore.mxl
+
+Generated GT files (gt.mscz exported, part files merged, gt_drop_measures applied) go to
+results/cache/samples/<sample-id>/, never into data/.
 """
 from __future__ import annotations
 
-import shutil
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -52,23 +52,19 @@ class Sample:
         return {str(k): float(v) for k, v in (self.meta.get("correction_minutes") or {}).items()}
 
 
-def _find_gt(d: Path, mscore: str | None) -> Path | None:
+def cache_dir(cfg: dict) -> Path:
+    return Path(cfg["results_dir"]) / "cache" / "samples"
+
+
+def _find_gt(d: Path, mscore: str | None, cache: Path) -> Path | None:
+    from . import truth
+
     for suf in MUSICXML_SUFFIXES:
         p = d / f"gt{suf}"
         if p.exists():
             return p
     mscz = d / "gt.mscz"
-    if mscz.exists():
-        out = d / "gt.converted.musicxml"
-        if out.exists() and out.stat().st_mtime >= mscz.stat().st_mtime:
-            return out
-        exe = mscore or shutil.which("mscore") or shutil.which("musescore") or shutil.which("mscore4")
-        if not exe:
-            raise RuntimeError(f"{mscz}: MuseScore CLI not found; export gt.musicxml manually "
-                               "or set musescore_cli in bench.yaml")
-        subprocess.run([exe, "-o", str(out), str(mscz)], check=True, capture_output=True)
-        return out
-    return None
+    return truth.convert(mscz, cache, mscore) if mscz.exists() else None
 
 
 def _gt_part_files(d: Path, meta: dict) -> tuple[list[Path], list[str]]:
@@ -84,9 +80,9 @@ def _gt_part_files(d: Path, meta: dict) -> tuple[list[Path], list[str]]:
     return [files[n] for n in order + rest], warns
 
 
-def _prepare_gt(d: Path, meta: dict, mscore: str | None) -> tuple[Path | None, list[str]]:
+def _prepare_gt(d: Path, meta: dict, mscore: str | None, cache: Path) -> tuple[Path | None, list[str]]:
     """Return the GT path to score against, merging part files / dropping measures if needed."""
-    base = _find_gt(d, mscore)
+    base = _find_gt(d, mscore, cache)
     parts, warns = _gt_part_files(d, meta)
     drop = meta.get("gt_drop_measures") or []
     if base and parts:
@@ -105,7 +101,7 @@ def _prepare_gt(d: Path, meta: dict, mscore: str | None) -> tuple[Path | None, l
         root = musicxml.merge_parts(roots)
     if drop:
         warns += musicxml.drop_measures(root, drop)
-    out = d / "gt.prepared.musicxml"
+    out = cache / d.name / "gt.prepared.musicxml"
     musicxml.write(root, out)
     return out, warns
 
@@ -136,10 +132,11 @@ def load_meta(path: Path) -> dict:
 
 def discover(data_dir: Path, only: list[str] | None = None,
              mscore: str | None = None, exclude: list[str] | None = None,
-             prefix: bool = False) -> tuple[list[Sample], list[str]]:
+             prefix: bool = False, *, cache: Path) -> tuple[list[Sample], list[str]]:
     """Return (samples, warnings).
 
     `only` / `exclude` select sample ids by exact name, or by name prefix if `prefix`.
+    cache: where generated GT files go (results/cache/samples).
     """
     samples = []
     dirs, warnings = select_dirs(data_dir, only, exclude, prefix)
@@ -151,7 +148,7 @@ def discover(data_dir: Path, only: list[str] | None = None,
         pdf = next((p for p in pdfs if p.stem == "input"), pdfs[0])
         meta = load_meta(d / "meta.yaml")
         try:
-            gt, gt_warns = _prepare_gt(d, meta, mscore)
+            gt, gt_warns = _prepare_gt(d, meta, mscore, Path(cache))
         except Exception as e:  # conversion failure is per-sample
             warnings.append(f"{d.name}: {e}")
             continue

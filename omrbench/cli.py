@@ -5,6 +5,8 @@
                                        songs of data/SHOW -> results/SHOW/<song>/*.musicxml
   omrbench transcribe [--samples x,y] [--exclude x,y] [--prefix_matching] [--force]
                                        every PDF of data/samples/* -> results/samples/<sample>/
+  omrbench bench SHOW [--songs 1,2] [--run TS] [--transcribe] [--full]
+                                       note F1 of the latest outputs vs data/SHOW/truth
   omrbench check SHOW [--songs 1,2] [-v] [--export DIR]
                                        validate songs.xlsx, show what every part resolves to
   omrbench new-sample NAME             create data/samples/NAME with a meta.yaml template
@@ -53,7 +55,8 @@ def cmd_doctor(cfg: dict, _args) -> int:
     data = Path(cfg["samples_dir"])
     ext: set[str] = set()
     if data.is_dir():
-        samples, warns = dataset.discover(data, None, cfg.get("musescore_cli"))
+        samples, warns = dataset.discover(data, None, cfg.get("musescore_cli"),
+                                          cache=dataset.cache_dir(cfg))
         ext = {n for s in samples for n in s.external}
         print(f"data   : {data} -> {len(samples)} samples "
               f"({', '.join(f'{s.id}[{s.score_type}]' for s in samples)})")
@@ -116,6 +119,28 @@ def cmd_transcribe(cfg: dict, args) -> int:
     return 1 if failed else 0
 
 
+def cmd_bench(cfg: dict, args) -> int:
+    from .bench import bench
+
+    if args.transcribe:
+        from . import project
+        from .transcribe import transcribe
+
+        if args.run:
+            raise SystemExit("--transcribe benchmarks the new outputs; leave out --run")
+        folder = project.find(Path(cfg["data_dir"]), args.show)
+        if folder is None:
+            raise SystemExit(f"no show '{args.show}' in {cfg['data_dir']}")
+        songs, _ = project.load(folder).select(_csv(args.songs))
+        if not (with_truth := [s.id for s in songs if s.truth]):
+            raise SystemExit("no selected song has a truth file (songs.xlsx, B2)")
+        transcribe(cfg, project=args.show, songs=with_truth,
+                   force=args.force, jobs=args.jobs, awake=args.keep_awake)
+    problems = bench(cfg, args.show, songs=_csv(args.songs), run=args.run, full=args.full,
+                     bench_id=args.bench_id)
+    return 1 if problems else 0
+
+
 def cmd_check(cfg: dict, args) -> int:
     from . import project
 
@@ -125,7 +150,8 @@ def cmd_check(cfg: dict, args) -> int:
         return 1
     try:
         problems = project.check(project.load(folder), _csv(args.songs), args.verbose,
-                                 Path(args.export) if args.export else None)
+                                 Path(args.export) if args.export else None,
+                                 Path(cfg["results_dir"]) / "cache", cfg.get("musescore_cli"))
     except (OSError, ValueError) as e:
         print(f"ERROR {e}")
         return 1
@@ -185,6 +211,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run-id", help="name of the run folder in results/<show>/runs/ (default: timestamp)")
     p.add_argument("--keep-awake", "--keep_awake", action="store_true",
                    help="keep Windows (also from WSL) from sleeping until the run ends")
+    p = sub.add_parser("bench", help="score a show's outputs against its truth scores")
+    p.add_argument("show", help="show in data/ (e.g. anastasia)")
+    p.add_argument("--songs", help="comma-separated song ids (default: all with a truth file)")
+    p.add_argument("--run", metavar="TS", help="score the outputs of results/<show>/runs/TS instead of the latest")
+    p.add_argument("--transcribe", action="store_true", help="transcribe the songs first (unchanged parts are skipped)")
+    p.add_argument("--force", action="store_true", help="with --transcribe: redo every part")
+    p.add_argument("--jobs", type=int, help="with --transcribe: PDFs at the same time")
+    p.add_argument("--keep-awake", "--keep_awake", action="store_true", help="with --transcribe")
+    p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn per part (slow)")
+    p.add_argument("--bench-id", help="name of the folder in results/<show>/bench/ (default: timestamp)")
     p = sub.add_parser("check", help="validate data/<show>/songs.xlsx and show the resolved parts")
     p.add_argument("show", help="show in data/ (e.g. anastasia) or its folder")
     p.add_argument("--songs", help="comma-separated sheet names (default: all)")
@@ -204,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg["data_dir"] = str(Path(args.data).resolve())
         cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
     return {"doctor": cmd_doctor, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "transcribe": cmd_transcribe, "check": cmd_check, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+            "transcribe": cmd_transcribe, "check": cmd_check, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

@@ -41,7 +41,9 @@ data/samples/<sample>/       single-PDF benchmark samples (omrbench run)
 results/<show>/<song>/       latest transcription of every part + combined.mscz + manifest.json
 results/<show>/runs/<ts>/    one transcribe run: its outputs, work dirs, run.log
 results/samples/...          the same for samples
-results/<ts>/                omrbench run (benchmark): report.md, scores.json, engine outputs
+results/<show>/bench/<ts>/   omrbench bench: report.md, scores.json, metrics.csv
+results/samples/bench/<ts>/  omrbench run (engine benchmark): report.md, scores.json, engine outputs
+results/cache/               truth exports, generated sample GT
 ```
 
 ## Your samples
@@ -63,12 +65,12 @@ The ground truth must cover exactly the pages in `input.pdf`. See `meta.example.
 ## Running
 
 ```bash
-omrbench run                              # all engines, all samples -> results/<timestamp>/report.md
+omrbench run                              # all engines, all samples -> results/samples/bench/<ts>/report.md
 omrbench run --engines audiveris,homr --samples choir-01
 omrbench run --exclude demo --prefix_matching   # skip every demo-* sample
 omrbench run --resume 20260927-1300       # re-use finished engine outputs, retry failures
-omrbench score results/<run>              # re-score, e.g. after fixing a GT file
-omrbench report results/<run>             # re-render, e.g. after adding correction times
+omrbench score results/samples/bench/<run>            # re-score, e.g. after fixing a GT file
+omrbench report results/samples/bench/<run>            # re-render, e.g. after adding correction times
 ```
 
 ### Transcribe only
@@ -192,6 +194,41 @@ New song: duplicate the previous sheet in Excel, rename it, set the title and pa
 are formatted as Text so Excel keeps `5-9` from becoming a date (the generator stops with an
 error if that happens anyway). `omrbench check` then shows what the new sheet resolves to.
 
+### Benchmark a show against its truth (`bench`)
+
+```bash
+omrbench bench anastasia                       # latest outputs of every song with a truth file
+omrbench bench anastasia --songs 1 --transcribe   # transcribe song 1 first (unchanged parts skipped)
+omrbench bench anastasia --run 20261010-1530   # the outputs of one transcribe run instead
+omrbench bench anastasia --full                # also OMR-NED and TEDn per part (minutes)
+```
+
+The truth is a full score made in MuseScore, as it is: `data/<show>/truth/<song>.mscz`, linked
+from the song's sheet (A2 `truth`, B2 the path). It is exported once with the MuseScore CLI to
+`results/cache/truth/` (again when the file changes). Each row's `truth` cell names the truth
+part(s) its output is compared with:
+
+| `truth` cell | Meaning |
+|---|---|
+| `Violine 1` | the row's only output part |
+| `Piccolo, Flöte 1` | one name per instrument, in `instruments` order (split parts); `-` leaves one out |
+| `Piano=Klavierauszug, Men=Männer` | by output part name; for piano reductions (parts of both files, singers named after the printed label); `Voice=-` ignores an output part |
+
+Output parts that name the same truth part are compared together. `omrbench check` checks the
+names against the truth score and lists truth parts with notes that no row names.
+
+The metric is note F1 per truth part: a note is (bar, staff, onset, sounding pitch, duration),
+bars matched by index, sounding pitch = written + `<transpose>` (so transposing parts compare
+fine either way); cue and grace notes are left out. Variants: `pitch` (no duration), `pc` (pitch
+class: octave conventions of singer parts), `rhythm` (no pitch: percussion). Per song the
+counts are summed (micro F1). A bench takes seconds.
+
+`results/<show>/bench/<timestamp>/` holds `report.md` (also printed: per part F1, precision,
+recall, bar counts, change since the previous bench; the bars that differ; what wasn't
+compared), `scores.json` and `metrics.csv`; with `--full` also the per-part files compared.
+
+### Benchmark engines on samples (`run`)
+
 Engines run one at a time so the resource numbers are clean. Scoring runs in parallel (`scoring.jobs`). A 3-page piano score takes roughly 1–2 minutes per engine to score, mostly in musicdiff.
 
 ## What gets measured
@@ -206,7 +243,7 @@ Engines run one at a time so the resource numbers are clean. Scoring runs in par
 | Wall / CPU / RAM / GPU | psutil + NVML | whole process tree, sampled every 0.1 s; also per page |
 | Correction time | you | `correction_minutes` in `meta.yaml`; the report applies the 70 % rule |
 
-Outputs go to `results/<run>/`:
+Outputs go to `results/samples/bench/<run>/`:
 - `report.md`
 - `scores.json`, with every number plus the flagged measures and the per-category musicdiff breakdown
 - `metrics.csv`
@@ -307,12 +344,15 @@ multi-rest expansions, alignment rest bars, crops that failed); `<run>/run.log` 
 ```
 omrbench/
   cli.py  runner.py  scoring.py  report.py  config.py  dataset.py
+  project.py        show = show.yaml + songs.xlsx -> parts with their meta; `check`
+  transcribe.py     transcribe a show's songs / the samples into results/
+  bench.py  truth.py  bench a show against its MuseScore truth
   monitor.py        resource measurement
   musicxml.py       loading, page merging, per-staff event extraction
   rasterize.py      PDF -> PNG (PyMuPDF)
   engines/          audiveris.py  pagewise.py (homr, oemer)  external.py
   pipeline/         layout.py (.omr)  bars.py  text.py  assemble.py  engine.py
-  metrics/          omrned.py  tedn.py  elements.py  flags.py  _olimpic_tedn.py
+  metrics/          notef1.py  omrned.py  tedn.py  elements.py  flags.py  _olimpic_tedn.py
 bench.yaml          engines, dpi, device, timeouts, scoring options
 ```
 

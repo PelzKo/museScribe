@@ -59,7 +59,9 @@ data/anastasia/truth, data/samples/ — part of Phase 5 already done)
 5. Page renders + OCR cache move to `results/cache/` keyed by pdf hash + page + dpi
    (shared across runs; today re-rendered per run).
 
-## Phase 3 – benchmark against full-score truth
+## Phase 3 – benchmark against full-score truth  — DONE 2026-10-10
+(bench.py, truth.py, metrics/notef1.py; truth mapping syntax in README; songs.xlsx filled for 1/2/4A;
+`check` validates truth names; bar-count check = bars column; delta vs previous bench)
 1. `truth.py`: convert .mscz via MuseScore 4 CLI (reuse transcribe.to_mscz lookup incl. WSL
    .exe fallback; dataset._find_gt lacks it) into `results/cache/truth/<hash>.musicxml`.
    Split into parts by part name; drop placeholder parts (map value `-`).
@@ -72,7 +74,9 @@ data/anastasia/truth, data/samples/ — part of Phase 5 already done)
 4. Multi-instrument parts: output split parts (Reed 1 – Piccolo, Reed 1 – Flute) map 1:1 to
    truth parts listed in the `truth` column.
 
-## Phase 4 – legacy benchmark cleanup
+## Phase 4 – legacy benchmark cleanup  — DONE 2026-10-10
+(sample GT exports -> results/cache/samples/; `run` writes results/samples/bench/<ts>/; shared metrics not merged:
+`run` keeps its musicdiff/element metrics, notef1 is used by `bench` only)
 1. `run` stays for data/samples; GT conversion writes to results/cache, not data/.
 2. Reuse truth.py + notef1 so both commands share metrics.
 

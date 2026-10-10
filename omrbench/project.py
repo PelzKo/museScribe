@@ -232,11 +232,20 @@ def load(folder: Path) -> Project:
     return Project(folder.name, folder, show, workbook, pdfs, songs)
 
 
+def truth_names(part: Part) -> list[str]:
+    """The truth part names a row's `truth` cell refers to ("Out=Truth" -> Truth; "-" = none)."""
+    names = [e.partition("=")[2].strip() if "=" in e else e.strip() for e in part.truth]
+    return [n for n in names if n and n != "-"]
+
+
 def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = False,
-          export: Path | None = None) -> int:
+          export: Path | None = None, truth_cache: Path | None = None,
+          musescore: str | None = None) -> int:
     """Validate the workbook and print what every part resolves to; return the problem count.
 
-    export: also write <dir>/<song>/meta.yaml-style <part>.yaml files (for inspection only)."""
+    export: also write <dir>/<song>/<part>.yaml files (for inspection only).
+    truth_cache: where truth scores are converted to (results/cache); the `truth` names are
+    then checked against the score's part names."""
     from .rasterize import pdf_pages
     from .transcribe import parse_pages
 
@@ -253,8 +262,18 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
     for song in songs:
         truth = f"   truth: {song.truth.name}" if song.truth else ""
         print(f"{proj.name} {song.id}  ({song.title}){truth}")
+        tparts: dict[str, int] | None = None   # truth part name -> note count
         if song.truth and not song.truth.exists():
             problem(f"ERROR    truth file {song.truth} missing")
+        elif song.truth and truth_cache is not None:
+            from . import musicxml
+            from . import truth as truth_mod
+            from .metrics import notef1
+            try:
+                troot = musicxml.load(truth_mod.convert(song.truth, truth_cache, musescore))
+                tparts = {n: len(notef1.notes(p)) for n, p in truth_mod.parts(troot)}
+            except Exception as e:  # noqa: BLE001
+                problem(f"ERROR    truth file {song.truth.name}: {e}")
         for e in song.errors:
             problem(f"ERROR    {e}")
         for part in song.parts:
@@ -271,6 +290,11 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
             unknown = [i for i in part.instruments if i not in library]
             if song.truth and not part.truth:
                 problem(f"WARN     {part.name}: no `truth` part name (not benchmarked)")
+            if tparts is not None:
+                known = {" ".join(n.lower().split()) for n in tparts}
+                for n in truth_names(part):
+                    if " ".join(n.lower().split()) not in known:
+                        problem(f"ERROR    {part.name}: no part '{n}' in {song.truth.name}")
             info = f"{n:>2} pages ({part.meta['pages']})"
             if part.instruments:
                 info += f"  [{', '.join(part.instruments)}]"
@@ -287,6 +311,11 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text(dump(part.meta, f"# from {proj.workbook.name}, sheet '{song.id}'"),
                                encoding="utf-8")
+        if tparts is not None:
+            named = {" ".join(n.lower().split()) for p in song.parts for n in truth_names(p)}
+            if rest := [f"{n} ({c})" for n, c in tparts.items()
+                        if c and " ".join(n.lower().split()) not in named]:
+                print(f"  note     truth parts with notes no row names (notes): {', '.join(rest)}")
     if missing:
         problem(f"WARN no sheet for: {', '.join(missing)}")
     if export:

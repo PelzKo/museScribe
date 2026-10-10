@@ -58,7 +58,8 @@ class Data:
         cfg = self.manifest["config"]
         # re-read samples so correction times entered after the run are picked up
         try:
-            samples, _ = dataset.discover(Path(cfg["samples_dir"]), None, cfg.get("musescore_cli"))
+            samples, _ = dataset.discover(Path(cfg.get("samples_dir", cfg["data_dir"])), None,
+                                          cfg.get("musescore_cli"), cache=dataset.cache_dir(cfg))
             self.samples = {s.id: s for s in samples}
         except Exception:
             self.samples = {}
@@ -379,7 +380,7 @@ def write_report(run_dir: Path) -> Path:
           "sample's `meta.yaml`:\n")
         A("```yaml\ncorrection_minutes:\n  manual_entry: 95   # typing the page(s) from scratch\n"
           "  audiveris: 40\n  homr: 55\n```\n")
-        A("then regenerate with `omrbench report results/<run>`.\n")
+        A("then regenerate with `omrbench report results/samples/bench/<run>`.\n")
     else:
         rows = []
         for s in d.sample_ids:
