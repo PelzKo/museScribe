@@ -14,7 +14,7 @@
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
                [--resume RUN_ID]       benchmark engines on data/samples
   omrbench score RUN_DIR               re-score an existing run (e.g. after fixing a GT)
-  omrbench report RUN_DIR              regenerate report.md (e.g. after adding correction times)
+  omrbench report RUN_DIR              regenerate report.md (e.g. after editing sample meta)
 """
 from __future__ import annotations
 
@@ -53,11 +53,9 @@ def cmd_doctor(cfg: dict, _args) -> int:
         except Exception as e:  # noqa: BLE001
             print(f"show   : {folder} ERROR {type(e).__name__}: {e}")
     data = Path(cfg["samples_dir"])
-    ext: set[str] = set()
     if data.is_dir():
         samples, warns = dataset.discover(data, None, cfg.get("musescore_cli"),
                                           cache=dataset.cache_dir(cfg))
-        ext = {n for s in samples for n in s.external}
         print(f"data   : {data} -> {len(samples)} samples "
               f"({', '.join(f'{s.id}[{s.score_type}]' for s in samples)})")
         for w in warns:
@@ -65,7 +63,7 @@ def cmd_doctor(cfg: dict, _args) -> int:
     else:
         print(f"data   : {data} does not exist (omrbench new-sample NAME)")
     ok_all = True
-    for e in config_mod.engines(cfg, ext):
+    for e in config_mod.engines(cfg):
         ok, ver = e.check()
         ok_all &= ok
         print(f"engine : {e.name:<16} {'OK ' if ok else 'MISSING'} {ver}")
@@ -75,11 +73,10 @@ def cmd_doctor(cfg: dict, _args) -> int:
 def cmd_new_sample(cfg: dict, args) -> int:
     d = Path(cfg["samples_dir"]) / args.name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "external").mkdir(exist_ok=True)
     if not (d / "meta.yaml").exists():
         shutil.copyfile(META_TEMPLATE, d / "meta.yaml")
     print(f"created {d}\n  put the score as {d / 'input.pdf'}\n  ground truth as {d / 'gt.musicxml'}"
-          f"\n  edit {d / 'meta.yaml'}\n  optional manual exports in {d / 'external'}/<tool>.musicxml")
+          f"\n  edit {d / 'meta.yaml'}")
     return 0
 
 

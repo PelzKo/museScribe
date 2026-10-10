@@ -87,13 +87,11 @@ def run_engines(engines: list[Engine], samples: list[dataset.Sample], run_dir: P
                     _log(f"{eng.name:>16} | {s.id}: cached")
                     results.append(r)
                     continue
-            if eng.kind == "external" and eng.name not in s.external:
-                continue
             _log(f"{eng.name:>16} | {s.id}: running ...")
             with logmod.context(s.id):
                 r = eng.run(s, wd)
             st = r.stats
-            took = f"{st.wall_s:.1f}s, {st.peak_rss_mb:.0f} MB" if st else "external"
+            took = f"{st.wall_s:.1f}s, {st.peak_rss_mb:.0f} MB" if st else "no stats"
             _log(f"{eng.name:>16} | {s.id}: {'FAILED ' + r.error if r.error else 'ok'} ({took})")
             results.append(r)
     return results
@@ -169,8 +167,7 @@ def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None
                                          exclude=samples_exclude, prefix=prefix_matching)
     if not samples:
         raise SystemExit(f"no samples in {cfg['samples_dir']}")
-    ext = {n for s in samples for n in s.external}
-    engines = config_mod.engines(cfg, ext, engines_only)
+    engines = config_mod.engines(cfg, engines_only)
     run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = Path(cfg["results_dir"]) / "samples" / "bench" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

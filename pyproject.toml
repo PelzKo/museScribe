@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "omrbench"
 version = "0.1.0"
-description = "Benchmark OMR engines (Audiveris, homr, oemer, external) against MusicXML ground truth"
+description = "Benchmark OMR engines (Audiveris, homr, oemer) against MusicXML ground truth"
 requires-python = ">=3.12"
 
 [project.scripts]

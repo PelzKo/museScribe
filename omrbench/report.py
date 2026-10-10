@@ -56,7 +56,7 @@ class Data:
             r = json.loads(p.read_text())
             self.results[(r["engine"], r["sample"])] = r
         cfg = self.manifest["config"]
-        # re-read samples so correction times entered after the run are picked up
+        # re-read samples so meta edits made after the run are picked up
         try:
             samples, _ = dataset.discover(Path(cfg.get("samples_dir", cfg["data_dir"])), None,
                                           cfg.get("musescore_cli"), cache=dataset.cache_dir(cfg))
@@ -182,8 +182,7 @@ def write_report(run_dir: Path) -> Path:
     A(f"Generated {datetime.now():%Y-%m-%d %H:%M}. Started {m.get('started', '?')}. "
       f"{len(d.sample_ids)} samples, {len(d.engines)} engines.\n")
     A("**How to read:** ↓ lower is better, ↑ higher is better; best value per column in bold. "
-      "Failed runs count as OMR-NED/TEDn/measure error = 100% and F1 = 0. "
-      "External engines (manual exports) have no runtime numbers.\n")
+      "Failed runs count as OMR-NED/TEDn/measure error = 100% and F1 = 0.\n")
 
     # ------------------------------------------------------------------ setup
     A("## Setup\n")
@@ -371,32 +370,6 @@ def write_report(run_dir: Path) -> Path:
               "Peak GPU MB", "Raster s", "Scoring s"], rows))
     A("")
 
-    # ------------------------------------------------------------------ correction time
-    A("## Manual correction time\n")
-    thr = float((cfg.get("scoring") or {}).get("correction_ratio_threshold", 0.7))
-    have_ct = any(d.meta.get(s, {}).get("correction_minutes") for s in d.sample_ids)
-    if not have_ct:
-        A("No correction times recorded yet. After correcting an engine's output in MuseScore, add to the "
-          "sample's `meta.yaml`:\n")
-        A("```yaml\ncorrection_minutes:\n  manual_entry: 95   # typing the page(s) from scratch\n"
-          "  audiveris: 40\n  homr: 55\n```\n")
-        A("then regenerate with `omrbench report results/samples/bench/<run>`.\n")
-    else:
-        rows = []
-        for s in d.sample_ids:
-            cm = {str(k): float(v) for k, v in (d.meta.get(s, {}).get("correction_minutes") or {}).items()}
-            man = cm.get("manual_entry")
-            for e, mins in cm.items():
-                if e == "manual_entry":
-                    continue
-                ratio = mins / man if man else None
-                verdict = "–" if ratio is None else ("✅ use OMR" if ratio <= thr else "❌ enter manually")
-                rows.append([s, d.meta.get(s, {}).get("type", "other"), f"`{e}`", _num(mins, 0),
-                             _num(man, 0), _pct(ratio, 0), verdict])
-        A(f"Decision rule: OMR is worth it if correction time ≤ {thr:.0%} of manual entry time.\n")
-        A(_table(["Sample", "Type", "Engine", "Correction min", "Manual entry min", "Ratio", "Verdict"], rows))
-    A("")
-
     # ------------------------------------------------------------------ recommendation
     A("## Best engine per score type\n")
     rows = []
@@ -410,17 +383,10 @@ def write_report(run_dir: Path) -> Path:
         best_fast = min((e for e in cands
                          if all(d.stats(e, s) and not d.failed(e, s) for s in sids)),
                         key=lambda e: sum(d.stats(e, s)["wall_s"] for s in sids), default=None)
-        ct = defaultdict(list)
-        for s in sids:
-            for e, mins in (d.meta.get(s, {}).get("correction_minutes") or {}).items():
-                if e != "manual_entry":
-                    ct[e].append(float(mins))
-        best_ct = min(ct, key=lambda e: mean(ct[e])) if ct else None
         rows.append([t, f"`{best_ned}` ({_pct(_mean(d.ned(best_ned, s, v) for s in sids))})",
                      f"`{best_notes}` ({_pct(_mean(d.ned(best_notes, s, d.variants[-1]) for s in sids))})",
-                     f"`{best_fast}`" if best_fast else "–", f"`{best_ct}`" if best_ct else "no data"])
-    A(_table(["Type", f"Lowest OMR-NED {d.variants[0]}", f"Lowest OMR-NED {d.variants[-1]}", "Fastest",
-              "Fastest to correct"], rows))
+                     f"`{best_fast}`" if best_fast else "–"])
+    A(_table(["Type", f"Lowest OMR-NED {d.variants[0]}", f"Lowest OMR-NED {d.variants[-1]}", "Fastest"], rows))
     A("")
 
     # ------------------------------------------------------------------ failures

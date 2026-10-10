@@ -11,7 +11,6 @@ the evaluation protocol (section 12) from the OMR research notes.
 | `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
 | `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
 | `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
-| *external* | `data/<sample>/external/<tool>.musicxml` | Soundslice, Newzik, PlayScore, ...; scored, not timed |
 
 Every engine is a subprocess from the same harness, measured the same way.
 
@@ -25,8 +24,7 @@ omrbench new-sample choir-01      # creates data/samples/choir-01/ with meta.yam
 data/samples/choir-01/
   input.pdf          2-3 pages, scan or phone photo
   gt.musicxml        hand-corrected in MuseScore (File > Export > MusicXML); gt.mxl/gt.mscz also OK
-  meta.yaml          type (choir|piano|piano_reduction|part|orchestral|drums|other), languages, switches, correction times
-  external/          optional: soundslice.musicxml, playscore.mxl, ...
+  meta.yaml          type (choir|piano|piano_reduction|part|orchestral|drums|other), languages, switches
 ```
 
 The ground truth must cover exactly the pages in `input.pdf`. See `meta.example.yaml` for all keys.
@@ -42,7 +40,7 @@ omrbench run --engines audiveris,homr --samples choir-01
 omrbench run --exclude demo --prefix_matching   # skip every demo-* sample
 omrbench run --resume 20260927-1300       # re-use finished engine outputs, retry failures
 omrbench score results/samples/bench/<run>            # re-score, e.g. after fixing a GT file
-omrbench report results/samples/bench/<run>            # re-render, e.g. after adding correction times
+omrbench report results/samples/bench/<run>            # re-render, e.g. after editing sample meta
 ```
 
 Engines run one at a time so the resource numbers are clean. Scoring runs in parallel (`scoring.jobs`). A 3-page piano score takes roughly 1–2 minutes per engine to score, mostly in musicdiff.
@@ -57,13 +55,12 @@ Engines run one at a time so the resource numbers are clean. Scoring runs in par
 | Measure error rate | own | share of output measures whose notes/rests differ from the aligned GT measure |
 | Flag precision/recall | own | how well `validator` (duration ≠ time signature) and Audiveris `.omr` abnormal/excess measures predict the wrong measures |
 | Wall / CPU / RAM / GPU | psutil + NVML | whole process tree, sampled every 0.1 s; also per page |
-| Correction time | you | `correction_minutes` in `meta.yaml`; the report applies the 70 % rule |
 
 Outputs go to `results/samples/bench/<run>/`:
 - `report.md`
 - `scores.json`, with every number plus the flagged measures and the per-category musicdiff breakdown
 - `metrics.csv`
-- `<engine>/<sample>/output.musicxml`, which you can open in MuseScore to time corrections
+- `<engine>/<sample>/output.musicxml`, which you can open in MuseScore to inspect the output
 - `engine.log`
 
 ## Known engine behaviour

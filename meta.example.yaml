@@ -93,10 +93,3 @@ languages: [deu, lat]
 # poor_input: true
 # audiveris_constants:         # any other -constant key=value
 #   org.audiveris.omr.sheet.ProcessingSwitches.crossHeads: true
-
-# Fill in after correcting each engine's output in MuseScore (minutes).
-# manual_entry = time to type the same pages from scratch.
-# correction_minutes:
-#   manual_entry: 90
-#   audiveris: 35
-#   homr: 50

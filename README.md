@@ -98,7 +98,7 @@ omrbench/
   monitor.py        resource measurement
   musicxml.py       loading, page merging, per-staff event extraction
   rasterize.py      PDF -> PNG (PyMuPDF)
-  engines/          audiveris.py  pagewise.py (homr, oemer)  external.py
+  engines/          audiveris.py  pagewise.py (homr, oemer)
   pipeline/         layout.py (.omr)  bars.py  text.py  assemble.py  engine.py
   metrics/          notef1.py  omrned.py  tedn.py  elements.py  flags.py  _olimpic_tedn.py
 bench.yaml          engines, dpi, device, timeouts, scoring options

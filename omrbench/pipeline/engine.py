@@ -42,7 +42,8 @@ from ..engines.audiveris import Audiveris
 from ..engines.base import Engine, EngineResult
 from ..engines.pagewise import Homr
 from ..monitor import RunStats, run_monitored
-from ..rasterize import is_scan, rasterize
+from ..pdfkind import is_scan
+from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
 from . import layout

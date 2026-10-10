@@ -31,9 +31,6 @@ engines:
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
     enabled: false
-  # Every data/<sample>/external/<name>.musicxml is picked up automatically as
-  # engine <name> (type: external). Add one here only to disable it:
-  # soundslice: {type: external, enabled: false}
 
 scoring:
   jobs: 4                 # parallel scoring processes (engines always run one at a time)
@@ -43,4 +40,3 @@ scoring:
     notes: NotesAndRests  # fair to engines that ignore lyrics/dynamics (homr, oemer)
   tedn: true
   tedn_max_nodes: 2500    # larger parts are scored measure-by-measure (see metrics/tedn.py)
-  correction_ratio_threshold: 0.7   # decision rule from the evaluation protocol

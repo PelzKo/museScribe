@@ -295,12 +295,10 @@ def transcribe(cfg: dict, *, project: str | None = None, songs=None, parts=None,
 
 def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in: list[Job],
                 engine: str, force: bool, jobs) -> int:
-    engines = config_mod.engines(cfg, set(), [engine])
+    engines = config_mod.engines(cfg, [engine])
     if not engines:
         raise SystemExit(f"unknown engine '{engine}' (configured: {', '.join(cfg.get('engines') or {})})")
     eng = engines[0]
-    if eng.kind == "external":
-        raise SystemExit(f"engine '{engine}' is external and can't be run")
     ok, ver = eng.check()
     if not ok:
         LOG.error(f"engine {engine} unavailable: {ver}")

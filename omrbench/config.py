@@ -35,10 +35,8 @@ def load(path: Path | None) -> dict:
     return cfg
 
 
-def engines(cfg: dict, external_names: set[str], only: list[str] | None = None) -> list[Engine]:
+def engines(cfg: dict, only: list[str] | None = None) -> list[Engine]:
     specs = dict(cfg.get("engines") or {})
-    for name in sorted(external_names):
-        specs.setdefault(name, {"type": "external"})
     out = []
     for name, spec in specs.items():
         spec = spec or {}

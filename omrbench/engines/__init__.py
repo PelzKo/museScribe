@@ -1,13 +1,11 @@
 from .audiveris import Audiveris
 from .base import Engine, EngineResult
-from .external import External
 from .pagewise import Homr, Oemer
 
 KINDS: dict[str, type[Engine]] = {
     "audiveris": Audiveris,
     "homr": Homr,
     "oemer": Oemer,
-    "external": External,
 }
 
 

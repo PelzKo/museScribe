@@ -16,7 +16,7 @@ class EngineResult:
     engine: str
     sample: str
     output: Path | None = None           # merged MusicXML for the whole sample
-    stats: RunStats | None = None        # None for external (not run by us)
+    stats: RunStats | None = None        # None when the engine failed before running
     prep_s: float = 0.0                  # rasterisation etc., not in stats
     pages: int = 0
     error: str | None = None

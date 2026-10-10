@@ -8,9 +8,6 @@ Layout::
         gt.musicxml               # ground truth (gt.mxl / gt.xml / gt.mscz also accepted)
         gt-<part>.musicxml        #   ...or one file per part, stacked in meta `gt_parts` order
         meta.yaml                 # optional, see meta.example.yaml
-        external/                 # optional: outputs of tools the harness can't run
-          soundslice.musicxml     #   engine name = file stem
-          playscore.mxl
 
 Generated GT files (gt.mscz exported, part files merged, gt_drop_measures applied) go to
 results/cache/samples/<sample-id>/, never into data/.
@@ -39,17 +36,6 @@ class Sample:
     @property
     def score_type(self) -> str:
         return str(self.meta.get("type", "other"))
-
-    @property
-    def external(self) -> dict[str, Path]:
-        d = self.dir / "external"
-        if not d.is_dir():
-            return {}
-        return {p.stem: p for p in sorted(d.iterdir()) if p.suffix.lower() in MUSICXML_SUFFIXES}
-
-    @property
-    def correction_minutes(self) -> dict[str, float]:
-        return {str(k): float(v) for k, v in (self.meta.get("correction_minutes") or {}).items()}
 
 
 def cache_dir(cfg: dict) -> Path:
