@@ -6,6 +6,9 @@ reads strips above and below every staff (the rest of the page masked white, one
 per page); tokens that look like bar evidence are added as text atoms where Audiveris
 has no text, so text.classify treats them like its own.
 
+Vector pages (pdfkind) have the exact words in the PDF text layer: those are read from the
+same strips instead of running Tesseract.
+
 The Tesseract binary is the one bundled in Audiveris' jars (extracted once into
 $OMRBENCH_HOME/tools/tesseract); a `tesseract` on PATH is used if there is one.
 """
@@ -67,12 +70,9 @@ def find_tesseract(home: Path) -> tuple[str, dict] | None:
     return str(exe), env
 
 
-def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) -> list[dict]:
-    """Words read in the strips around the staves, in page coordinates."""
-    with Image.open(img_path) as im0:
-        im = im0.convert("L")
-    sx = im.width / page.width if page.width else 1.0
-    canvas = Image.new("L", im.size, 255)
+def _strips(page: Page) -> list[tuple[float, float, float, float]]:
+    """(x0, y0, x1, y1) in page coordinates: the bands above and below every staff that are read."""
+    out = []
     for sy in page.systems:
         if sy.skip:
             continue
@@ -80,10 +80,21 @@ def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) ->
             il = st.interline
             for top, bot in ((st.top - STRIP * il, st.top - 0.1 * il),
                              (st.bottom + 0.1 * il, st.bottom + STRIP * il)):
-                box = (max(0, int((st.left - 4 * il) * sx)), max(0, int(top * sx)),
-                       min(im.width, int((st.right + 2 * il) * sx)), min(im.height, int(bot * sx)))
-                if box[2] > box[0] and box[3] > box[1]:
-                    canvas.paste(im.crop(box), box[:2])
+                out.append((st.left - 4 * il, top, st.right + 2 * il, bot))
+    return out
+
+
+def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) -> list[dict]:
+    """Words read in the strips around the staves, in page coordinates."""
+    with Image.open(img_path) as im0:
+        im = im0.convert("L")
+    sx = im.width / page.width if page.width else 1.0
+    canvas = Image.new("L", im.size, 255)
+    for x0, y0, x1, y1 in _strips(page):
+        box = (max(0, int(x0 * sx)), max(0, int(y0 * sx)),
+               min(im.width, int(x1 * sx)), min(im.height, int(y1 * sx)))
+        if box[2] > box[0] and box[3] > box[1]:
+            canvas.paste(im.crop(box), box[:2])
     canvas.save(tmp)
     staves = sorted((st for sy in page.systems for st in sy.all_staves), key=lambda s: s.top)
     px = im.load()
@@ -123,21 +134,77 @@ def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) ->
     return words
 
 
-def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict], cache: Path,
-               jobs: int = 4) -> list[list[dict]]:
-    """Words per page; cached as JSON in `cache` (reassemble reuses them)."""
+def _text_layer(page: Page, pdf_page) -> list[dict]:
+    """Words of a vector PDF page's text layer that lie in the strips, in page coordinates.
+
+    shortcut: digits drawn as music-font glyphs (multi-rest counts, SMuFL time-signature digits)
+    are not in the text layer and multirest is always False; map SMuFL digits if vector scores
+    lose multi-rest counts.
+    """
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    strips = _strips(page)
+    words = []
+
+    def add(chars: list[dict], size: float) -> None:
+        if not chars:
+            return
+        # glyph box, not the line box: digits are ~0.7 font size tall above the baseline
+        h = 0.7 * size * sx
+        x, y = chars[0]["bbox"][0] * sx, chars[0]["origin"][1] * sx - h
+        w = chars[-1]["bbox"][2] * sx - x
+        if any(a <= x + w / 2 <= c and b <= y + h / 2 <= d for a, b, c, d in strips):
+            words.append({"text": "".join(ch["c"] for ch in chars), "conf": 100.0,
+                          "x": x, "y": y, "w": w, "h": h, "multirest": False})
+
+    for block in pdf_page.get_text("rawdict")["blocks"]:
+        for line in block.get("lines", []):
+            for span in line["spans"]:
+                cur: list[dict] = []
+                for ch in span["chars"]:
+                    if ch["c"].isspace():
+                        add(cur, span["size"])
+                        cur = []
+                    else:
+                        cur.append(ch)
+                add(cur, span["size"])
+    return words
+
+
+def text_layer_pages(pages: list[Page], pdf: Path) -> dict[int, list[dict]]:
+    """0-based page index -> text-layer words, for the vector pages of `pdf` (pages[i] is PDF page i)."""
+    import pymupdf as fitz
+
+    from ..pdfkind import classify_page
+    from ..rasterize import FITZ_LOCK
+    with FITZ_LOCK, fitz.open(pdf) as doc:
+        return {i: _text_layer(pages[i], p) for i, p in enumerate(doc)
+                # no fonts = no text layer (scans): skips the costly classification
+                if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"}
+
+
+def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | None, cache: Path,
+               jobs: int = 4, pdf: Path | None = None) -> list[list[dict]]:
+    """Words per page; cached as JSON in `cache` (reassemble reuses them).
+
+    With `pdf`, vector pages use the PDF text layer instead of Tesseract (tess may then be None).
+    """
     cache.mkdir(parents=True, exist_ok=True)
+    vector = text_layer_pages(pages, pdf) if pdf is not None else {}
 
     def one(i: int) -> list[dict]:
+        if i in vector:
+            return vector[i]
         f = cache / f"page{i + 1:02d}.json"
         if f.exists():
             return json.loads(f.read_text())
+        if tess is None or i >= len(images):
+            return []
         words = _read_page(pages[i], images[i], tess, cache / f"page{i + 1:02d}-mask.png")
         f.write_text(json.dumps(words))
         return words
 
     with ThreadPoolExecutor(max(1, jobs)) as ex:
-        return list(ex.map(one, range(min(len(pages), len(images)))))
+        return list(ex.map(one, range(len(pages))))
 
 
 def _overlaps(a: Text, x: float, y: float, w: float, h: float) -> bool:

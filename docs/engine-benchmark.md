@@ -66,6 +66,6 @@ Outputs go to `results/samples/bench/<run>/`:
 ## Known engine behaviour
 
 - **Audiveris** OCRs the part label on every system. If the label changes (for example "Soprano" becomes "S.", or an OCR slip turns "Voice" into "Voico"), it opens a new part. The Structure table in the report shows this. The fix is post-processing with the known instrument list, not the benchmark.
-- **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs the pinned old `numpy`, `opencv` and `onnxruntime` that `setup.sh` installs. Because of the cost it is disabled in `bench.yaml`; run it with `--engines oemer` (or set `enabled: true`).
+- **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs pinned old `numpy`, `opencv` and `onnxruntime`; the `omrbench/oemer:0.1.8` image has them. Because of the cost it is disabled in `bench.yaml`; run it with `--engines oemer` (or set `enabled: true`).
 - **homr** reads notes only: no lyrics, dynamics or text. The `notes` OMR-NED variant is the fair comparison for it.
 - **GPU:** `device: auto` (default) picks `cuda` only when an NVIDIA GPU is visible inside WSL (`nvidia-smi` works), else `cpu`. AMD iGPUs (Radeon 780M, for example) can't be used from WSL by these engines, so they run on CPU; engines marked `requires_gpu: true` are skipped there.

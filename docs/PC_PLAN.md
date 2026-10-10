@@ -109,20 +109,27 @@ Design rules that the code follows:
 - **Not verified:** Audiveris exporting from a container; homr output inside a container vs. the native run;
   the pool path (`pool: true`, the default); GPU speed for homr.
 
-## 6. Next steps on the PC (in order)
+## 6. Status and next steps
 
-1. Pull the branch (`git pull` or `git fetch && git checkout phase1-docker`), then rebuild the images: `omrbench images build`.
-   Layers before the changed `COPY` lines are cached; the homr install layer and everything after it rebuild.
-2. Check the ownership fix (section 5).
-3. Run the smoke test: `bash scripts/smoke_docker.sh`. It checks the GPU provider, creates the demo samples if
-   missing, runs `audiveris,homr` on `demo-violin-part` through the containers, and checks outputs and root-owned files.
-   Send the full output if anything fails.
-4. Compare the homr result with the native run (if one exists in `results/`): same note F1 expected for the same version
-   (homr 0.7.0). Differences mean the container changed something (device, threads, env).
-5. Run one real sample: `omrbench run --engines audiveris,homr --samples <one real sample>`.
-6. Only then: P1 remainder (the `docker/<engine>` adapters for the other engines), P3 remainder (vector text
-   extraction into `ocr.read_pages`, pdfkind column in the report), then P2 (`semantic.py`, `mozart.py`, `lmx.py`),
-   then P4 as in `docs/PLAN_full.md`.
+Done (smoke test passed on PC and laptop):
+- P1: Audiveris, homr and oemer images. Audiveris needs `libgtk-3` in the image (it loads GTK at startup, even in
+  `-batch`). oemer: onnxruntime-gpu 1.19 segfaults when CUDA is requested without a GPU, so the image patches oemer
+  to ask for CPU only when `CUDA_VISIBLE_DEVICES=""` (= `device: cpu`). oemer on the laptop CPU: demo page 260 s,
+  6 GB, note F1 94 %.
+- homr image: onnxruntime-gpu always lists `CUDAExecutionProvider`, so homr picked its fp16 GPU models even with
+  `device: cpu` (slower on CPU, and different output: Anastasia 1 piano reduction 0.932 -> 0.745 note F1, one extra bar).
+  The worker and the CLI now honour `CUDA_VISIBLE_DEVICES=""`; the image holds both model sets; onnxruntime-gpu pinned
+  to 1.31.0. With `device: cuda` (PC) homr uses the fp16 models, so PC and laptop results can differ slightly.
+- P3: on vector pages the bar-number pass reads the PDF text layer instead of Tesseract (`pipeline/ocr.py`,
+  `text_layer_pages`); pages without fonts (scans) skip the check. Run reports have a `PDF` (pdfkind) column.
+
+On the PC after pulling: `omrbench images build audiveris oemer`, then `omrbench run --engines oemer --samples demo-violin-part`
+with `device: auto` (cuda) to check oemer on the GPU.
+
+Next: P4 page-level engines, one at a time (clarity, transcoda, smt-fp, mozart), each with image, adapter, converter
+and test. P2 converters land with the engine that needs them (`semantic.py` with tromr/tfe2e, `mozart.py` with mozart;
+Zeus writes MusicXML). GPU-only engines get `requires_gpu: true` in `bench.yaml`.
+Not done: vector pages at a higher render dpi (P3), split of the report by pdfkind.
 
 ## 7. Data facts (from this machine's survey)
 

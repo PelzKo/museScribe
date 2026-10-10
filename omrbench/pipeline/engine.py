@@ -235,7 +235,7 @@ class Pipeline(Engine):
         ocr_dir = workdir / "ocr"
         if ocr_dir.exists():
             shutil.rmtree(ocr_dir)
-        self.add_ocr_text(pages, images, ocr_dir)
+        self.add_ocr_text(pages, images, ocr_dir, sample.pdf)
         res.prep_s = time.perf_counter() - t0
 
         # 3. homr per crop; homr is sensitive to the crop (e.g. "No noteheads found" at one
@@ -417,16 +417,16 @@ class Pipeline(Engine):
                    "parts": [p.name for p in parts]}
         return score, summary, files
 
-    def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path) -> None:
-        """Tesseract bar numbers where Audiveris' OCR has no text (cached in ocr_dir)."""
+    def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path, pdf: Path) -> None:
+        """Bar numbers where Audiveris' OCR has no text: the PDF text layer on vector pages,
+        Tesseract elsewhere (cached in ocr_dir)."""
         if not self.cfg.get("ocr_bar_numbers", True):
             return
         tess = ocr.find_tesseract(self.home)
         if tess is None:
-            LOG.warning("tesseract not found (PATH or Audiveris jars): no second OCR pass for bar numbers")
-            return
+            LOG.warning("tesseract not found (PATH or Audiveris jars): bar numbers from the text layer only")
         t0 = time.perf_counter()
-        words = ocr.read_pages(pages, images, tess, ocr_dir)
+        words = ocr.read_pages(pages, images, tess, ocr_dir, pdf=pdf)
         added = sum(ocr.supplement(p, w) for p, w in zip(pages, words))
         LOG.info(f"bar-number OCR: {added} text items added on {len(words)} pages "
                  f"in {time.perf_counter() - t0:.0f}s")
@@ -440,7 +440,7 @@ class Pipeline(Engine):
         if self.cfg.get("ocr_bar_numbers", True):
             dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
             images = rasterize(sample.pdf, workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi", dpi=dpi)
-            self.add_ocr_text(pages, images, workdir / "ocr")
+            self.add_ocr_text(pages, images, workdir / "ocr", sample.pdf)
         roots = {}
         for f in sorted((workdir / "crops").glob("s*-g*.musicxml")):
             k, g = f.stem[1:].split("-g")

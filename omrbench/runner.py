@@ -27,6 +27,7 @@ from . import config as config_mod
 from . import dataset
 from . import log as logmod
 from .engines import Engine, EngineResult
+from .pdfkind import doc_kind
 from .scoring import score
 
 
@@ -185,7 +186,8 @@ def run(cfg: dict, *, engines_only=None, samples_only=None, samples_exclude=None
             usable.append(e)
     manifest = {"run_id": run_id, "started": datetime.now().isoformat(timespec="seconds"),
                 "host": host_info(), "config": cfg, "engines": versions,
-                "samples": [{"id": s.id, "pdf": str(s.pdf), "gt": str(s.gt), "meta": s.meta}
+                "samples": [{"id": s.id, "pdf": str(s.pdf), "gt": str(s.gt), "meta": s.meta,
+                             "pdfkind": doc_kind(s.pdf)}
                             for s in samples],
                 "warnings": warnings, "env": {"OMRBENCH_HOME": os.environ.get("OMRBENCH_HOME")}}
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str))
