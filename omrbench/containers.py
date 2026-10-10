@@ -27,6 +27,7 @@ IMAGES = {
     "base-cuda": ("omrbench/base:cuda", "base", {"BASE_IMAGE": "nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04"}),
     "audiveris": ("omrbench/audiveris:5.11.0", "audiveris", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "homr": ("omrbench/homr:0.7.0", "homr", {"BASE_IMAGE": "omrbench/base:cuda"}),
+    "oemer": ("omrbench/oemer:0.1.8", "oemer", {"BASE_IMAGE": "omrbench/base:cuda"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi
 GPU_PROBE_IMAGE = "nvidia/cuda:12.6.3-base-ubuntu24.04"

@@ -49,7 +49,8 @@ if threads:
 from homr.main import (ProcessingConfig, XmlGeneratorArguments, cuda_available,  # noqa: E402
                        coreml_available, download_weights)
 
-gpu = cuda_available()
+# onnxruntime-gpu lists CUDA even with no GPU; device: cpu hides the GPU with CUDA_VISIBLE_DEVICES=""
+gpu = cuda_available() and os.environ.get("CUDA_VISIBLE_DEVICES") != ""
 segnet_gpu = gpu or coreml_available()
 download_weights(segnet_gpu, gpu, False)
 ort.set_default_logger_severity(3)

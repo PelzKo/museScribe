@@ -37,6 +37,8 @@ class PagewiseEngine(Engine):
         return self.venv / "bin" / self.cli_name
 
     def check(self) -> tuple[bool, str]:
+        if self.container:
+            return containers.check_image(self.container)
         if not self.exe.exists():
             return False, f"not found: {self.exe} (run setup.sh)"
         probe = (f"import importlib.metadata as m, onnxruntime as o, {self.package}; "
@@ -125,13 +127,9 @@ class Homr(PagewiseEngine):
     container_image = "homr"
     container_exe = "homr"
 
-    def check(self) -> tuple[bool, str]:
-        if self.container:
-            return containers.check_image(self.container)
-        return super().check()
-
     def page_cmd(self, image, out_dir):
-        return [self.exe, *(self.cfg.get("extra_args") or []), image]
+        gpu = [] if self.bench.get("device", "cpu") == "cuda" else ["--gpu", "no"]   # see _homr_worker.py
+        return [self.exe, *gpu, *(self.cfg.get("extra_args") or []), image]
 
     def use_pool(self) -> bool:
         """Persistent workers (homr_pool.py); CLI options need the one-process-per-image path."""
@@ -161,6 +159,8 @@ class Oemer(PagewiseEngine):
     venv_name = "oemer"
     cli_name = "oemer"
     package = "oemer"
+    container_image = "oemer"
+    container_exe = "oemer"
 
     def page_cmd(self, image, out_dir):
         cmd = [self.exe, "-o", out_dir]
