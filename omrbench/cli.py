@@ -9,6 +9,8 @@
                                        note F1 of the latest outputs vs data/SHOW/truth
   omrbench check SHOW [--songs 1,2] [-v] [--export DIR]
                                        validate songs.xlsx, show what every part resolves to
+  omrbench images list|build [base-cpu base-cuda audiveris homr]
+                                       list or build the Docker images (docker/)
   omrbench new-sample NAME             create data/samples/NAME with a meta.yaml template
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,6 +36,39 @@ def _csv(s: str | None) -> list[str] | None:
     return [x.strip() for x in s.split(",") if x.strip()] if s else None
 
 
+def _doctor_docker() -> None:
+    from . import containers as C
+
+    ok, ver = C.docker_ok()
+    print(f"docker : {'OK ' if ok else 'MISSING'} {ver}")
+    if not ok:
+        return
+    ok, info = C.gpu_ok()
+    print(f"docker gpu: {'OK ' if ok else 'FAILED'} {info}")
+    for name, (tag, _, _) in C.IMAGES.items():
+        print(f"image  : {name:<10} {'OK ' if C.image_present(tag) else 'MISSING'} {tag}")
+
+
+def cmd_images(_cfg: dict, args) -> int:
+    from . import containers as C
+
+    names = args.names or list(C.IMAGES)
+    unknown = [n for n in names if n not in C.IMAGES]
+    if unknown:
+        raise SystemExit(f"unknown image(s) {unknown} (known: {list(C.IMAGES)})")
+    if args.action == "list":
+        for n in names:
+            tag = C.IMAGES[n][0]
+            print(f"{n:<10} {'built' if C.image_present(tag) else 'not built':<10} {tag}")
+        return 0
+    for n in names:  # base images first, in the order they are listed
+        print(f"==> building {n}")
+        if subprocess.run(C.build_cmd(n)).returncode != 0:
+            print(f"build of {n} failed")
+            return 1
+    return 0
+
+
 def cmd_doctor(cfg: dict, _args) -> int:
     from .runner import host_info
 
@@ -43,6 +79,7 @@ def cmd_doctor(cfg: dict, _args) -> int:
         print("         WARNING device=cuda but no GPU visible; install the NVIDIA Windows driver "
               "with WSL support and check `nvidia-smi` inside WSL")
     print(f"home   : {cfg['home']}")
+    _doctor_docker()
     from . import project
 
     for folder in project.projects(Path(cfg["data_dir"])):
@@ -180,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data", help="override data_dir")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("doctor")
+    p = sub.add_parser("images", help="list or build the Docker images")
+    p.add_argument("action", choices=["list", "build"])
+    p.add_argument("names", nargs="*", help="base-cpu base-cuda audiveris homr (default: all)")
     p = sub.add_parser("new-sample")
     p.add_argument("name")
     sub.add_parser("demo")
@@ -236,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.data:
         cfg["data_dir"] = str(Path(args.data).resolve())
         cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
-    return {"doctor": cmd_doctor, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
+    return {"doctor": cmd_doctor, "images": cmd_images, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
             "transcribe": cmd_transcribe, "check": cmd_check, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
 
 
