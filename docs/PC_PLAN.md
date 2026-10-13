@@ -23,7 +23,7 @@ benchmarks, P7 routing + ensemble.
 | WSL user | `konstantin` (shell prompt `konstantin@SuperGamer3000`) |
 | GPU | NVIDIA GeForce RTX 2070 SUPER, 8 GB, Turing (fp16 yes, bf16 no, no FlashAttention-2) |
 | Driver | NVIDIA 610.53, CUDA UMD 13.3 (`nvidia-smi` in WSL works) |
-| CPU / RAM | Ryzen 7 3700X (16 threads), 15.6 GB |
+| CPU / RAM | Ryzen 7 3700X (16 threads), 32 GB (WSL: 28 GB) |
 | Repo | `~/museScribe` (`/home/konstantin/museScribe`), branch `phase1-docker` |
 | Data | `~/museScribe/data/` (not in git; copied by hand, same layout as the Windows copy) |
 | Harness venv | `~/.local/share/omrbench/venvs/harness`, activate with `source ~/.local/share/omrbench/env.sh` |
@@ -154,8 +154,14 @@ On the PC after pulling: `omrbench images build clarity transcoda smt-fp mozart`
   `anastasia-pr-4a` (p. 58, type piano, GT Klavierauszug), GT extracted from the truth scores.
 
 Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (manual approval + token).
-Next: P5 rest (tromr, tfe2e; clarity's staff stage), then P6. WSL sees only 15.6 GB of the PC's 32 GB
-(`.wslconfig` `memory=`), so runs are kept mostly sequential.
+- Full Anastasia 1/2/4A with other crop recognizers (2026-10-13, bench ids `pc-pipeline-zeus`, `pc-pipeline-smt`):
+  `pipeline` (homr) 0.955, `pipeline-smt` 0.769, `pipeline-zeus` 0.659 total note F1. Zeus's solo-staff model
+  breaks on scanned orchestral parts (bar counts up to 6x, Song 2 winds/brass near 0) and on keyboards; smt-sys
+  ruins the piano reductions (346 / 1581 bars) and drops most keyboard notes. homr stays the default `pipeline`.
+- tromr and tfe2e skipped: homr's transformer is derived from TrOMR, and tfe2e (PrIMuS CRNN) reads monophonic
+  incipits only; neither is likely to beat homr or Zeus anywhere.
+Next: P5 rest (clarity's staff stage), then P6. WSL now has 28 GB (`.wslconfig` `memory=28GB`); transcribes
+still run one engine at a time (`--jobs 2`; peak about 10 GB used).
 P2's remaining converters land with their recognizers (`semantic.py` with tromr/tfe2e; Zeus writes MusicXML).
 Not done: vector pages at a higher render dpi (P3), split of the report by pdfkind.
 
