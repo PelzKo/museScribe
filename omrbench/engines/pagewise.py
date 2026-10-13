@@ -251,6 +251,20 @@ class Zeus(PagewiseEngine):
         return [self.container_exe, "predict", "--model-snapshot", self.models[staves], "--quiet-tf", *images]
 
 
+
+class ClarityStaff(PagewiseEngine):
+    """Clarity-OMR's staff reader (stage B) on pipeline crops -> `<image>.musicxml`
+    (docker/clarity/crops.py); a pipeline crop recognizer, not a page engine."""
+    kind = "clarity"
+    container_image = "clarity"
+    container_exe = "clarity-crops"
+
+    def staves_cmd(self, staves: int, images: list[Path]) -> list:
+        cmd = [self.container_exe, "--staves", str(staves), "--device", self.device]
+        if self.cfg.get("beam_width"):
+            cmd += ["--beam-width", str(self.cfg["beam_width"])]
+        return [*cmd, *images]
+
 class Mozart(KernPages):
     """Classic-CV floor: one treble staff at a time, its own text format."""
     kind = "mozart"

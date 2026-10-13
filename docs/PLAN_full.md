@@ -106,6 +106,23 @@ Only metrics derivable from GT MusicXML + PDF.
   - part labels: fuzzy match to GT part names
   - rehearsal marks: set match with GT `<rehearsal>`
 - Results to `results/samples/components/<ts>/report.md` + json.
+- **Recognizer comparison without homr tuning** (user request 2026-10-13). The `pipeline` repairs were tuned on
+  homr output: `_vote` (assemble.py) breaks a 1-vs-1 tie between Audiveris and the crop reader in favour of the crop
+  reader, homr's courtesy-signature rest bar is dropped, multirests and bar numbers are fixed around homr's habits.
+  Zeus lost on full Anastasia mainly through this: one Zeus crop looped into 177 bars (Song 1 Violin 2, system 5),
+  and the tie rule accepted it. So each recognizer is benchmarked at three levels on the same samples/songs:
+  1. **raw**: the engine alone on the page (`homr`, `audiveris`, `oemer`, `clarity`, ... as page engines). Zeus and
+     smt-sys have no page mode, so for them level 2 is the lowest.
+  2. **plain crops**: same Audiveris layout and crops for every reader, crop measures concatenated per part, no vote,
+     no repairs (a `repairs: false` pipeline switch).
+  3. **full pipeline**: as now (`pipeline`, `pipeline-<recognizer>`).
+  The level 2 → 3 gain shows how much of homr's lead is tuning. Generic guards that help every reader
+  (e.g. reject a crop with more bars than 2x the Audiveris stacks) go into level 3 for all readers.
+- **Runtime and memory in every benchmark** (user request 2026-10-13). `omrbench run` reports already show runtime per
+  page and peak RSS, but `omrbench bench` (shows) does not, and long-lived workers (homr pool, Zeus/SMT/Transcoda
+  batch containers) only report host-side numbers. Goal: per engine and part, wall time, CPU time, peak RAM
+  (including container processes, e.g. `docker stats` or cgroup `memory.peak`) and peak VRAM (NVML), in
+  `report.md` and the JSON, and a per-engine total in the summary table.
 
 ## Phase 7 — Routing + ensemble
 - **Matrix report**: after `run`, aggregate per (score type × pdfkind × element metric) → best engine/recognizer, written to `results/samples/bench/<run>/routing.yaml`. Element metrics come from `metrics/elements.py`: notes, pitch, rhythm, rests, clefs, keys, dynamics, lyrics, words.

@@ -5,7 +5,8 @@ each image next to it; `output` finds that file. `recognize` returns (job, error
 per job, in order. `staves`: the staff-group sizes (of `Pipeline._crop_jobs`) it reads;
 the other groups go to the `fallback` recognizer.
 
-Recognizers: `homr` (any group); `zeus` (single staves and grand staves, a model for each);
+Recognizers: `homr` (any group); `zeus` (single staves and grand staves, a model for each); `clarity`
+(Clarity-OMR's staff reader on single staves and grand staves split in two);
 the pianoform kern models on grand staves (2-staff groups): `smt-sys` (SMT system-level
 grand-staff model), `transcoda`, `smt-fp` (page models, here on one system).
 
@@ -18,7 +19,7 @@ import time
 from pathlib import Path
 
 from .. import log as logmod
-from ..engines.pagewise import Homr, SmtFp, SmtSys, Transcoda, Zeus
+from ..engines.pagewise import ClarityStaff, Homr, SmtFp, SmtSys, Transcoda, Zeus
 from ..monitor import RunStats, run_monitored
 
 
@@ -136,7 +137,8 @@ class BatchRecognizer:
 
 
 class ZeusRecognizer(BatchRecognizer):
-    """Zeus: the solo-staff model on single staves, the grand-staff model on 2-staff groups."""
+    """Zeus: the solo-staff model on single staves, the grand-staff model on 2-staff groups.
+    Also Clarity's staff reader (one call per group size, each staff read on its own)."""
     staves = {1, 2}
 
     def commands(self, jobs, crop_dir):
@@ -169,7 +171,7 @@ class WithFallback:
         return [(j, done[j[:2]]) for j in jobs]
 
 
-BATCH = {"zeus": (ZeusRecognizer, Zeus), "smt-sys": (BatchRecognizer, SmtSys),
+BATCH = {"zeus": (ZeusRecognizer, Zeus), "clarity": (ZeusRecognizer, ClarityStaff), "smt-sys": (BatchRecognizer, SmtSys),
          "transcoda": (BatchRecognizer, Transcoda), "smt-fp": (BatchRecognizer, SmtFp)}
 KNOWN = ["homr", *BATCH]
 

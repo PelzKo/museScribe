@@ -34,4 +34,7 @@ print(ensure_default_stage_a_weights(r), ensure_default_stage_b_checkpoint(r))"
 ENV OMR_DISABLE_BACKBONE_PRETRAINED=1 YOLO_CONFIG_DIR=/tmp/ultralytics
 RUN printf '#!/bin/sh\ncd /opt/clarity && exec /opt/clarity/venv/bin/python omr.py "$@"\n' > /usr/local/bin/clarity \
  && chmod +x /usr/local/bin/clarity
+COPY docker/clarity/crops.py /opt/clarity/crops.py
+RUN printf '#!/bin/sh\nexec /opt/clarity/venv/bin/python /opt/clarity/crops.py "$@"\n' > /usr/local/bin/clarity-crops \
+ && chmod +x /usr/local/bin/clarity-crops
 ENTRYPOINT []

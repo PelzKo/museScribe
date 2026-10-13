@@ -158,9 +158,14 @@ Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (m
   `pipeline` (homr) 0.955, `pipeline-smt` 0.769, `pipeline-zeus` 0.659 total note F1. Zeus's solo-staff model
   breaks on scanned orchestral parts (bar counts up to 6x, Song 2 winds/brass near 0) and on keyboards; smt-sys
   ruins the piano reductions (346 / 1581 bars) and drops most keyboard notes. homr stays the default `pipeline`.
+- `pipeline-clarity` (2026-10-13): Clarity's staff reader (stage B) on our crops, via `clarity-crops`
+  (docker/clarity/crops.py; stage A skipped, a grand staff split at its emptiest row, joined back into one part).
+  Samples: pr-1 0.881, pr-4a 1.000, lindenbaum 0.960 (homr pipeline 0.942 / 1.000 / 0.986). Full Anastasia
+  1/2/4A: 0.696 (bench `pc-pipeline-clarity`); only 4A Keyboard 2 is better than homr (1.000 vs 0.983).
 - tromr and tfe2e skipped: homr's transformer is derived from TrOMR, and tfe2e (PrIMuS CRNN) reads monophonic
   incipits only; neither is likely to beat homr or Zeus anywhere.
-Next: P5 rest (clarity's staff stage), then P6. WSL now has 28 GB (`.wslconfig` `memory=28GB`); transcribes
+Next: P5 rest (clarity's staff stage), then P6. P6 also covers the recognizer comparison without homr tuning
+(raw / plain crops / full pipeline) and runtime + memory in every report; see `PLAN_full.md` Phase 6. WSL now has 28 GB (`.wslconfig` `memory=28GB`); transcribes
 still run one engine at a time (`--jobs 2`; peak about 10 GB used).
 P2's remaining converters land with their recognizers (`semantic.py` with tromr/tfe2e; Zeus writes MusicXML).
 Not done: vector pages at a higher render dpi (P3), split of the report by pdfkind.

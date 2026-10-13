@@ -39,6 +39,9 @@ engines:
   pipeline-transcoda:     # pipeline with Transcoda on 2-staff groups, homr on the rest
     type: pipeline
     recognizer: transcoda
+  pipeline-clarity:       # pipeline with Clarity's staff reader on single staves and grand staves, homr on larger groups
+    type: pipeline
+    recognizer: clarity
   clarity:                # Clarity-OMR, whole PDF -> MusicXML; piano-tuned (container only)
     type: clarity
     # beam_width: 5         # default 5; 2 is ~2x faster on CPU
