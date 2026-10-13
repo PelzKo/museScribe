@@ -11,6 +11,7 @@ the evaluation protocol (section 12) from the OMR research notes.
 | `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
 | `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
 | `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
+| `pipeline-zeus` / `-smt` / `-transcoda` | same, another crop recognizer (`recognizer:`), homr on the groups it can't read | Zeus `c8569eb` (OLiMPiC grand staff CC BY-SA, `ayce-2026-08-03` solo staff CC BY-NC-SA); `PRAIG/smt-grandstaff` |
 | `clarity` | Clarity-OMR (commit `c6bb8a4`): whole PDF, YOLO staves + DaViT tokens -> MusicXML | piano-tuned; ~20 s per staff on CPU |
 | `transcoda` | Transcoda 59M (HF revision `b529f8a`): full page -> `**kern` | pianoform; ~70 s/page on CPU |
 | `smt-fp` | Sheet Music Transformer, `PRAIG/smt-fp-grandstaff`: full page -> bekern | pianoform; slow on CPU (no KV cache); the Mozarteum and Polish variants are gated on HF |

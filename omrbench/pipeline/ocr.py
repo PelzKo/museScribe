@@ -10,7 +10,8 @@ Vector pages (pdfkind) have the exact words in the PDF text layer: those are rea
 same strips instead of running Tesseract.
 
 The Tesseract binary is the one bundled in Audiveris' jars (extracted once into
-$OMRBENCH_HOME/tools/tesseract); a `tesseract` on PATH is used if there is one.
+$OMRBENCH_HOME/tools/tesseract); a `tesseract` on PATH is used if there is one. Without a
+native Audiveris, the jars and tessdata are copied out of the Audiveris image first.
 """
 from __future__ import annotations
 
@@ -39,8 +40,44 @@ KEEP = re.compile(r"^(\d{1,4}[A-E]?([-–—]\d{1,4}[A-E]?)?|\[?to\]?(\d{1,4}[A-
 _EDGE = re.compile(r"^[^\w\[]+|[^\w\]]+$")      # accents / slurs stuck to a number: "203>"
 
 
+IMAGE_JARS = "/opt/audiveris-root/opt/audiveris/lib/app"
+
+
+def _from_image(home: Path) -> None:
+    """Copy the Tesseract/Leptonica jars and tessdata of the Audiveris image to
+    tools/audiveris-image/ and tools/tessdata/ (Audiveris runs in its container)."""
+    from .. import containers
+    tag = containers.IMAGES["audiveris"][0]
+    dest = home / "tools" / "audiveris-image" / "opt" / "audiveris" / "lib" / "app"
+    try:
+        names = subprocess.run(["docker", "run", "--rm", tag, "ls", IMAGE_JARS], capture_output=True,
+                               text=True, timeout=120, check=True).stdout.split()
+        cid = subprocess.run(["docker", "create", tag, "true"], capture_output=True, text=True,
+                             timeout=120, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as e:
+        LOG.debug(f"no tesseract from {tag}: {e}")
+        return
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        for n in names:
+            if n.startswith(("tesseract-", "leptonica-")) and n.endswith("-linux-x86_64.jar"):
+                subprocess.run(["docker", "cp", f"{cid}:{IMAGE_JARS}/{n}", str(dest / n)], check=True,
+                               capture_output=True, timeout=300)
+        if not (home / "tools" / "tessdata").is_dir():
+            subprocess.run(["docker", "cp", f"{cid}:/opt/tessdata", str(home / "tools" / "tessdata")],
+                           check=True, capture_output=True, timeout=300)
+        LOG.info(f"tesseract jars and tessdata copied from {tag} into {home / 'tools'}")
+    except (OSError, subprocess.SubprocessError) as e:
+        LOG.warning(f"copying tesseract from {tag} failed: {e}")
+    finally:
+        subprocess.run(["docker", "rm", cid], capture_output=True, timeout=120)
+
+
 def find_tesseract(home: Path) -> tuple[str, dict] | None:
     """(executable, environment) or None if neither PATH nor Audiveris has one."""
+    if not shutil.which("tesseract") and not (home / "tools" / "tesseract" / "tesseract").exists() \
+            and not list((home / "tools").glob("audiveris*/opt/audiveris/lib/app/tesseract-*-linux-x86_64.jar")):
+        _from_image(home)
     env = dict(os.environ)
     tessdata = home / "tools" / "tessdata"
     if tessdata.is_dir():

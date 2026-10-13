@@ -43,7 +43,7 @@ def test_pool_cmd_is_interactive_and_runs_the_worker(tmp_path):
 
 def test_build_cmd_uses_repo_root_context():
     cmd = containers.build_cmd("homr")
-    assert "BASE_IMAGE=omrbench/base:cuda" in cmd
+    assert "BASE_IMAGE=omrbench/base:cuda13" in cmd
     assert cmd[cmd.index("-f") + 1].endswith("docker/homr/Dockerfile")
     assert cmd[-1] == str(ROOT)
 

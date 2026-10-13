@@ -138,8 +138,14 @@ class Homr(PagewiseEngine):
     container_image = "homr"
     container_exe = "homr"
 
+    @property
+    def device(self) -> str:
+        """CPU unless `device: cuda` in its config: on the PC the fp16 CUDA models scored lower
+        (Anastasia 1/2/4A note F1 0.928 vs 0.955) and 8 GPU workers stalled into timeouts."""
+        return str(self.cfg.get("device", "cpu"))
+
     def page_cmd(self, image, out_dir):
-        gpu = [] if self.bench.get("device", "cpu") == "cuda" else ["--gpu", "no"]   # see _homr_worker.py
+        gpu = [] if self.device == "cuda" else ["--gpu", "no"]   # see _homr_worker.py
         return [self.exe, *gpu, *(self.cfg.get("extra_args") or []), image]
 
     def use_pool(self) -> bool:
@@ -153,7 +159,7 @@ class Homr(PagewiseEngine):
             # the crops live under results/, so the image sees results/ at the same path
             results = Path(self.bench["results_dir"])
             launch = containers.pool_cmd(containers.IMAGES[self.container][0], mounts={results: str(results)},
-                                         gpu=self.bench.get("device", "cpu") == "cuda",
+                                         gpu=self.device == "cuda",
                                          env=self.container_env(env))
         else:
             launch = [str(self.venv / "bin" / "python"), str(WORKER)]
@@ -189,7 +195,7 @@ class KernPages(PagewiseEngine):
     suffix, convert = ".krn", staticmethod(kern_to_musicxml)
 
     def batch_cmd(self, images, out_dir):
-        return [self.container_exe, "--out", out_dir, "--device", self.bench.get("device", "cpu"),
+        return [self.container_exe, "--out", out_dir, "--device", self.device,
                 *self.adapter_args(), *images]
 
     def adapter_args(self) -> list[str]:
@@ -220,6 +226,29 @@ class SmtFp(KernPages):
     kind = "smt-fp"
     container_image = "smt-fp"
     container_exe = "smt"
+
+
+class SmtSys(KernPages):
+    """Sheet Music Transformer, system-level grand-staff model (bekern); a pipeline crop
+    recognizer (pipeline/recognizer.py), not a page engine."""
+    kind = "smt-sys"
+    container_image = "smt-sys"
+    container_exe = "smt"
+
+    def adapter_args(self):
+        return ["--system"]
+
+
+class Zeus(PagewiseEngine):
+    """Zeus (OmniOMR/zeus): one staff or grand staff per image -> `<image>.musicxml`; a pipeline
+    crop recognizer (pipeline/recognizer.py), not a page engine."""
+    kind = "zeus"
+    container_image = "zeus"
+    container_exe = "zeus"
+    models = {1: "/opt/zeus/models/solo.model", 2: "/opt/zeus/models/grand.model"}   # by staves
+
+    def staves_cmd(self, staves: int, images: list[Path]) -> list:
+        return [self.container_exe, "predict", "--model-snapshot", self.models[staves], "--quiet-tf", *images]
 
 
 class Mozart(KernPages):

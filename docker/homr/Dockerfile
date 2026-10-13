@@ -1,6 +1,7 @@
-# homr, pinned like setup.sh, on onnxruntime-gpu (CUDA 12 build; Turing/RTX 2070 SUPER runs fp16/fp32, no bf16).
+# homr, pinned like setup.sh, on onnxruntime-gpu (1.31 is a CUDA 13 build: base-cuda13; with the CUDA 12 base its
+# CUDA provider fails to load and homr silently runs its fp16 models on the CPU). Turing: fp16/fp32, no bf16.
 # Build context is the repo root; the worker is the same file the native homr pool uses.
-ARG BASE_IMAGE=omrbench/base:cuda
+ARG BASE_IMAGE=omrbench/base:cuda13
 FROM ${BASE_IMAGE}
 
 ARG HOMR_VERSION=0.7.0

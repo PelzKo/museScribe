@@ -131,8 +131,31 @@ Done (smoke test passed on PC and laptop):
 On the PC after pulling: `omrbench images build clarity transcoda smt-fp mozart`, then
 `omrbench run --engines clarity,transcoda,smt-fp,mozart --samples demo-*` (`--prefix-matching` if needed) on the GPU.
 
+- P4 verified on the PC (2026-10-12): all images build; `docker run --gpus all` sees the GPU in homr (after the
+  CUDA 13 fix below), zeus (TF), smt, transcoda, clarity (torch).
+- P5 started: `pipeline/recognizer.py` (`recognizer:` / `fallback:` in a pipeline entry). The source label `homr` in
+  assemble.py is now `crop`; parity: `reassemble()` on all 41 Anastasia 1/2/4A work dirs gives byte-identical
+  MusicXML before/after. Recognizers: `homr`, `zeus` (image `omrbench/zeus:c8569eb`, base-cuda11; solo-staff
+  `ayce-2026-08-03` CC BY-NC-SA + grand-staff `zeus-olimpic-1.0` CC BY-SA), `smt-sys` (`omrbench/smt:grandstaff`,
+  `PRAIG/smt-grandstaff`), `transcoda`, `smt-fp`; groups a recognizer can't read go to homr. bench.yaml entries
+  `pipeline-zeus`, `pipeline-smt`, `pipeline-transcoda`.
+- PC findings (2026-10-12):
+  - homr's onnxruntime-gpu 1.31 is a CUDA 13 build; on the CUDA 12.6 base its CUDA provider failed to load
+    (`libcublasLt.so.13`) and homr silently ran its fp16 models on the CPU. homr is now on `base-cuda13`.
+  - Even on the GPU, the fp16 models score lower (Anastasia 1/2/4A total note F1 0.928 vs 0.955 with the fp32 CPU
+    models) and 8 GPU workers on 8 GB stalled into 1800 s timeouts. homr therefore runs on the CPU by default on
+    every machine (`device: cuda` in its config opts in). homr's fp32 models on CUDA (patched worker, tested in a
+    scratch script only) gave CPU-identical output but no speed-up.
+  - Without native Audiveris there was no Tesseract, so the bar-number OCR pass was skipped on scans. `ocr.py`
+    now copies Tesseract 5.5.2 + tessdata out of the Audiveris image once into `~/.local/share/omrbench/tools`.
+  - With both fixes the PC matches the laptop: total note F1 0.955 on Anastasia 1/2/4A (laptop outputs re-scored
+    with the same code: 0.955). Laptop results are kept as reference in `results-laptop/`.
+- Samples `data/samples/anastasia-pr-1` (PianoReduction p. 7-9, GT Klavierauszug + Frauen + Männer) and
+  `anastasia-pr-4a` (p. 58, type piano, GT Klavierauszug), GT extracted from the truth scores.
+
 Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (manual approval + token).
-Next: P5 (pluggable crop recognizer; refactor `homr` -> generic `crop` source first, parity via `reassemble()`).
+Next: P5 rest (tromr, tfe2e; clarity's staff stage), then P6. WSL sees only 15.6 GB of the PC's 32 GB
+(`.wslconfig` `memory=`), so runs are kept mostly sequential.
 P2's remaining converters land with their recognizers (`semantic.py` with tromr/tfe2e; Zeus writes MusicXML).
 Not done: vector pages at a higher render dpi (P3), split of the report by pdfkind.
 
@@ -153,7 +176,7 @@ Not done: vector pages at a higher render dpi (P3), split of the report by pdfki
 
 ## 9. Tests and conventions
 
-- `pytest -q tests` must pass before a commit. There are 17 tests; none need Docker.
+- `pytest -q tests` must pass before a commit. There are 28 tests; none need Docker.
 - Lint: `python -m pyflakes omrbench tests` (only four warnings predate this work: `report.py:435`, `runner.py:193`,
   `metrics/_olimpic_tedn.py:110`, `pipeline/vocal.py:25`).
 - Commit messages end with `Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>` when made by Claude.

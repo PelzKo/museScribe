@@ -9,7 +9,7 @@
                                        note F1 of the latest outputs vs data/SHOW/truth
   omrbench check SHOW [--songs 1,2] [-v] [--export DIR]
                                        validate songs.xlsx, show what every part resolves to
-  omrbench images list|build [base-cpu base-cuda audiveris homr oemer clarity transcoda smt-fp mozart]
+  omrbench images list|build [base-cpu base-cuda base-cuda11 base-cuda13 audiveris homr oemer clarity transcoda smt-fp smt-sys zeus mozart]
                                        list or build the Docker images (docker/)
   omrbench new-sample NAME             create data/samples/NAME with a meta.yaml template
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
@@ -222,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor")
     p = sub.add_parser("images", help="list or build the Docker images")
     p.add_argument("action", choices=["list", "build"])
-    p.add_argument("names", nargs="*", help="base-cpu base-cuda audiveris homr oemer clarity transcoda smt-fp mozart (default: all)")
+    p.add_argument("names", nargs="*", help="base-cpu base-cuda base-cuda11 base-cuda13 audiveris homr oemer clarity transcoda smt-fp smt-sys zeus mozart (default: all)")
     p = sub.add_parser("new-sample")
     p.add_argument("name")
     sub.add_parser("demo")

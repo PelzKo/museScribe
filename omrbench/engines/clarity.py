@@ -26,7 +26,7 @@ class Clarity(Engine):
         shutil.copyfile(sample.pdf, src)
         out = workdir / "output.musicxml"
         out.unlink(missing_ok=True)
-        device = self.bench.get("device", "cpu")
+        device = self.device
         cmd = ["clarity", src, "-o", out, "--work-dir", workdir / "work", "--device", device,
                "--pdf-dpi", str(int(self.cfg.get("dpi", self.bench.get("dpi", 300))))]
         if self.cfg.get("beam_width"):

@@ -65,9 +65,14 @@ class Engine:
         raise NotImplementedError
 
     # -- common ------------------------------------------------------------
+    @property
+    def device(self) -> str:
+        """bench.yaml `device`, or the engine's own `device: cpu` (e.g. homr's fp32 CPU models)."""
+        return str(self.cfg.get("device") or self.bench.get("device", "cpu"))
+
     def env(self) -> dict:
         env = {}
-        if self.bench.get("device", "cpu") == "cpu":
+        if self.device == "cpu":
             env["CUDA_VISIBLE_DEVICES"] = ""
         env.update({str(k): str(v) for k, v in (self.cfg.get("env") or {}).items()})
         return env
@@ -89,7 +94,7 @@ class Engine:
         if not self.container:
             return run_monitored(cmd, log_path=log_path, cwd=cwd, env=env, timeout_s=timeout_s)
         from .. import containers
-        gpu = self.bench.get("device", "cpu") == "cuda"
+        gpu = self.device == "cuda"
         return containers.run_in_container(
             containers.IMAGES[self.container][0], [self.container_exe, *cmd[1:]], workdir=workdir,
             log_path=log_path, gpu=gpu, env=self.container_env(env or {}), cwd=cwd,

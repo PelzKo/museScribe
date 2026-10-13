@@ -25,12 +25,20 @@ REPO_DOCKER = REPO / "docker"
 IMAGES = {
     "base-cpu": ("omrbench/base:cpu", "base", {"BASE_IMAGE": "ubuntu:24.04"}),
     "base-cuda": ("omrbench/base:cuda", "base", {"BASE_IMAGE": "nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04"}),
+    # onnxruntime-gpu >= 1.24 (homr) is built for CUDA 13
+    "base-cuda13": ("omrbench/base:cuda13", "base", {"BASE_IMAGE": "nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04"}),
+    # TensorFlow 2.12 (zeus): Python 3.10, CUDA 11.8 / cuDNN 8
+    "base-cuda11": ("omrbench/base:cuda11", "base", {"BASE_IMAGE": "nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04"}),
     "audiveris": ("omrbench/audiveris:5.11.0", "audiveris", {"BASE_IMAGE": "omrbench/base:cpu"}),
-    "homr": ("omrbench/homr:0.7.0", "homr", {"BASE_IMAGE": "omrbench/base:cuda"}),
+    "homr": ("omrbench/homr:0.7.0", "homr", {"BASE_IMAGE": "omrbench/base:cuda13"}),
     "oemer": ("omrbench/oemer:0.1.8", "oemer", {"BASE_IMAGE": "omrbench/base:cuda"}),
     "clarity": ("omrbench/clarity:c6bb8a4", "clarity", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "transcoda": ("omrbench/transcoda:b529f8a", "transcoda", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "smt-fp": ("omrbench/smt:fp-grandstaff", "smt", {"BASE_IMAGE": "omrbench/base:cpu"}),
+    "smt-sys": ("omrbench/smt:grandstaff", "smt", {"BASE_IMAGE": "omrbench/base:cpu",
+                                                   "SMT_MODEL": "PRAIG/smt-grandstaff",
+                                                   "SMT_REVISION": "fd3d512a64aab51ee4048435d44c0455d6cc0abd"}),
+    "zeus": ("omrbench/zeus:c8569eb", "zeus", {"BASE_IMAGE": "omrbench/base:cuda11"}),
     "mozart": ("omrbench/mozart:a51c9d7", "mozart", {"BASE_IMAGE": "omrbench/base:cpu"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi

@@ -25,10 +25,20 @@ engines:
     # nice: 0             # >0 lowers the workers' CPU priority (was slower in tests)
   pipeline:               # audiveris-meta layout + homr per staff group + repairs
     type: pipeline
-    prefer: auto          # scans: homr bars first; vector PDFs: audiveris bars first
+    prefer: auto          # scans: crop (recognizer) bars first; vector PDFs: audiveris bars first
+    # recognizer: homr    # crop recognizer (pipeline/recognizer.py)
     # auto_beam: true     # beam unbeamed eighths and shorter by beat (else MuseScore shows flags)
     # max_wedge_bars: 2   # hairpins longer than this are misread pairings and dropped
-    # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run)
+    # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run); device: cuda to use the GPU (fp16, scored lower)
+  pipeline-zeus:          # pipeline with Zeus on single staves and grand staves, homr on larger groups
+    type: pipeline
+    recognizer: zeus
+  pipeline-smt:           # pipeline with SMT system-level grand-staff model on 2-staff groups, homr on the rest
+    type: pipeline
+    recognizer: smt-sys
+  pipeline-transcoda:     # pipeline with Transcoda on 2-staff groups, homr on the rest
+    type: pipeline
+    recognizer: transcoda
   clarity:                # Clarity-OMR, whole PDF -> MusicXML; piano-tuned (container only)
     type: clarity
     # beam_width: 5         # default 5; 2 is ~2x faster on CPU

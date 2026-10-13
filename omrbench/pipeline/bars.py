@@ -27,7 +27,7 @@ Clef = tuple[str, str, str]      # sign, line, octave change
 @dataclass
 class Bar:
     items: list[etree._Element]            # note/backup/forward/direction/... in order
-    source: str                            # homr | audiveris | rest
+    source: str                            # crop | audiveris | rest
     staves: int = 1
     clefs: dict[int, Clef] = field(default_factory=dict)   # in force at start, per staff
     key: str | None = None                 # fifths
