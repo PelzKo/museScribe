@@ -189,6 +189,24 @@ Only metrics derivable from GT MusicXML + PDF.
 - Transcribe: `--engine combo --routing <routing.yaml>`. Score type comes from sample `meta.yaml type` / show part config, with auto fallback (2-staff braced → piano_reduction, lyrics → choir, percussion clef → drums).
 - Leakage guard: report combo scores with leave-one-sample-out routing weights, so its benchmark number is honest.
 
+**P7 status 2026-10-13 (per-bar ensemble, Anastasia 1/2/4A):** `ensemble: [zeus, clarity, smt-sys]` in a pipeline
+entry adds those readers' crop readings (`<workdir>/crops-<reader>/`, same crops) as per-bar candidates
+(assemble.plan_systems `alts`); `ensemble_pick` / `ensemble_weights` choose. Tested by reassembling the existing
+reader runs (default path byte-identical):
+
+| variant | note F1 | parts better / worse than homr |
+|---|---|---|
+| `pipeline` (homr) | **0.955** | – |
+| agree (medoid among full bars) | 0.937 | 4 / 12 |
+| fallback (alts only where homr and Audiveris both fail the bar) | 0.937 | – |
+| weighted by level-2 quality | 0.937 | – |
+| weighted, homr's bar always a candidate | 0.946 | 4 / 10 |
+
+A homr bar whose voices don't add up is still usually the best reading; another reader's "complete" bar replacing
+it costs more than the ensemble gains. With the current readers and truth data, routing says homr for every part
+type (Clarity wins only 4A Keyboard 2 / piano-reduction details). The routed matrix (routing.yaml) and leave-one-out
+need truth for more score types to be meaningful (choir/vocal, drums, vector shows).
+
 ## Order / deliverable checkpoints
 P0 → P1 (Audiveris+homr in Docker, identical scores to native) → P2+P3 → P4 (one engine at a time: clarity, transcoda, smt-fp, mozart) → P5 (refactor first, then zeus, smt-sys, transcoda, tromr, tfe2e) → P6 → P7. Each engine lands with image, adapter, converter test and bench.yaml entry, and is run on demo + one real sample before moving on.
 

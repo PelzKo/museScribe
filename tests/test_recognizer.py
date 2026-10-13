@@ -68,3 +68,9 @@ def test_plan_systems_raw_keeps_crop_bars():
     stats = A.Stats()
     plan = A.plan_systems([page], aud, {}, D, ["crop", "audiveris"], stats, raw=True)[0]
     assert plan.n == 4 and stats.bars["audiveris"] == 4   # crop failed: Audiveris bars
+
+
+def test_bar_similarity():
+    from omrbench.pipeline import bars as B
+    a = B.rest_bar(1, 16, 4)
+    assert B.similarity(B.signature(a), B.signature(a)) == 1.0   # rests only: both empty

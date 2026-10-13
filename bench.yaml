@@ -45,6 +45,19 @@ engines:
   pipeline-ola:           # pipeline + OLA's measure count per system as one more bar-count vote (P6 layout)
     type: pipeline
     measure_vote: ola
+  pipeline-ensemble:      # P7: homr + more crop readers per bar (agreement among full bars); reads crops-<reader>/
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+  pipeline-ensemble-fb: {type: pipeline, ensemble: [zeus, clarity, smt-sys], ensemble_pick: fallback}
+  pipeline-ensemble-w:    # votes weighted by reader quality (level-2 bar-aligned note F1, Anastasia)
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+    ensemble_weights: {crop: 0.91, audiveris: 0.47, "alt:clarity": 0.81, "alt:zeus": 0.68, "alt:smt-sys": 0.59}
+  pipeline-ensemble-wk:   # weighted, homr's reading always a candidate
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+    ensemble_pick: agree-keep
+    ensemble_weights: {crop: 0.91, audiveris: 0.47, "alt:clarity": 0.81, "alt:zeus": 0.68, "alt:smt-sys": 0.59}
   # bar-number OCR engine (P6 OCR component); default ocr_engine: tesseract
   pipeline-easyocr: {type: pipeline, ocr_engine: easyocr}
   pipeline-doctr: {type: pipeline, ocr_engine: doctr}

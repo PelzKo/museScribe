@@ -204,10 +204,18 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
 
 
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
-                 stats: Stats, raw: bool = False, extra_votes: dict | None = None) -> list[SysPlan]:
+                 stats: Stats, raw: bool = False, extra_votes: dict | None = None,
+                 alts: dict | None = None, pick_mode: str = "agree",
+                 weights: dict | None = None) -> list[SysPlan]:
     """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
     bars only for groups whose crop failed. For comparing readers without homr tuning.
-    extra_votes: {system index: bar count} of another layout provider (OLA), one more vote."""
+    extra_votes: {system index: bar count} of another layout provider (OLA), one more vote.
+    alts: {reader name: crop bars like `crop`} of more crop readers (ensemble). Their bars join the
+    candidates of systems where they read the planned bar count; among the candidates that fill
+    their bar, the one that agrees most with all others wins (ties: crop, audiveris, alts).
+    pick_mode "agree": score = own weight + sum of other readings' weight x agreement (weights per
+    source: crop, audiveris, alt:<name>; default 1); "fallback": alts only where neither crop nor
+    Audiveris fills the bar; "agree-keep": like agree, the crop reading always takes part."""
     systems = [sy for p in pages for sy in p.systems]
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
@@ -302,6 +310,9 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                 if hb:
                     hb = [B.to_unpitched(b) for b in hb]
             options = {"crop": hb, "audiveris": ab}
+            perc = all(st.clef == "PERCUSSION_CLEF" for st in group)
+            alt_opts = {f"alt:{name}": [B.to_unpitched(b) for b in v] if perc else v
+                        for name, d in (alts or {}).items() if (v := d.get((k, gi))) and len(v) == n}
             primary = next((options[s] for s in order if options.get(s)), None)
             chosen = []
             for i in range(n):
@@ -315,15 +326,33 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     clef_src = options[seen[0]]
                 cands = [(s, B.close_voice_gaps(options[s][i], length) if s == "crop" else options[s][i])
                          for s in bar_order if options.get(s)]
+                cands += [(s, B.close_voice_gaps(v[i], length)) for s, v in alt_opts.items()]
                 l, r = plan.xs[i]
                 ids = {st.id for st in group}
-                if any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ())):
+                printed = any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ()))
+                if printed:
                     # noteheads are printed: a rest-only reading lost a voice whose rhythm
                     # didn't add up (Audiveris), the other engine's notes are better
                     with_notes = [(s, b) for s, b in cands if not b.rest_only]
                     cands = with_notes + [c for c in cands if c not in with_notes]
-                pick = next(((s, b) for s, b in cands if B.bar_ok(b, length)), None) \
-                    or next(((s, b) for s, b in cands if not b.empty), None)
+                ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
+                if pick_mode == "fallback" and any(not s.startswith("alt:") for s, _ in ok):
+                    ok = [c for c in ok if not c[0].startswith("alt:")]
+                if pick_mode == "agree-keep":
+                    # homr's reading stays a candidate even when its voices don't fill the bar
+                    ok += [c for c in cands if c[0] == "crop" and not c[1].empty and c not in ok]
+                if alt_opts and pick_mode.startswith("agree") and len(ok) >= 2:
+                    # ensemble: the full bar that agrees most with every other reading
+                    if printed:
+                        ok = [c for c in ok if not c[1].rest_only] or ok
+                    sigs = [B.signature(b) for _, b in cands]
+                    w = [(weights or {}).get(s, 1.0) for s, _ in cands]
+                    score = {id(b): w[j] + sum(w[m] * B.similarity(sigs[j], sigs[m])
+                                               for m in range(len(cands)) if m != j)
+                             for j, (_, b) in enumerate(cands)}
+                    pick = max(ok, key=lambda c: (round(score[id(c[1])], 6), -ok.index(c)))
+                else:
+                    pick = (ok[0] if ok else None) or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
                     # neither source has this system's bar count: best effort by position
                     loose = [v for v in (h_bars.get(gi), a_bars.get(gi)) if v]

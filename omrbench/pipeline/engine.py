@@ -285,6 +285,32 @@ class Pipeline(Engine):
         boxes, _ = components.ola_boxes(run_root, workdir, images, self.bench.get("device", "cpu"))
         return components.ola_measures(pages, images, boxes)
 
+    def ensemble_bars(self, workdir: Path, systems: list, D: int) -> dict | None:
+        """`ensemble: [zeus, clarity, ...]`: bars of more crop readers, read from
+        <workdir>/crops-<reader>/s<k>-g<g>.musicxml (same crops as the main reader)."""
+        names = self.cfg.get("ensemble") or []
+        out = {}
+        for name in names:
+            bars = {}
+            for f in sorted((workdir / f"crops-{name}").glob("s*-g*.musicxml")):
+                m = re.fullmatch(r"s(\d+)-g(\d+)", f.stem)
+                if not m:
+                    continue
+                k, gi = int(m.group(1)) - 1, int(m.group(2)) - 1
+                if k >= len(systems) or gi >= len(systems[k].groups()):
+                    continue
+                try:
+                    part = musicxml.load(f).find("part")
+                except Exception as e:  # noqa: BLE001 - one unreadable crop is no reading
+                    LOG.debug(f"{name} {f.name}: {e}")
+                    continue
+                n_staves = len(systems[k].groups()[gi])
+                bs = B.part_bars(part, D, "crop", staves=n_staves) if part is not None else []
+                if bs and max(b.staves for b in bs) == n_staves:
+                    bars[(k, gi)] = bs
+            out[name] = bars
+        return out or None
+
     def assemble(self, sample: Sample, pages: list[layout.Page], books: list[Path],
                  roots: dict, stats: A.Stats, workdir: Path | None = None):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
@@ -327,7 +353,10 @@ class Pipeline(Engine):
         # repairs: false = level 2 of the recognizer comparison (PLAN_full.md P6): crop bars as read
         repairs = bool(self.cfg.get("repairs", True))
         votes = self.measure_votes(sample, pages, workdir) if workdir else None
-        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes)
+        alts = self.ensemble_bars(workdir, systems, D) if workdir else None
+        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
+                                 alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
+                                 weights=self.cfg.get("ensemble_weights"))
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)

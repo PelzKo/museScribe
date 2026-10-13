@@ -7,6 +7,8 @@ they really change.
 """
 from __future__ import annotations
 
+from collections import Counter
+
 import copy
 import math
 import re
@@ -209,6 +211,24 @@ def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
             off = el.findtext("offset")
             out.append((cur + (int(off) if off and off.strip().lstrip("-").isdigit() else 0), el))
     return out
+
+
+def signature(bar: Bar) -> Counter:
+    """The sounding notes of a bar as a multiset of (staff, onset, pitch, duration)."""
+    out: Counter = Counter()
+    for on, el in onsets(bar):
+        if el.tag != "note" or el.find("rest") is not None or el.find("grace") is not None:
+            continue
+        p = el.find("pitch")
+        pitch = (p.findtext("step"), p.findtext("alter", "0"), p.findtext("octave")) if p is not None else None
+        out[(el.findtext("staff", "1"), on, pitch, el.findtext("duration"))] += 1
+    return out
+
+
+def similarity(a: Counter, b: Counter) -> float:
+    """Dice overlap of two bar signatures; two empty bars agree."""
+    n = sum(a.values()) + sum(b.values())
+    return 2 * sum((a & b).values()) / n if n else 1.0
 
 
 def rest_bar(staves: int, length: int | None, D: int) -> Bar:
