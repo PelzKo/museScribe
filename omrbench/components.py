@@ -1,4 +1,4 @@
-"""Component benchmarks (PLAN_full.md Phase 6). `omrbench components layout`: layout providers on
+"""Component benchmarks (docs/PLAN.md section 7). `omrbench components layout`: layout providers on
 the pages of a finished pipeline run, compared with Audiveris (the pipeline's layout) and the
 ground-truth bar count.
 

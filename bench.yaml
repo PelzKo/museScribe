@@ -62,7 +62,7 @@ engines:
   pipeline-easyocr: {type: pipeline, ocr_engine: easyocr}
   pipeline-doctr: {type: pipeline, ocr_engine: doctr}
   pipeline-paddle: {type: pipeline, ocr_engine: paddle}
-  # level 2 of the recognizer comparison (PLAN_full.md P6): same crops, bars as read, no repairs
+  # level 2 of the recognizer comparison (PLAN.md section 7): same crops, bars as read, no repairs
   pipeline-raw: {type: pipeline, repairs: false}
   pipeline-zeus-raw: {type: pipeline, recognizer: zeus, repairs: false}
   pipeline-smt-raw: {type: pipeline, recognizer: smt-sys, repairs: false}

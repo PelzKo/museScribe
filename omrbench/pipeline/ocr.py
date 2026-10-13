@@ -249,7 +249,7 @@ def text_layer_pages(pages: list[Page], pdf: Path) -> dict[int, list[dict]]:
                 if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"}
 
 
-# OCR engines other than Tesseract (component benchmark, PLAN_full.md P6): image key, `ocr-words` engine
+# OCR engines other than Tesseract (component benchmark, PLAN.md section 7): image key, `ocr-words` engine
 ENGINES = {"easyocr": "ocr", "doctr": "ocr", "paddle": "paddle"}
 CPU_ONLY = {"paddle"}    # the paddle image has the CPU build of PaddlePaddle
 

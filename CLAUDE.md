@@ -2,7 +2,7 @@
 
 Benchmark and transcription harness for OMR tools (Audiveris, homr, ...), run in Docker.
 
-**Start with `docs/PC_PLAN.md`** (state, commands, known issues, next steps), then `docs/PLAN_full.md` (master plan).
+**Start with `docs/PLAN.md`** (goal, state, baselines, learnings, next steps); backlog in `docs/IMPROVEMENTS.md`.
 
 Quick commands:
 - `source ~/.local/share/omrbench/env.sh` (harness venv)

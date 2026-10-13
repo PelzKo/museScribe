@@ -350,7 +350,7 @@ class Pipeline(Engine):
         # the recognizer's name (e.g. "homr") stands for its crops
         prefer = ["crop" if s in rec.split("+") else s for s in prefer]
         self.last_prefer = prefer
-        # repairs: false = level 2 of the recognizer comparison (PLAN_full.md P6): crop bars as read
+        # repairs: false = level 2 of the recognizer comparison (PLAN.md section 7): crop bars as read
         repairs = bool(self.cfg.get("repairs", True))
         votes = self.measure_votes(sample, pages, workdir) if workdir else None
         alts = self.ensemble_bars(workdir, systems, D) if workdir else None
