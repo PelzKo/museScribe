@@ -178,6 +178,10 @@ Only metrics derivable from GT MusicXML + PDF.
   batch containers) only report host-side numbers. Goal: per engine and part, wall time, CPU time, peak RAM
   (including container processes, e.g. `docker stats` or cgroup `memory.peak`) and peak VRAM (NVML), in
   `report.md` and the JSON, and a per-engine total in the summary table.
+  **Done 2026-10-13 for `omrbench bench`:** section "Runtime and memory" per PDF (engine, pages, time, s/page, CPU,
+  peak RAM, peak VRAM) + totals, from the work dir result.json of the run that wrote each output (`--run`: that
+  run's work dirs); `perf` list in scores.json. Caveats in the report: homr pool RAM is the shared pool's, VRAM is
+  NVML for the whole GPU.
 
 ## Phase 7 — Routing + ensemble
 - **Matrix report**: after `run`, aggregate per (score type × pdfkind × element metric) → best engine/recognizer, written to `results/samples/bench/<run>/routing.yaml`. Element metrics come from `metrics/elements.py`: notes, pitch, rhythm, rests, clefs, keys, dynamics, lyrics, words.

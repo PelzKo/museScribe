@@ -102,6 +102,26 @@ def _previous(bench_root: Path, this: Path) -> dict:
                                     for r in data["rows"]}}
 
 
+def _perf(root: Path, src_root: Path, sid: str, entry: dict) -> dict | None:
+    """Runtime and memory of the engine run that wrote a PDF's output: the work dir's result.json
+    (the run named in the song's manifest, or with --run the work dirs of that run)."""
+    if src_root != root:        # --run: that run's own work dirs
+        cands = sorted(src_root.glob(f"*/{sid}/result.json"))
+    elif entry.get("run") and entry.get("engine"):
+        cands = [root / "runs" / entry["run"] / entry["engine"] / sid / "result.json"]
+    else:
+        cands = []
+    f = next((c for c in cands if c.exists()), None)
+    if f is None:
+        return None
+    r = json.loads(f.read_text(encoding="utf-8"))
+    st = r.get("stats") or {}
+    return {"engine": r.get("engine"), "pages": r.get("pages"), "wall_s": st.get("wall_s"),
+            "cpu_s": (st.get("cpu_user_s") or 0) + (st.get("cpu_sys_s") or 0),
+            "peak_rss_mb": st.get("peak_rss_mb"), "peak_gpu_mem_mb": st.get("peak_gpu_mem_mb"),
+            "timed_out": st.get("timed_out")}
+
+
 def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: bool = False,
           bench_id: str | None = None) -> int:
     """Return the number of problems (missing outputs, unmappable truth cells)."""
@@ -125,6 +145,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
              f"{'run ' + run if run else 'latest outputs'} -> {out_dir}")
 
     rows: list[dict] = []
+    perf: list[dict] = []
     songs_out: list[dict] = []
     problems: list[str] = []
     for song in selected:
@@ -145,6 +166,9 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
             for part in song.parts:
                 if not part.truth:
                     continue
+                pf = _perf(root, src_root, f"{proj.name}-{song.id}--{part.name}", manifest.get(part.name) or {})
+                if pf:
+                    perf.append({"song": song.id, "part": part.name, **pf})
                 files = [src_root / song.id / n for n in output_names(part.name, part.meta)]
                 if not all(f.exists() for f in files):
                     problems.append(f"{song.id}/{part.name}: no output in {src_root / song.id} "
@@ -194,7 +218,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
 
     prev = _previous(root / "bench", out_dir)
     data = {"show": proj.name, "source": str(src_root), "time": datetime.now().isoformat(timespec="seconds"),
-            "previous": prev.get("_id"), "songs": songs_out, "rows": rows, "problems": problems,
+            "previous": prev.get("_id"), "songs": songs_out, "rows": rows, "perf": perf, "problems": problems,
             "total": {v: _sum(rows, v) for v in notef1.VARIANTS}}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "scores.json").write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -299,6 +323,28 @@ def _report(data: dict, prev: dict) -> str:
     lines += ["", f"**Total note F1 {_f(t['notes']['f1'])}** (P {_f(t['notes']['precision'])}, "
                   f"R {_f(t['notes']['recall'])}; {t['notes']['truth']} truth notes); "
                   f"bar-aligned {_f(t['aligned']['f1'])}", ""]
+    perf = data.get("perf") or []
+    if perf:
+        def n(x, fmt="{:.0f}"):
+            return "-" if x is None else fmt.format(x)
+        pages = sum(p["pages"] or 0 for p in perf)
+        wall = sum(p["wall_s"] or 0 for p in perf)
+        lines += ["## Runtime and memory", "",
+                  "Per PDF, from the run that wrote the output (work dir result.json). Time = summed step wall "
+                  "times (Audiveris + crop reader + assembly); the crop reader pool is shared by the PDFs "
+                  "transcribed at the same time, so its RAM (workers x worker RSS) is the pool's. VRAM = "
+                  "NVML peak of the whole GPU (other processes included).", "",
+                  "| song | part | engine | pages | time s | s/page | CPU s | peak RAM MB | peak VRAM MB |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for p in perf:
+            spp = p["wall_s"] / p["pages"] if p["wall_s"] and p["pages"] else None
+            lines.append(f"| {p['song']} | {p['part']} | {p['engine']} | {n(p['pages'])} | {n(p['wall_s'])}"
+                         f"{' ⏱' if p.get('timed_out') else ''} | {n(spp, '{:.1f}')} | {n(p['cpu_s'])} | "
+                         f"{n(p['peak_rss_mb'])} | {n(p['peak_gpu_mem_mb'])} |")
+        lines += ["", f"**Total** {len(perf)} PDFs, {pages} pages: {wall:.0f} s summed "
+                      f"({wall / pages:.1f} s/page), peak RAM {max(p['peak_rss_mb'] or 0 for p in perf):.0f} MB, "
+                      f"peak VRAM {max(p['peak_gpu_mem_mb'] or 0 for p in perf):.0f} MB."
+                  if pages else "", ""]
     worst = sorted((r for r in data["rows"] if r["wrong_bars"]),
                    key=lambda r: (r["metrics"]["notes"]["f1"] or 0))
     if worst:
