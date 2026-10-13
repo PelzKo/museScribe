@@ -40,6 +40,8 @@ IMAGES = {
                                                    "SMT_REVISION": "fd3d512a64aab51ee4048435d44c0455d6cc0abd"}),
     "zeus": ("omrbench/zeus:c8569eb", "zeus", {"BASE_IMAGE": "omrbench/base:cuda11"}),
     "mozart": ("omrbench/mozart:a51c9d7", "mozart", {"BASE_IMAGE": "omrbench/base:cpu"}),
+    # layout component (P6): built on the Clarity image (Ultralytics + CUDA torch already there)
+    "ola": ("omrbench/ola:2.0", "ola", {"BASE_IMAGE": "omrbench/clarity:c6bb8a4"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi
 GPU_PROBE_IMAGE = "nvidia/cuda:12.6.3-base-ubuntu24.04"

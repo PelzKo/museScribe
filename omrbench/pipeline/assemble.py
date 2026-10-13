@@ -204,9 +204,10 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
 
 
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
-                 stats: Stats, raw: bool = False) -> list[SysPlan]:
+                 stats: Stats, raw: bool = False, extra_votes: dict | None = None) -> list[SysPlan]:
     """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
-    bars only for groups whose crop failed. For comparing readers without homr tuning."""
+    bars only for groups whose crop failed. For comparing readers without homr tuning.
+    extra_votes: {system index: bar count} of another layout provider (OLA), one more vote."""
     systems = [sy for p in pages for sy in p.systems]
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
@@ -238,7 +239,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
         if raw:
             n, how = (Counter(h_ns).most_common(1)[0][0], "crop") if h_ns else (a_n or 0, "audiveris")
         else:
-            n, how = _vote(a_n, h_ns)
+            n, how = _vote(a_n, h_ns + ([extra_votes[k]] if extra_votes and extra_votes.get(k) else []))
         sy_labels = labels.get(id(sy), [])
         if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
                 and a_n == len(sy.stacks) >= 2 and len(sy_labels) <= a_n \

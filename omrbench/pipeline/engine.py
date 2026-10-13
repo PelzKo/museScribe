@@ -226,7 +226,7 @@ class Pipeline(Engine):
 
         # 4. assemble
         t1 = time.perf_counter()
-        score, summary, files = self.assemble(sample, pages, books, roots, stats)
+        score, summary, files = self.assemble(sample, pages, books, roots, stats, workdir)
         summary["crops"] = len(jobs)
         res.output = workdir / "output.musicxml"
         musicxml.write(score, res.output)
@@ -274,8 +274,19 @@ class Pipeline(Engine):
         written as two files (transcribe.SPLIT_TYPES)."""
         return sample.score_type == "piano_reduction"
 
+    def measure_votes(self, sample: Sample, pages: list[layout.Page], workdir: Path) -> dict | None:
+        """`measure_vote: ola`: OLA's measure count per system as one more bar-count vote."""
+        if self.cfg.get("measure_vote") != "ola":
+            return None
+        from .. import components
+        dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
+        run_root = workdir.parent.parent
+        images = sorted((run_root / "_pages" / sample.id / f"{dpi}dpi").glob("page*.png"))
+        boxes, _ = components.ola_boxes(run_root, workdir, images, self.bench.get("device", "cpu"))
+        return components.ola_measures(pages, images, boxes)
+
     def assemble(self, sample: Sample, pages: list[layout.Page], books: list[Path],
-                 roots: dict, stats: A.Stats):
+                 roots: dict, stats: A.Stats, workdir: Path | None = None):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
         a_roots = book_roots(books)
         D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values()))
@@ -315,7 +326,8 @@ class Pipeline(Engine):
         self.last_prefer = prefer
         # repairs: false = level 2 of the recognizer comparison (PLAN_full.md P6): crop bars as read
         repairs = bool(self.cfg.get("repairs", True))
-        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs)
+        votes = self.measure_votes(sample, pages, workdir) if workdir else None
+        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
@@ -401,4 +413,4 @@ class Pipeline(Engine):
             key = (int(k) - 1, int(g.split("-")[0]) - 1)
             roots.setdefault(key, musicxml.load(f))
         stats = A.Stats()
-        return self.assemble(sample, pages, sorted(omr_src.rglob("*.mxl")), roots, stats)
+        return self.assemble(sample, pages, sorted(omr_src.rglob("*.mxl")), roots, stats, workdir)

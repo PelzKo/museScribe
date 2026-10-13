@@ -101,6 +101,19 @@ Only metrics derivable from GT MusicXML + PDF.
   - staves per system vs GT part/staff count
   - per-page system count consistency
   - downstream: pipeline note F1 when this provider's boxes drive the crops. Needs a `Layout` adapter producing `Page`/`System`/`Staff` (layout.py:17-134) from YOLO boxes; Audiveris stays the source for part labels/text.
+  **Layout done 2026-10-13:** `omrbench components layout [show] --run <run>` (omrbench/components.py) runs OLA v2.0
+  (image `omrbench/ola:2.0`, built on the Clarity image; must run at its training size 640, at 1280 its system
+  boxes are garbage) on the pages of a finished pipeline run and compares with Audiveris and the truth bar count;
+  report `results/<show|samples>/components/<id>/layout.md` with OLA time, peak RAM and VRAM per part.
+  - Samples (vector): OLA ≈ Audiveris (same staves 96 %, same measures 89 % of matched systems); pr-1 measures
+    OLA 32 / Audiveris 30 / truth 32; misses 2 of 5 systems on demo-violin-part.
+  - Anastasia 41 parts (scans): OLA finds 242 systems vs Audiveris 385; on single-staff scanned parts it misses
+    many systems (song 1 Reed 3: 2 of 9). On vector piano/keyboard pages it matches or beats Audiveris
+    (PianoReduction 2: 77 vs 76 of 78 measures).
+  - Downstream: `measure_vote: ola` (bench entry `pipeline-ola`) adds OLA's per-system measure count as one more
+    bar-count vote: Anastasia total 0.955 -> 0.929 (10 parts worse, none better). Audiveris stays the layout.
+  - MeasureDetector skipped: same Faster R-CNN family the OLA authors evaluated against YOLO (their
+    `evaluation-release`), TF1.13 image, measures only.
 - **Text/OCR**: providers `tesseract` (existing), `paddleocr`, `doctr`, `easyocr`, `qwen-vl` (Qwen2.5-VL-7B Q4 GGUF via llama.cpp server image, ~6 GB VRAM; prompt per crop), `pdftext` (vector pages). Same crops (above-staff bar-number region, left part-label region). Metrics:
   - bar numbers: read value ∈ GT measure numbers and monotonic per page; downstream bar-alignment error
   - part labels: fuzzy match to GT part names

@@ -178,6 +178,28 @@ def cmd_bench(cfg: dict, args) -> int:
     return 1 if problems else 0
 
 
+def cmd_components(cfg: dict, args) -> int:
+    from datetime import datetime
+
+    from . import components as C
+
+    results = Path(cfg["results_dir"])
+    if args.show:
+        run_root = results / args.show / "runs" / args.run
+        truth = C.truth_bars(args.show, results)
+        out = results / args.show / "components"
+    else:
+        run_root = results / "samples" / "bench" / args.run
+        truth = C.sample_truth_bars(Path(cfg["data_dir"]))
+        out = results / "samples" / "components"
+    if not (run_root / "pipeline").is_dir():
+        raise SystemExit(f"no pipeline work dirs in {run_root}")
+    out = out / (args.id or datetime.now().strftime("%Y%m%d-%H%M%S"))
+    C.layout_bench(cfg, run_root, truth, out, int(cfg.get("dpi", 300)))
+    print(f"report: {out / 'layout.md'}")
+    return 0
+
+
 def cmd_check(cfg: dict, args) -> int:
     from . import project
 
@@ -261,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-awake", "--keep_awake", action="store_true", help="with --transcribe")
     p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn per part (slow)")
     p.add_argument("--bench-id", help="name of the folder in results/<show>/bench/ (default: timestamp)")
+    p = sub.add_parser("components", help="component benchmarks on a finished pipeline run (layout)")
+    p.add_argument("what", choices=["layout"])
+    p.add_argument("show", nargs="?", help="show in data/ (runs in results/<show>/runs/); omit for samples "
+                                          "(runs in results/samples/bench/)")
+    p.add_argument("--run", required=True, help="run folder with pipeline/<id> work dirs and _pages/")
+    p.add_argument("--id", help="name of the report folder (default: timestamp)")
     p = sub.add_parser("check", help="validate data/<show>/songs.xlsx and show the resolved parts")
     p.add_argument("show", help="show in data/ (e.g. anastasia) or its folder")
     p.add_argument("--songs", help="comma-separated sheet names (default: all)")
@@ -280,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg["data_dir"] = str(Path(args.data).resolve())
         cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
     return {"doctor": cmd_doctor, "images": cmd_images, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "transcribe": cmd_transcribe, "check": cmd_check, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+            "transcribe": cmd_transcribe, "check": cmd_check, "components": cmd_components, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

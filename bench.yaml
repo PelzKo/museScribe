@@ -42,6 +42,9 @@ engines:
   pipeline-clarity:       # pipeline with Clarity's staff reader on single staves and grand staves, homr on larger groups
     type: pipeline
     recognizer: clarity
+  pipeline-ola:           # pipeline + OLA's measure count per system as one more bar-count vote (P6 layout)
+    type: pipeline
+    measure_vote: ola
   # level 2 of the recognizer comparison (PLAN_full.md P6): same crops, bars as read, no repairs
   pipeline-raw: {type: pipeline, repairs: false}
   pipeline-zeus-raw: {type: pipeline, recognizer: zeus, repairs: false}
