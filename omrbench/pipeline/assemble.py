@@ -124,8 +124,23 @@ def audiveris_bars(books: list[etree._Element], systems: list[System], D: int
             bs = B.part_bars(part, D, "audiveris")
             pos = 0
             for k, c in zip(idx, counts):
-                out[(k, pi + 1)] = bs[pos:pos + c]
+                seg = bs[pos:pos + c]
+                col = _fold_multirests(seg)
+                # Audiveris writes a multi-rest as the count bar + count-1 empty bars; one bar
+                # per stack lets its count meet homr's (the printed count expands it later)
+                out[(k, pi + 1)] = col if len(col) == len(systems[k].stacks) != len(seg) else seg
                 pos += c
+    return out
+
+
+def _fold_multirests(bars: list[B.Bar]) -> list[B.Bar]:
+    out, skip = [], 0
+    for b in bars:
+        if skip and b.rest_only:
+            skip -= 1
+            continue
+        skip = max(b.multirest - 1, 0)
+        out.append(b)
     return out
 
 
@@ -256,6 +271,11 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             # decide it (homr splits bars at dashed barlines / long notes); more numbers
             # than stacks means Audiveris missed a barline
             n, how = a_n, "audiveris"
+        if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
+                and a_n == len(sy.stacks) and any(st.special == "MULTI_REST" for st in sy.stacks):
+            # homr splits systems with multi-measure rests (at the key changes between them,
+            # or the count read as a note): Audiveris' stacks are the better count there
+            n, how = a_n, "audiveris"
         if n == 0 and sy.staves:
             # neither engine found a bar: a staff of multi-measure rests ("5" over "5-9").
             # One rest bar; expand_multirests / resegment_rest_systems count it out
@@ -336,6 +356,10 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     with_notes = [(s, b) for s, b in cands if not b.rest_only]
                     cands = with_notes + [c for c in cands if c not in with_notes]
                 ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
+                if len(sy.stacks) == n and sy.stacks[i].special == "MULTI_REST" and options.get("audiveris") \
+                        and options["audiveris"][i].rest_only:
+                    # Audiveris' multi-rest: homr reads the printed count above it as notes
+                    ok = [c for c in cands if c[0] == "audiveris"]
                 if pick_mode == "fallback" and any(not s.startswith("alt:") for s, _ in ok):
                     ok = [c for c in ok if not c[0].startswith("alt:")]
                 if pick_mode == "agree-keep":

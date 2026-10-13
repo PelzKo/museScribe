@@ -135,8 +135,8 @@ def _mask(page: Page, img_path: Path, out: Path) -> None:
     canvas.save(out)
 
 
-def _finish(page: Page, img_path: Path, raw: list[dict]) -> list[dict]:
-    """Words in image pixels -> page coordinates, with the multi-rest flag."""
+def _multirest_check(page: Page, img_path: Path):
+    """multirest_below(x, w, bottom) in page coordinates: a multi-measure rest bar under a word."""
     with Image.open(img_path) as im0:
         im = im0.convert("L")
     sx = im.width / page.width if page.width else 1.0
@@ -155,10 +155,16 @@ def _finish(page: Page, img_path: Path, raw: list[dict]) -> list[dict]:
         x0, x1 = int((cx - 1.5 * il) * sx), int((cx + 1.5 * il) * sx)
         if x0 < 0 or y0 < 0 or x1 >= im.width or y1 >= im.height:
             return False
-        need = 0.6 * il * sx
+        need = 0.45 * il * sx    # bar thickness: Ghost (Finale) multi-rests are ~0.5 il
         cols = sum(1 for xx in range(x0, x1) if sum(px[xx, yy] < 128 for yy in range(y0, y1)) >= need)
         return cols >= 0.8 * (x1 - x0)
 
+    return multirest_below, sx
+
+
+def _finish(page: Page, img_path: Path, raw: list[dict]) -> list[dict]:
+    """Words in image pixels -> page coordinates, with the multi-rest flag."""
+    multirest_below, sx = _multirest_check(page, img_path)
     words = []
     for r in raw:
         if r["conf"] < MIN_CONF:
@@ -198,9 +204,9 @@ def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) ->
 def _text_layer(page: Page, pdf_page) -> list[dict]:
     """Words of a vector PDF page's text layer that lie in the strips, in page coordinates.
 
-    shortcut: digits drawn as music-font glyphs (multi-rest counts, SMuFL time-signature digits)
-    are not in the text layer and multirest is always False; map SMuFL digits if vector scores
-    lose multi-rest counts.
+    shortcut: digits drawn as music-font glyphs (SMuFL multi-rest / time-signature digits) are not
+    in the text layer; map SMuFL digits if vector scores lose multi-rest counts. The multirest
+    flag is set from the page image in read_pages.
     """
     sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
     strips = _strips(page)
@@ -297,6 +303,10 @@ def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | N
 
     def one(i: int) -> list[dict]:
         if i in vector:
+            if i < len(images):     # multi-rest counts in the text layer (Ghost parts): flag them
+                below, _ = _multirest_check(pages[i], images[i])
+                for w in vector[i]:
+                    w["multirest"] = below(w["x"], w["w"], w["y"] + w["h"])
             return vector[i]
         f = cache / f"page{i + 1:02d}.json"
         if f.exists():
