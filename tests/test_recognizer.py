@@ -74,3 +74,10 @@ def test_bar_similarity():
     from omrbench.pipeline import bars as B
     a = B.rest_bar(1, 16, 4)
     assert B.similarity(B.signature(a), B.signature(a)) == 1.0   # rests only: both empty
+
+
+def test_fold_audiveris_multirests():
+    from omrbench.pipeline import bars as B
+    bars = [B.rest_bar(1, 16, 4) for _ in range(5)]
+    bars[1].multirest = 3                        # count bar + 2 empty bars, then one more bar
+    assert len(A._fold_multirests(bars)) == 3
