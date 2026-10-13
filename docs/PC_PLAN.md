@@ -166,6 +166,10 @@ Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (m
   homr is the best reader at every level. Level 1 runs via `omrbench transcribe --engine homr|audiveris`; level 2 by
   reassembling finished work dirs with a `repairs: false` entry (no reader rerun).
   Note: `omrbench transcribe --engine X` overwrites `results/<show>/<song>/`; back it up or rerun `pipeline` after.
+- P6 layout and OCR components done (2026-10-13), see `PLAN_full.md` Phase 6: OLA (layout) and EasyOCR / docTR /
+  PaddleOCR / Qwen2.5-VL (bar numbers) all lose to the current Audiveris layout + Tesseract on Anastasia.
+  Open in P6: runtime + memory in `omrbench bench` reports (planned, not built), part-label / rehearsal OCR.
+  Next: P7 (routing + ensemble); gated SMT models (`HF_TOKEN`) at the end.
 - tromr and tfe2e skipped: homr's transformer is derived from TrOMR, and tfe2e (PrIMuS CRNN) reads monophonic
   incipits only; neither is likely to beat homr or Zeus anywhere.
 Next: P5 rest (clarity's staff stage), then P6. P6 also covers the recognizer comparison without homr tuning
