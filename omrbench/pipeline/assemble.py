@@ -272,9 +272,11 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             # than stacks means Audiveris missed a barline
             n, how = a_n, "audiveris"
         if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
-                and a_n == len(sy.stacks) and any(st.special == "MULTI_REST" for st in sy.stacks):
+                and a_n == len(sy.stacks) and any(st.special == "MULTI_REST" for st in sy.stacks) \
+                and max(st.right for st in sy.staves) - sy.stacks[-1].right < 8 * il:
             # homr splits systems with multi-measure rests (at the key changes between them,
-            # or the count read as a note): Audiveris' stacks are the better count there
+            # or the count read as a note): Audiveris' stacks are the better count there,
+            # unless they stop short of the staff end (a missed barline)
             n, how = a_n, "audiveris"
         if n == 0 and sy.staves:
             # neither engine found a bar: a staff of multi-measure rests ("5" over "5-9").
@@ -289,8 +291,16 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             plans.append(plan)
             continue
         # x-range per bar: Audiveris stacks if they match, else an even split
+        staff_right = max(s.right for s in sy.staves) if sy.staves else 0
         if len(sy.stacks) == n:
             plan.xs = [(s.left, s.right) for s in sy.stacks]
+        elif sy.stacks and len(sy.stacks) < n and staff_right - sy.stacks[-1].right >= 8 * il:
+            # Audiveris missed the last barline(s): its stacks for the bars they cover, the
+            # rest of the staff split among the bars it missed
+            left, extra = sy.stacks[-1].right, n - len(sy.stacks)
+            w = (staff_right - left) / extra
+            plan.xs = [(s.left, s.right) for s in sy.stacks] + \
+                [(left + i * w, left + (i + 1) * w) for i in range(extra)]
         else:
             left = sy.stacks[0].left if sy.stacks else min(s.left for s in sy.staves)
             right = sy.stacks[-1].right if sy.stacks else max(s.right for s in sy.staves)
@@ -356,10 +366,13 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     with_notes = [(s, b) for s, b in cands if not b.rest_only]
                     cands = with_notes + [c for c in cands if c not in with_notes]
                 ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
-                if len(sy.stacks) == n and sy.stacks[i].special == "MULTI_REST" and options.get("audiveris") \
-                        and options["audiveris"][i].rest_only:
-                    # Audiveris' multi-rest: homr reads the printed count above it as notes
-                    ok = [c for c in cands if c[0] == "audiveris"]
+                st_i = sy.stacks[i] if i < len(sy.stacks) else None
+                if st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right):
+                    # Audiveris' multi-rest (its stack kept for this bar): homr reads the printed
+                    # count above it as notes. Its rest bar, else a rest bar of the right length
+                    ab_i = options["audiveris"][i] if options.get("audiveris") else None
+                    ok = [("audiveris", ab_i)] if ab_i is not None and ab_i.rest_only else \
+                        [("rest", B.rest_bar(len(group), length, D))]
                 if pick_mode == "fallback" and any(not s.startswith("alt:") for s, _ in ok):
                     ok = [c for c in ok if not c[0].startswith("alt:")]
                 if pick_mode == "agree-keep":
