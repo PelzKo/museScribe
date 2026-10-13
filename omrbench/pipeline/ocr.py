@@ -325,6 +325,14 @@ def _overlaps(a: Text, x: float, y: float, w: float, h: float) -> bool:
     return a.x < x + w and x < a.x + a.w and a.y < y + h and y < a.y + a.h
 
 
+def _covers(a: Text, x: float, y: float, w: float, h: float) -> bool:
+    """Audiveris text `a` covers at least half of the word's box (it read that word already). Not
+    any overlap: a tempo text just above a multi-rest count touches the count's box."""
+    ix = min(a.x + a.w, x + w) - max(a.x, x)
+    iy = min(a.y + a.h, y + h) - max(a.y, y)
+    return ix > 0 and iy > 0 and ix * iy >= 0.5 * w * h
+
+
 def supplement(page: Page, words: list[dict]) -> int:
     """Add the bar-evidence words that no Audiveris text covers. Returns the number added."""
     added = 0
@@ -343,7 +351,11 @@ def supplement(page: Page, words: list[dict]) -> int:
             continue        # lone digits are mostly note heads, fingerings, tuplet marks
         if h > 1.8 * il and not wd.get("multirest"):
             continue        # count-sized but no multi-rest under it: notes read as digits
-        if any(_overlaps(a, x, y, w, h) for a in old):
+        # Audiveris read it already. A multi-rest count: an overlapping text with the same number,
+        # or one that mostly covers it; a tempo text ("c. 130)") just above it touches its box (Ghost)
+        digits = re.sub(r"\D", "", t)
+        if any(_overlaps(a, x, y, w, h) and (not wd.get("multirest") or re.sub(r"\D", "", a.value) == digits
+                                             or _covers(a, x, y, w, h)) for a in old):
             continue
         kind = "number" if t.isdigit() else "word"
         page.texts.append(Text(page.number, 0, x, y, w, h, t, kind, role="", font="ocr"))
