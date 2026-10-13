@@ -392,7 +392,12 @@ class Pipeline(Engine):
         if tess is None:
             LOG.warning("tesseract not found (PATH or Audiveris jars): bar numbers from the text layer only")
         t0 = time.perf_counter()
-        words = ocr.read_pages(pages, images, tess, ocr_dir, pdf=pdf)
+        engine = self.cfg.get("ocr_engine", "tesseract")
+        if engine != "tesseract":
+            # own cache per engine (component benchmark); the default keeps `ocr/`
+            ocr_dir = ocr_dir.with_name(f"ocr-{engine}")
+        words = ocr.read_pages(pages, images, tess, ocr_dir, pdf=pdf, engine=engine,
+                               device=self.bench.get("device", "cpu"))
         added = sum(ocr.supplement(p, w) for p, w in zip(pages, words))
         LOG.info(f"bar-number OCR: {added} text items added on {len(words)} pages "
                  f"in {time.perf_counter() - t0:.0f}s")

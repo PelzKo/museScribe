@@ -30,6 +30,8 @@ LOG = logmod.get("components")
 
 def ola_boxes(run_root: Path, wd: Path, images: list[Path], device: str) -> tuple[dict, RunStats | None]:
     """{page image file name: boxes} for the pages of one work dir; cached in <wd>/ola/boxes.json."""
+    run_root, wd = run_root.resolve(), wd.resolve()     # mounted at their own paths
+    images = [i.resolve() for i in images]
     out = wd / "ola" / "boxes.json"
 
     def by_name(d):
@@ -183,3 +185,52 @@ def report(data: dict) -> str:
                      f"OLA {exact['ola_measures']}; mean abs error Audiveris {mae['aud_measures']:.1f}, "
                      f"OLA {mae['ola_measures']:.1f}.")
     return "\n".join(lines) + "\n"
+
+
+def ocr_bench(run_root: Path, truth: dict[str, int], engines: list[str], out_dir: Path) -> dict:
+    """Bar-number tokens per OCR engine from the caches a pipeline run with `ocr_engine: X`
+    left in <workdir>/ocr-X/ (tesseract: <workdir>/ocr/). A plain number is plausible when it lies
+    in 1..truth bars; ranges count when both ends do. Runtime / memory from the engine's run.json."""
+    import re
+    from .pipeline.ocr import KEEP, _EDGE
+
+    rows = []
+    for eng in engines:
+        tot = {"engine": eng, "parts": 0, "tokens": 0, "plausible": 0, "wall_s": 0.0, "peak_rss_mb": 0.0,
+               "peak_gpu_mem_mb": 0.0}
+        for wd in sorted(p for p in (run_root / "pipeline").iterdir() if p.is_dir()):
+            cache = wd / ("ocr" if eng == "tesseract" else f"ocr-{eng}")
+            pages = sorted(cache.glob("page[0-9][0-9].json"))
+            if not pages:
+                continue
+            tot["parts"] += 1
+            n_bars = truth.get(wd.name)
+            for f in pages:
+                for w in json.loads(f.read_text()):
+                    t = _EDGE.sub("", w["text"].strip())
+                    if not t or not KEEP.match(t) or not re.search(r"\d", t):
+                        continue
+                    tot["tokens"] += 1
+                    nums = [int(n) for n in re.findall(r"\d+", t)]
+                    if n_bars and all(1 <= n <= n_bars for n in nums):
+                        tot["plausible"] += 1
+            run = cache / "run.json"
+            if run.exists():
+                r = json.loads(run.read_text())
+                tot["wall_s"] += r.get("wall_s") or 0
+                tot["peak_rss_mb"] = max(tot["peak_rss_mb"], r.get("peak_rss_mb") or 0)
+                tot["peak_gpu_mem_mb"] = max(tot["peak_gpu_mem_mb"], r.get("peak_gpu_mem_mb") or 0)
+        rows.append(tot)
+    data = {"run": str(run_root), "time": datetime.now().isoformat(timespec="seconds"), "rows": rows}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "ocr.json").write_text(json.dumps(data, indent=1))
+    lines = [f"# OCR components ({data['time']})", "", f"Pipeline run: `{run_root}`. Bar-number tokens = words "
+             "that look like bar evidence (97, 15-17, 131A); plausible = all numbers in 1..truth bars. "
+             "Tesseract runs on the host (no time recorded here).", "",
+             "| engine | parts | bar-number tokens | plausible | time s | peak RAM MB | peak VRAM MB |", "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        share = f"{r['plausible']} ({r['plausible'] / r['tokens']:.0%})" if r["tokens"] else "0"
+        lines.append(f"| {r['engine']} | {r['parts']} | {r['tokens']} | {share} | {r['wall_s']:.0f} | "
+                     f"{r['peak_rss_mb']:.0f} | {r['peak_gpu_mem_mb']:.0f} |")
+    (out_dir / "ocr.md").write_text("\n".join(lines) + "\n")
+    return data

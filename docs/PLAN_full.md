@@ -119,6 +119,27 @@ Only metrics derivable from GT MusicXML + PDF.
   - part labels: fuzzy match to GT part names
   - rehearsal marks: set match with GT `<rehearsal>`
 - Results to `results/samples/components/<ts>/report.md` + json.
+  **OCR done 2026-10-13 (bar numbers):** pipeline `ocr_engine: tesseract|easyocr|doctr|paddle` (bench entries
+  `pipeline-easyocr` / `-doctr` / `-paddle`; caches `<workdir>/ocr-<engine>/`, images `omrbench/ocr:easyocr1.7.2-doctr0.11`
+  on the Clarity image and `omrbench/paddle:3.3` CPU; paddleocr 3.0.x pins pandas 1.5.3, no py3.12 wheel).
+  `omrbench components ocr <show> --run <run>` counts bar-number tokens per engine with time / RAM / VRAM.
+  Anastasia 1/2/4A (reassembled from the same work dirs; vector pages keep the PDF text layer):
+
+  | engine | note F1 | bar-number tokens (plausible) | time s | peak RAM MB | peak VRAM MB |
+  |---|---|---|---|---|---|
+  | tesseract (default) | **0.955** | 1015 (96 %) | host | – | – |
+  | easyocr | 0.944 | 930 (98 %) | 311 | 1354 | 6662 |
+  | doctr | 0.948 | 1169 (96 %) | 296 | 1715 | 1998 |
+  | paddle (CPU) | 0.948 | 1228 (96 %) | 1104 | 7364 | – |
+
+  Each wins 1–3 parts and loses 3–5; the word filters in `ocr.supplement` (MIN_CONF, lone digits) were tuned on
+  Tesseract, same caveat as the reader comparison. Tesseract stays.
+  **Qwen2.5-VL-7B** (Q4_K_M GGUF, llama.cpp `server-cuda` pinned by digest `sha256:c4348afb…`, 7.3 GB VRAM,
+  ~1–2 s per strip): reads the strip numbers correctly where Tesseract misses them (every-bar numbers 6 7 8 9,
+  [to] 14 15 16 17), but its `bbox_2d` through llama.cpp is not in image coordinates (nonlinear, compressed), so it
+  can't place numbers on bars. Follow-up if bar alignment errors matter: ask per Audiveris bar segment (position
+  known), ~4000 requests for Anastasia 1/2/4A. Expected gain small (7 parts with wrong bar counts, ~0.01 total F1).
+  Part labels and rehearsal marks: not benchmarked yet (Audiveris text is used).
 - **Recognizer comparison without homr tuning** (user request 2026-10-13). The `pipeline` repairs were tuned on
   homr output: `_vote` (assemble.py) breaks a 1-vs-1 tie between Audiveris and the crop reader in favour of the crop
   reader, homr's courtesy-signature rest bar is dropped, multirests and bar numbers are fixed around homr's habits.

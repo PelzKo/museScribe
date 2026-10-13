@@ -42,6 +42,9 @@ IMAGES = {
     "mozart": ("omrbench/mozart:a51c9d7", "mozart", {"BASE_IMAGE": "omrbench/base:cpu"}),
     # layout component (P6): built on the Clarity image (Ultralytics + CUDA torch already there)
     "ola": ("omrbench/ola:2.0", "ola", {"BASE_IMAGE": "omrbench/clarity:c6bb8a4"}),
+    # OCR component (P6): EasyOCR + docTR on the Clarity image; PaddleOCR (CPU) on its own
+    "ocr": ("omrbench/ocr:easyocr1.7.2-doctr0.11", "ocr", {"BASE_IMAGE": "omrbench/clarity:c6bb8a4"}),
+    "paddle": ("omrbench/paddle:3.3", "paddle", {"BASE_IMAGE": "omrbench/base:cpu"}),
 }
 # GPU check: a CUDA base image that only has nvidia-smi
 GPU_PROBE_IMAGE = "nvidia/cuda:12.6.3-base-ubuntu24.04"

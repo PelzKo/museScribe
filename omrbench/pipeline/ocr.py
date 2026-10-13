@@ -121,8 +121,8 @@ def _strips(page: Page) -> list[tuple[float, float, float, float]]:
     return out
 
 
-def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) -> list[dict]:
-    """Words read in the strips around the staves, in page coordinates."""
+def _mask(page: Page, img_path: Path, out: Path) -> None:
+    """The page with everything but the strips around the staves painted white."""
     with Image.open(img_path) as im0:
         im = im0.convert("L")
     sx = im.width / page.width if page.width else 1.0
@@ -132,7 +132,14 @@ def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) ->
                min(im.width, int(x1 * sx)), min(im.height, int(y1 * sx)))
         if box[2] > box[0] and box[3] > box[1]:
             canvas.paste(im.crop(box), box[:2])
-    canvas.save(tmp)
+    canvas.save(out)
+
+
+def _finish(page: Page, img_path: Path, raw: list[dict]) -> list[dict]:
+    """Words in image pixels -> page coordinates, with the multi-rest flag."""
+    with Image.open(img_path) as im0:
+        im = im0.convert("L")
+    sx = im.width / page.width if page.width else 1.0
     staves = sorted((st for sy in page.systems for st in sy.all_staves), key=lambda s: s.top)
     px = im.load()
 
@@ -152,23 +159,40 @@ def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) ->
         cols = sum(1 for xx in range(x0, x1) if sum(px[xx, yy] < 128 for yy in range(y0, y1)) >= need)
         return cols >= 0.8 * (x1 - x0)
 
+    words = []
+    for r in raw:
+        if r["conf"] < MIN_CONF:
+            continue
+        x, y, w, h = r["x"] / sx, r["y"] / sx, r["w"] / sx, r["h"] / sx
+        words.append({"text": r["text"], "conf": r["conf"], "x": x, "y": y, "w": w, "h": h,
+                      "multirest": multirest_below(x, w, y + h)})
+    return words
+
+
+def _tesseract(img: Path, tess: tuple[str, dict]) -> list[dict]:
+    """Tesseract's words in image pixels."""
     exe, env = tess
-    r = subprocess.run([exe, str(tmp), "stdout", "--psm", "11", "-l", "eng",
+    r = subprocess.run([exe, str(img), "stdout", "--psm", "11", "-l", "eng",
                         "-c", "tessedit_create_tsv=1"],
                        capture_output=True, text=True, env=env, timeout=300)
-    tmp.unlink(missing_ok=True)
     words = []
     for row in csv.DictReader(io.StringIO(r.stdout), delimiter="\t", quoting=csv.QUOTE_NONE):
         try:
-            if row.get("level") != "5" or float(row["conf"]) < MIN_CONF:
+            if row.get("level") != "5":
                 continue
-            x, y = int(row["left"]) / sx, int(row["top"]) / sx
-            w, h = int(row["width"]) / sx, int(row["height"]) / sx
-            words.append({"text": row["text"], "conf": float(row["conf"]), "x": x, "y": y,
-                          "w": w, "h": h, "multirest": multirest_below(x, w, y + h)})
+            words.append({"text": row["text"], "conf": float(row["conf"]), "x": int(row["left"]),
+                          "y": int(row["top"]), "w": int(row["width"]), "h": int(row["height"])})
         except (KeyError, TypeError, ValueError):
             continue
     return words
+
+
+def _read_page(page: Page, img_path: Path, tess: tuple[str, dict], tmp: Path) -> list[dict]:
+    """Words read in the strips around the staves, in page coordinates."""
+    _mask(page, img_path, tmp)
+    raw = _tesseract(tmp, tess)
+    tmp.unlink(missing_ok=True)
+    return _finish(page, img_path, raw)
 
 
 def _text_layer(page: Page, pdf_page) -> list[dict]:
@@ -219,14 +243,57 @@ def text_layer_pages(pages: list[Page], pdf: Path) -> dict[int, list[dict]]:
                 if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"}
 
 
+# OCR engines other than Tesseract (component benchmark, PLAN_full.md P6): image key, `ocr-words` engine
+ENGINES = {"easyocr": "ocr", "doctr": "ocr", "paddle": "paddle"}
+CPU_ONLY = {"paddle"}    # the paddle image has the CPU build of PaddlePaddle
+
+
+def _engine_pages(pages: list[Page], images: list[Path], todo: list[int], cache: Path,
+                  engine: str, device: str) -> None:
+    """Read the masked pages `todo` with a container OCR engine (one call), cache as JSON."""
+    from .. import containers
+    cache = cache.resolve()     # mounted at its own path in the container
+    if engine in CPU_ONLY:
+        device = "cpu"
+    masks = {i: cache / f"page{i + 1:02d}-mask.png" for i in todo}
+    for i, m in masks.items():
+        _mask(pages[i], images[i], m)
+    out = cache / "words.json"
+    st = containers.run_in_container(
+        containers.IMAGES[ENGINES[engine]][0],
+        ["ocr-words", "--engine", engine, "--out", str(out), "--device", device, *map(str, masks.values())],
+        workdir=cache, log_path=cache / "ocr.log", gpu=device == "cuda",
+        env={} if device == "cuda" else {"CUDA_VISIBLE_DEVICES": ""})
+    raw = json.loads(out.read_text()) if out.exists() else {}
+    if not raw:     # not cached: the next run retries
+        LOG.warning(f"{engine} read nothing (exit {st.exit_code}); see {cache / 'ocr.log'}")
+        for m in masks.values():
+            m.unlink(missing_ok=True)
+        return
+    stats = json.loads((cache / "stats.json").read_text()) if (cache / "stats.json").exists() else {}
+    for i, m in masks.items():
+        (cache / f"page{i + 1:02d}.json").write_text(json.dumps(_finish(pages[i], images[i], raw.get(m.name, []))))
+        m.unlink(missing_ok=True)
+    # runtime / memory of the OCR call, for the component report
+    (cache / "run.json").write_text(json.dumps({"engine": engine, "pages": len(todo), **stats}))
+    out.unlink(missing_ok=True)
+
+
 def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | None, cache: Path,
-               jobs: int = 4, pdf: Path | None = None) -> list[list[dict]]:
+               jobs: int = 4, pdf: Path | None = None, engine: str = "tesseract",
+               device: str = "cpu") -> list[list[dict]]:
     """Words per page; cached as JSON in `cache` (reassemble reuses them).
 
-    With `pdf`, vector pages use the PDF text layer instead of Tesseract (tess may then be None).
+    With `pdf`, vector pages use the PDF text layer instead of the OCR (tess may then be None).
+    engine: tesseract, or a container engine of ENGINES.
     """
     cache.mkdir(parents=True, exist_ok=True)
     vector = text_layer_pages(pages, pdf) if pdf is not None else {}
+    if engine != "tesseract":
+        todo = [i for i in range(min(len(pages), len(images)))
+                if i not in vector and not (cache / f"page{i + 1:02d}.json").exists()]
+        if todo:
+            _engine_pages(pages, images, todo, cache, engine, device)
 
     def one(i: int) -> list[dict]:
         if i in vector:
@@ -234,7 +301,7 @@ def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | N
         f = cache / f"page{i + 1:02d}.json"
         if f.exists():
             return json.loads(f.read_text())
-        if tess is None or i >= len(images):
+        if tess is None or i >= len(images) or engine != "tesseract":
             return []
         words = _read_page(pages[i], images[i], tess, cache / f"page{i + 1:02d}-mask.png")
         f.write_text(json.dumps(words))

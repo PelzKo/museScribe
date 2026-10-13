@@ -195,8 +195,12 @@ def cmd_components(cfg: dict, args) -> int:
     if not (run_root / "pipeline").is_dir():
         raise SystemExit(f"no pipeline work dirs in {run_root}")
     out = out / (args.id or datetime.now().strftime("%Y%m%d-%H%M%S"))
-    C.layout_bench(cfg, run_root, truth, out, int(cfg.get("dpi", 300)))
-    print(f"report: {out / 'layout.md'}")
+    if args.what == "ocr":
+        C.ocr_bench(run_root, truth, ["tesseract", "easyocr", "doctr", "paddle"], out)
+        print(f"report: {out / 'ocr.md'}")
+    else:
+        C.layout_bench(cfg, run_root, truth, out, int(cfg.get("dpi", 300)))
+        print(f"report: {out / 'layout.md'}")
     return 0
 
 
@@ -283,8 +287,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-awake", "--keep_awake", action="store_true", help="with --transcribe")
     p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn per part (slow)")
     p.add_argument("--bench-id", help="name of the folder in results/<show>/bench/ (default: timestamp)")
-    p = sub.add_parser("components", help="component benchmarks on a finished pipeline run (layout)")
-    p.add_argument("what", choices=["layout"])
+    p = sub.add_parser("components", help="component benchmarks on a finished pipeline run (layout, ocr)")
+    p.add_argument("what", choices=["layout", "ocr"],
+                   help="layout: OLA vs Audiveris; ocr: bar-number tokens per OCR engine (from the caches "
+                        "of pipeline runs with ocr_engine: X on the same run)")
     p.add_argument("show", nargs="?", help="show in data/ (runs in results/<show>/runs/); omit for samples "
                                           "(runs in results/samples/bench/)")
     p.add_argument("--run", required=True, help="run folder with pipeline/<id> work dirs and _pages/")
