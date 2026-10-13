@@ -42,6 +42,12 @@ engines:
   pipeline-clarity:       # pipeline with Clarity's staff reader on single staves and grand staves, homr on larger groups
     type: pipeline
     recognizer: clarity
+  # level 2 of the recognizer comparison (PLAN_full.md P6): same crops, bars as read, no repairs
+  pipeline-raw: {type: pipeline, repairs: false}
+  pipeline-zeus-raw: {type: pipeline, recognizer: zeus, repairs: false}
+  pipeline-smt-raw: {type: pipeline, recognizer: smt-sys, repairs: false}
+  pipeline-transcoda-raw: {type: pipeline, recognizer: transcoda, repairs: false}
+  pipeline-clarity-raw: {type: pipeline, recognizer: clarity, repairs: false}
   clarity:                # Clarity-OMR, whole PDF -> MusicXML; piano-tuned (container only)
     type: clarity
     # beam_width: 5         # default 5; 2 is ~2x faster on CPU

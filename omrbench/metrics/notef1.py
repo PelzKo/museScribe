@@ -10,6 +10,9 @@ Variants:
   pc      pitch class instead of pitch, without duration (octave-insensitive: singer parts
           whose octave convention differs, treble vs treble-8vb)
   rhythm  without pitch (onset and duration right; the fair one for percussion)
+  aligned the full tuple, but bars matched by the best monotonic alignment instead of by index:
+          a missing or extra bar costs only its own notes, not every bar after it (reading quality
+          without bar bookkeeping; for comparing readers without the pipeline's repairs)
 
 Sounding pitch = written pitch + the part's <transpose> (chromatic, octave-change). Unpitched
 notes have no pitch: for them `notes`/`pitch` compare rhythm only. Cue notes, grace notes and
@@ -23,7 +26,7 @@ from fractions import Fraction
 from lxml import etree
 
 _STEP = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
-VARIANTS = ("notes", "pitch", "pc", "rhythm")
+VARIANTS = ("notes", "pitch", "pc", "rhythm", "aligned")
 
 
 def _num(el, path, default="0") -> Fraction:
@@ -90,10 +93,27 @@ def prf(tp: int, n_pred: int, n_truth: int) -> dict:
     return {"precision": p, "recall": r, "f1": f, "tp": tp, "pred": n_pred, "truth": n_truth}
 
 
+def aligned(pred: list, truth: list) -> dict:
+    """Note F1 with bars aligned by dynamic programming (max matched notes, order kept)."""
+    def by_bar(ns):
+        bars: dict[int, Counter] = {}
+        for n in ns:
+            bars.setdefault(n[0], Counter())[_key(n, "notes")[1:]] += 1
+        return [bars.get(i, Counter()) for i in range(max(bars) + 1)] if bars else []
+    a, b = by_bar(pred), by_bar(truth)
+    prev = [0] * (len(b) + 1)
+    for ca in a:
+        cur = [0]
+        for j, cb in enumerate(b):
+            cur.append(max(prev[j + 1], cur[j], prev[j] + (sum((ca & cb).values()) if ca and cb else 0)))
+        prev = cur
+    return prf(prev[-1], len(pred), len(truth))
+
+
 def compare(pred: list, truth: list) -> dict:
     """{variant: prf} for two note lists (see `notes`)."""
-    out = {}
-    for v in VARIANTS:
+    out = {"aligned": aligned(pred, truth)}
+    for v in VARIANTS[:-1]:
         a = Counter(_key(n, v) for n in pred)
         b = Counter(_key(n, v) for n in truth)
         out[v] = prf(sum((a & b).values()), len(pred), len(truth))

@@ -118,6 +118,27 @@ Only metrics derivable from GT MusicXML + PDF.
   3. **full pipeline**: as now (`pipeline`, `pipeline-<recognizer>`).
   The level 2 → 3 gain shows how much of homr's lead is tuning. Generic guards that help every reader
   (e.g. reject a crop with more bars than 2x the Audiveris stacks) go into level 3 for all readers.
+  **Done 2026-10-13 (PC, Anastasia 1/2/4A):** `repairs: false` pipeline switch (bench entries `pipeline-raw`,
+  `pipeline-<reader>-raw`; default path byte-identical on all 41 parts), and a bar-aligned note F1 (`aligned`,
+  metrics/notef1.py: bars matched by DP instead of index, so one missing bar doesn't zero the rest of a part).
+  Level 1 page engines only cover single-instrument parts (no doubling/percussion/piano-reduction split), so the
+  table is on the 27 parts every level has output for (bench ids `pc-lvl1-*`, `cmp-l2-*`, `cmp-l3-*`):
+
+  | level | reader | note F1 (bars by index) | bar-aligned |
+  |---|---|---|---|
+  | 1 page | Audiveris | 0.234 | 0.473 |
+  | 1 page | homr | 0.398 | 0.631 |
+  | 2 crops, no repairs | homr | 0.644 | 0.957 |
+  | 2 crops, no repairs | Clarity | 0.520 | 0.889 |
+  | 2 crops, no repairs | Zeus | 0.501 | 0.765 |
+  | 3 full pipeline | homr | 0.976 | 0.980 |
+  | 3 full pipeline | Clarity | 0.723 | 0.904 |
+  | 3 full pipeline | Zeus | 0.640 | 0.785 |
+
+  All 41 parts, aligned, level 2: homr 0.907, Clarity 0.806, Zeus 0.682, SMT 0.592. Per part, Zeus/Clarity beat homr
+  on 2 parts each (Pauken, Crotales / Frauen, 4A Keyboard 2) and lose on 30+. Conclusion: homr is the best reader
+  even without tuning; the Audiveris-layout crops add the most (level 1 -> 2), the repairs mostly fix bar counts
+  (index score 0.64 -> 0.98, aligned 0.96 -> 0.98). Keep tuning homr + the shared repairs.
 - **Runtime and memory in every benchmark** (user request 2026-10-13). `omrbench run` reports already show runtime per
   page and peak RSS, but `omrbench bench` (shows) does not, and long-lived workers (homr pool, Zeus/SMT/Transcoda
   batch containers) only report host-side numbers. Goal: per engine and part, wall time, CPU time, peak RAM

@@ -313,7 +313,9 @@ class Pipeline(Engine):
         # the recognizer's name (e.g. "homr") stands for its crops
         prefer = ["crop" if s in rec.split("+") else s for s in prefer]
         self.last_prefer = prefer
-        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats)
+        # repairs: false = level 2 of the recognizer comparison (PLAN_full.md P6): crop bars as read
+        repairs = bool(self.cfg.get("repairs", True))
+        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
@@ -324,8 +326,9 @@ class Pipeline(Engine):
         # ground truths here); estimated = beat estimated from its x position
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
-        A.expand_multirests(plans, crop_bars, D, stats)
-        if self.cfg.get("align_bar_numbers", True):
+        if repairs:
+            A.expand_multirests(plans, crop_bars, D, stats)
+        if repairs and self.cfg.get("align_bar_numbers", True):
             A.align_bars(plans, D, stats, LOG)
         beam = bool(self.cfg.get("auto_beam", True))
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))

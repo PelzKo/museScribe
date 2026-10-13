@@ -162,6 +162,10 @@ Open: `PRAIG/smt-fp-mozarteum` and `-polish-scores` are gated on Hugging Face (m
   (docker/clarity/crops.py; stage A skipped, a grand staff split at its emptiest row, joined back into one part).
   Samples: pr-1 0.881, pr-4a 1.000, lindenbaum 0.960 (homr pipeline 0.942 / 1.000 / 0.986). Full Anastasia
   1/2/4A: 0.696 (bench `pc-pipeline-clarity`); only 4A Keyboard 2 is better than homr (1.000 vs 0.983).
+- P6 recognizer comparison done (2026-10-13): three levels + bar-aligned note F1, see `PLAN_full.md` Phase 6.
+  homr is the best reader at every level. Level 1 runs via `omrbench transcribe --engine homr|audiveris`; level 2 by
+  reassembling finished work dirs with a `repairs: false` entry (no reader rerun).
+  Note: `omrbench transcribe --engine X` overwrites `results/<show>/<song>/`; back it up or rerun `pipeline` after.
 - tromr and tfe2e skipped: homr's transformer is derived from TrOMR, and tfe2e (PrIMuS CRNN) reads monophonic
   incipits only; neither is likely to beat homr or Zeus anywhere.
 Next: P5 rest (clarity's staff stage), then P6. P6 also covers the recognizer comparison without homr tuning

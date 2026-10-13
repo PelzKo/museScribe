@@ -204,7 +204,9 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
 
 
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
-                 stats: Stats) -> list[SysPlan]:
+                 stats: Stats, raw: bool = False) -> list[SysPlan]:
+    """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
+    bars only for groups whose crop failed. For comparing readers without homr tuning."""
     systems = [sy for p in pages for sy in p.systems]
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
@@ -226,16 +228,19 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
         a_n = max((len(v) for v in a_bars.values() if v), default=0) or None
         h_bars = {gi: crop.get((k, gi)) for gi in range(len(groups))}
         il = sy.staves[0].interline
-        if sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
+        if not raw and sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
             # homr reads the courtesy key/time signature after the last barline as a rest
             # bar of its own; Audiveris leaves that space out of its stacks
             for gi, v in h_bars.items():
                 if v and len(v) == len(sy.stacks) + 1 and v[-1].rest_only:
                     h_bars[gi] = v[:-1]
         h_ns = [len(v) for v in h_bars.values() if v]
-        n, how = _vote(a_n, h_ns)
+        if raw:
+            n, how = (Counter(h_ns).most_common(1)[0][0], "crop") if h_ns else (a_n or 0, "audiveris")
+        else:
+            n, how = _vote(a_n, h_ns)
         sy_labels = labels.get(id(sy), [])
-        if a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
+        if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
                 and a_n == len(sy.stacks) >= 2 and len(sy_labels) <= a_n \
                 and _numbered_stacks(sy, sy_labels) >= max(a_n - 1, 2):
             # one homr reading against Audiveris is a tie: parts that number every bar
@@ -273,6 +278,20 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
+            if raw:
+                src, s = (h_bars.get(gi), "crop") if h_bars.get(gi) else (a_bars.get(gi), "audiveris")
+                chosen = []
+                for i in range(n):
+                    if src and i < len(src):
+                        bar = copy.deepcopy(src[i])
+                    else:
+                        s = "rest"
+                        bar = B.rest_bar(len(group), B.bar_length(plan.times[i], D), D)
+                    stats.bars[s] += 1
+                    bar.staves = max(bar.staves, len(group))
+                    chosen.append(bar)
+                plan.chosen[gi] = chosen
+                continue
             hb = h_bars.get(gi) if h_bars.get(gi) and len(h_bars[gi]) == n else None
             ab = a_bars.get(gi) if a_bars.get(gi) and len(a_bars[gi]) == n else None
             order = prefer

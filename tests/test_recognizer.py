@@ -51,3 +51,20 @@ def test_engine_device_override(tmp_path):
     assert homr.device == "cpu" and homr.env()["CUDA_VISIBLE_DEVICES"] == ""   # homr: CPU by default
     assert R.build("pipeline", {"homr": {"device": "cuda"}}, bench).engine.device == "cuda"
     assert R.build("pipeline", {"recognizer": "zeus"}, bench).main.engine.device == "cuda"
+
+
+def test_plan_systems_raw_keeps_crop_bars():
+    from omrbench.pipeline import bars as B
+    from omrbench.pipeline.layout import Page, Stack, Staff, System
+    staff = Staff(id=1, part=0, top=100, bottom=140, left=0, right=1000)
+    sy = System(page=1, id=1, staves=[staff], stacks=[Stack(i, i * 250, (i + 1) * 250) for i in range(4)])
+    page = Page(number=1, width=1200, height=1600, systems=[sy])
+    D = 4
+    aud = {(0, 0): [B.rest_bar(1, 4 * D, D) for _ in range(4)]}
+    crop = {(0, 0): [B.rest_bar(1, 4 * D, D) for _ in range(7)]}
+    stats = A.Stats()
+    plan = A.plan_systems([page], aud, crop, D, ["crop", "audiveris"], stats, raw=True)[0]
+    assert plan.n == 7 and stats.bars["crop"] == 7
+    stats = A.Stats()
+    plan = A.plan_systems([page], aud, {}, D, ["crop", "audiveris"], stats, raw=True)[0]
+    assert plan.n == 4 and stats.bars["audiveris"] == 4   # crop failed: Audiveris bars

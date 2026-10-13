@@ -263,8 +263,9 @@ def _report(data: dict, prev: dict) -> str:
     lines = [f"# Bench {data['show']} ({data['time']})", "",
              f"Outputs: `{data['source']}`" + (f"; Δ vs bench {prev['_id']}" if delta else ""), "",
              "Note F1: notes = bar, staff, onset, sounding pitch, duration; pitch = without duration; "
-             "pc = pitch class; rhythm = without pitch.", ""]
-    hdr = ["song", "part", "truth", "bars", "notes F1", "P", "R", "pitch", "pc", "rhythm"]
+             "pc = pitch class; rhythm = without pitch; aligned = notes with bars matched by best "
+             "alignment instead of by index (reading quality without bar-count errors).", ""]
+    hdr = ["song", "part", "truth", "bars", "notes F1", "P", "R", "pitch", "pc", "rhythm", "aligned"]
     hdr += ["OMR-NED", "TEDn"] if full else []
     hdr += ["Δ notes"] if delta else []
     lines += ["| " + " | ".join(hdr) + " |", "|" + "---|" * len(hdr)]
@@ -278,7 +279,8 @@ def _report(data: dict, prev: dict) -> str:
             name = r["part"] + (f" ({', '.join(r['outputs'])})" if r["outputs"] else " (no output)")
             bars = f"{r['bars_pred']}/{r['bars_truth']}" + ("" if r["bars_pred"] == r["bars_truth"] else " ⚠")
             cells = [s["song"], name, r["truth"], bars, _f(m["notes"]["f1"]), _f(m["notes"]["precision"]),
-                     _f(m["notes"]["recall"]), _f(m["pitch"]["f1"]), _f(m["pc"]["f1"]), _f(m["rhythm"]["f1"])]
+                     _f(m["notes"]["recall"]), _f(m["pitch"]["f1"]), _f(m["pc"]["f1"]), _f(m["rhythm"]["f1"]),
+                     _f(m["aligned"]["f1"])]
             if full:
                 fr = r.get("full") or {}
                 cells += [_f(fr.get("omr_ned_all")), _f(fr.get("tedn"))]
@@ -288,13 +290,15 @@ def _report(data: dict, prev: dict) -> str:
             line(cells)
         m = s["metrics"]
         cells = [f"**{s['song']}**", "**all**", "", "", f"**{_f(m['notes']['f1'])}**", _f(m["notes"]["precision"]),
-                 _f(m["notes"]["recall"]), _f(m["pitch"]["f1"]), _f(m["pc"]["f1"]), _f(m["rhythm"]["f1"])]
+                 _f(m["notes"]["recall"]), _f(m["pitch"]["f1"]), _f(m["pc"]["f1"]), _f(m["rhythm"]["f1"]),
+                     _f(m["aligned"]["f1"])]
         cells += ["", ""] if full else []
         cells += [""] if delta else []
         line(cells)
     t = data["total"]
     lines += ["", f"**Total note F1 {_f(t['notes']['f1'])}** (P {_f(t['notes']['precision'])}, "
-                  f"R {_f(t['notes']['recall'])}; {t['notes']['truth']} truth notes)", ""]
+                  f"R {_f(t['notes']['recall'])}; {t['notes']['truth']} truth notes); "
+                  f"bar-aligned {_f(t['aligned']['f1'])}", ""]
     worst = sorted((r for r in data["rows"] if r["wrong_bars"]),
                    key=lambda r: (r["metrics"]["notes"]["f1"] or 0))
     if worst:
