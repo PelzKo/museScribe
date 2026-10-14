@@ -634,6 +634,8 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 # vocal scores box the bar number at the system start
                 plan.printed.setdefault(i, int(value))
                 continue
+            if value.isdigit():
+                continue        # a boxed bar number; the truth scores keep letters only
             d = etree.Element("direction", placement="above")
             etree.SubElement(etree.SubElement(d, "direction-type"), "rehearsal").text = value
             B.add_direction(plan.chosen[0][i], d, 0, 1)
@@ -1790,4 +1792,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     for c in el.findall("clef"):
                         state_clefs[int(c.get("number", "1"))] = B._clef(c)
                 m.append(el)
+            if g == len(p.bars) - 1:
+                # final barline, as in the truth scores (MuseScore adds none on import)
+                bl = etree.SubElement(m, "barline", location="right")
+                etree.SubElement(bl, "bar-style").text = "light-heavy"
     return root

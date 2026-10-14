@@ -223,6 +223,7 @@ class Pipeline(Engine):
         stats.crops_failed = len(todo)
         stats.failed_crops = [(k, gi, n, img, reasons.get((k, gi), [])) for k, gi, n, img in todo]
         LOG.info(f"{rec.name} done in {time.perf_counter() - t_h:.0f}s: {len(roots)}/{len(jobs)} crops read")
+        self._ensemble_crops(jobs, workdir, log, total)
 
         # 4. assemble
         t1 = time.perf_counter()
@@ -284,6 +285,23 @@ class Pipeline(Engine):
         images = sorted((run_root / "_pages" / sample.id / f"{dpi}dpi").glob("page*.png"))
         boxes, _ = components.ola_boxes(run_root, workdir, images, self.bench.get("device", "cpu"))
         return components.ola_measures(pages, images, boxes)
+
+    def _ensemble_crops(self, jobs: list, workdir: Path, log: Path, total: RunStats) -> None:
+        """`ensemble` readers read the same crops (first margin) into <workdir>/crops-<reader>/."""
+        for name in self.cfg.get("ensemble") or []:
+            edir = workdir / f"crops-{name}"
+            if edir.exists():
+                shutil.rmtree(edir)
+            edir.mkdir(parents=True)
+            rec = R._one(name, self.name, self.cfg, self.bench)
+            mine = []
+            for k, gi, n, img in jobs:
+                if rec.staves is None or n in rec.staves:
+                    shutil.copyfile(img, edir / img.name)
+                    mine.append((k, gi, n, edir / img.name))
+            t0 = time.perf_counter()
+            bad = sum(err is not None for _, err in rec.recognize(mine, edir, log, total, self.timeout_s))
+            LOG.info(f"ensemble {name}: {len(mine) - bad}/{len(mine)} crops read in {time.perf_counter() - t0:.0f}s")
 
     def ensemble_bars(self, workdir: Path, systems: list, D: int) -> dict | None:
         """`ensemble: [zeus, clarity, ...]`: bars of more crop readers, read from

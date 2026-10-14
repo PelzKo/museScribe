@@ -8,18 +8,19 @@ Ideas for making museScribe better, roughly in order of value. Status and result
 1. **More truth scores of different types.** Every new score type exposed bugs that the existing truth could not:
 Ghost 20 (first born-digital show) showed the multi-rest problem (0.538 -> 0.719 after fixes). Most valuable next:
 choir / vocal scores, drum parts, keyboard books, and songs with many instrument changes (Reed books).
-2. **One command for a new truth score.** `omrbench bench <show> --songs 20 --transcribe` exists, but linking the truth
+2. **One command for a new truth score.** (Partly done 2026-10-14: `omrbench check` suggests the `truth` cell of
+unmapped rows; the B2 cell is still typed by hand.) `omrbench bench <show> --songs 20 --transcribe` exists, but linking the truth
 needs a manual workbook edit (B2 + `truth` column). A helper that lists the truth parts, proposes the mapping
 from part / instrument names and prints the cells to paste would make a new truth score a five-minute job.
 3. **Regression samples from real failures.** Cut the systems that broke (Ghost Trumpet system 8, Reed system 1,
 Anastasia 2 Violin 1) into small samples with their truth bars, and test them in `pytest` via `reassemble()` on a
 stored work dir. Then a change that fixes Ghost can't silently break Anastasia again.
-4. **Metric for slash notation.** Ghost Guitar truth is 608 slash notes of 725. Compare slash noteheads on rhythm only
+4. **Metric for slash notation.** (Done 2026-10-14, `notef1.fold_slashes` / `edits.py`.) Ghost Guitar truth is 608 slash notes of 725. Compare slash noteheads on rhythm only
 (any note at that onset and duration matches), so the score reflects what can be read from the page.
-5. **Report what matters to the user.** Next to note F1: bar count right (yes/no), key and time signature changes,
+5. **Report what matters to the user.** (Done 2026-10-14: edit penalty, bars to fix, element F1 per category.) Next to note F1: bar count right (yes/no), key and time signature changes,
 dynamics, lyrics. A part with right notes but one missing bar is almost usable; the index-based note F1 calls it 0.
 The bar-aligned F1 is a start; a per-part "fix effort" estimate (bars to correct) would be closer to the real use.
-6. **Track results over time.** A small CSV / chart of total note F1 per show and commit (bench ids already exist), so
+6. **Track results over time.** (Done 2026-10-14: `results/<show>/bench/trend.csv`.) A small CSV / chart of total note F1 per show and commit (bench ids already exist), so
 regressions show up as a dip, not in a table diff.
 
 ## Pipeline quality

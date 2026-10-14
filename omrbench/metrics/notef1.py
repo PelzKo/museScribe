@@ -15,8 +15,10 @@ Variants:
           without bar bookkeeping; for comparing readers without the pipeline's repairs)
 
 Sounding pitch = written pitch + the part's <transpose> (chromatic, octave-change). Unpitched
-notes have no pitch: for them `notes`/`pitch` compare rhythm only. Cue notes, grace notes and
-rests are left out.
+(drum kit) notes are keyed by their staff position ("u:E4" = display step/octave = kit
+instrument), so simultaneous hits stay apart. Slash noteheads have no pitch (None): they are
+scored on rhythm only, and `fold_slashes` turns the output notes at a truth slash onset into one
+rhythm-only note. Cue notes, grace notes and rests are left out.
 """
 from __future__ import annotations
 
@@ -37,8 +39,9 @@ def _num(el, path, default="0") -> Fraction:
         return Fraction(default)
 
 
-def notes(part: etree._Element) -> list[tuple[int, int, Fraction, int | None, Fraction]]:
-    """(bar index, staff, onset, sounding midi or None, duration) of every sounding note."""
+def notes(part: etree._Element) -> list[tuple[int, int, Fraction, int | str | None, Fraction]]:
+    """(bar index, staff, onset, sounding midi | "u:<step><octave>" | None, duration) of every
+    sounding note (None = slash)."""
     out = []
     divisions = Fraction(1)
     shift = 0
@@ -66,11 +69,15 @@ def notes(part: etree._Element) -> list[tuple[int, int, Fraction, int | None, Fr
                 if grace or el.find("rest") is not None or el.find("cue") is not None \
                         or (el.find("type") is not None and el.find("type").get("size") == "cue"):
                     continue
-                p = el.find("pitch")
+                p, u = el.find("pitch"), el.find("unpitched")
                 midi = None
-                if p is not None:
+                if el.findtext("notehead", "").strip() == "slash":
+                    pass
+                elif p is not None:
                     midi = (_STEP.get(p.findtext("step", "C").strip(), 0) + int(_num(p, "alter"))
                             + 12 * (int(_num(p, "octave", "4")) + 1) + shift)
+                elif u is not None:
+                    midi = f"u:{u.findtext('display-step', '?').strip()}{u.findtext('display-octave', '?').strip()}"
                 out.append((mi, int(el.findtext("staff") or 1), onset, midi, dur))
     return out
 
@@ -83,7 +90,7 @@ def _key(n, variant: str):
         return bar, staff, onset, midi, dur
     if variant == "pitch":
         return bar, staff, onset, midi
-    return bar, staff, onset, midi % 12
+    return bar, staff, onset, midi % 12 if isinstance(midi, int) else midi
 
 
 def prf(tp: int, n_pred: int, n_truth: int) -> dict:
@@ -110,8 +117,19 @@ def aligned(pred: list, truth: list) -> dict:
     return prf(prev[-1], len(pred), len(truth))
 
 
+def fold_slashes(pred: list, truth: list) -> list:
+    """Output notes where the truth has slashes (same bar, staff, onset): one rhythm-only note per
+    (bar, staff, onset, duration), since a slash only says "play here for this long"."""
+    at = {n[:3] for n in truth if n[3] is None}
+    if not at:
+        return pred
+    out = [n for n in pred if n[:3] not in at]
+    return out + sorted({(*n[:3], None, n[4]) for n in pred if n[:3] in at})
+
+
 def compare(pred: list, truth: list) -> dict:
     """{variant: prf} for two note lists (see `notes`)."""
+    pred = fold_slashes(pred, truth)
     out = {"aligned": aligned(pred, truth)}
     for v in VARIANTS[:-1]:
         a = Counter(_key(n, v) for n in pred)

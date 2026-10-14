@@ -58,6 +58,9 @@ engines:
     ensemble: [zeus, clarity, smt-sys]
     ensemble_pick: agree-keep
     ensemble_weights: {crop: 0.91, audiveris: 0.47, "alt:clarity": 0.81, "alt:zeus": 0.68, "alt:smt-sys": 0.59}
+  pipeline-allreaders:    # base run of the full sweep grid: every crop reader's crops for the reassembled variants
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys, transcoda]
   # bar-number OCR engine (P6 OCR component); default ocr_engine: tesseract
   pipeline-easyocr: {type: pipeline, ocr_engine: easyocr}
   pipeline-doctr: {type: pipeline, ocr_engine: doctr}

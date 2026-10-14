@@ -232,6 +232,40 @@ def cmd_score(cfg: dict, args) -> int:
     return 0
 
 
+def cmd_sweep(cfg: dict, args) -> int:
+    from . import sweep
+
+    if args.resume or args.rebench or args.report_only:
+        plan = sweep.load_plan(cfg, args.id)
+        if args.report_only:
+            sweep.report(cfg, plan["shows"], plan["engines"], args.id)
+            return 0
+    else:
+        if sweep.plan_file(cfg, args.id).exists():
+            raise SystemExit(f"sweep '{args.id}' exists: continue it with --resume (or pick a new --id)")
+        if not args.shows:
+            raise SystemExit("name the shows, e.g. `omrbench sweep anastasia,ghost --id ID`")
+        engines = _csv(args.engines) or ([] if args.grid else
+                                         [n for n, s in (cfg.get("engines") or {}).items()
+                                          if (s or {}).get("enabled", True) is not False])
+        grids, reuse = [], {}
+        if args.grid:
+            variants = sweep.grid_engines(cfg, args.grid_base, args.grid)
+            grids.append({"base": args.grid_base, "grid": args.grid})
+            if args.grid_reuse:
+                if args.grid_reuse not in engines:
+                    engines.insert(0, args.grid_reuse)
+                reuse = {v: args.grid_reuse for v in variants if v != args.grid_reuse}
+            engines += [v for v in variants if v not in engines]
+        plan = {"shows": _csv(args.shows), "engines": engines, "grids": grids, "reuse": reuse,
+                "songs": _csv(args.songs), "full": args.full, "jobs": args.jobs}
+        sweep.save_plan(cfg, args.id, plan)
+    sweep.sweep(cfg, plan["shows"], plan["engines"], sweep_id=args.id, songs=plan["songs"],
+                full=plan["full"], jobs=args.jobs or plan["jobs"], force=args.force,
+                resume=args.resume, rebench=args.rebench, reuse=plan.get("reuse"))
+    return 0
+
+
 def cmd_report(_cfg: dict, args) -> int:
     from .report import write_report
 
@@ -287,6 +321,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-awake", "--keep_awake", action="store_true", help="with --transcribe")
     p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn per part (slow)")
     p.add_argument("--bench-id", help="name of the folder in results/<show>/bench/ (default: timestamp)")
+    p = sub.add_parser("sweep", help="every engine / variant on every truth song, then a ranking report")
+    p.add_argument("shows", nargs="?", help="comma-separated shows (e.g. anastasia,ghost); not with --resume")
+    p.add_argument("--id", required=True, help="sweep name: runs <id>-<engine>, report in results/sweeps/<id>/")
+    p.add_argument("--engines", help="comma-separated bench.yaml engines (default: all enabled; none with --grid)")
+    p.add_argument("--grid", help='variants of --grid-base, e.g. "recognizer=homr,clarity;repairs=true,false"')
+    p.add_argument("--grid-base", default="pipeline", help="engine the --grid variants start from")
+    p.add_argument("--grid-reuse", metavar="ENGINE",
+                   help="reassemble the --grid variants from ENGINE's work dirs (run first) instead of transcribing")
+    p.add_argument("--songs", help="comma-separated song ids (default: every song with truth)")
+    p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn (slow)")
+    p.add_argument("--jobs", type=int, help="PDFs at the same time")
+    p.add_argument("--force", action="store_true", help="redo PDFs the run folders already have")
+    p.add_argument("--report-only", action="store_true", help="only rebuild the report from existing benches")
+    p.add_argument("--resume", action="store_true",
+                   help="continue the saved sweep --id after a crash: skips finished engines and PDFs")
+    p.add_argument("--rebench", action="store_true", help="re-score the finished engines (no transcribing)")
     p = sub.add_parser("components", help="component benchmarks on a finished pipeline run (layout, ocr)")
     p.add_argument("what", choices=["layout", "ocr"],
                    help="layout: OLA vs Audiveris; ocr: bar-number tokens per OCR engine (from the caches "
@@ -314,7 +364,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg["data_dir"] = str(Path(args.data).resolve())
         cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
     return {"doctor": cmd_doctor, "images": cmd_images, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "transcribe": cmd_transcribe, "check": cmd_check, "components": cmd_components, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+            "transcribe": cmd_transcribe, "check": cmd_check, "components": cmd_components, "bench": cmd_bench, "score": cmd_score, "report": cmd_report,
+            "sweep": cmd_sweep}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

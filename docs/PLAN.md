@@ -62,6 +62,13 @@ omrbench check anastasia                          # validate the workbook
 omrbench transcribe anastasia --songs 1,2 [--run-id ID] [--jobs 2]
 omrbench bench anastasia [--songs 1] [--run ID] [--full]   # score against truth; --full adds OMR-NED + TEDn
 omrbench bench ghost --songs 20 --transcribe       # transcribe + score
+omrbench sweep anastasia,ghost --id ID [--engines a,b] [--grid "k=v1,v2;k2=..."] [--grid-reuse BASE] [--songs 1,1a]
+                                                   # every engine/variant -> transcribe (or reassemble from BASE) + bench,
+                                                   # then results/sweeps/ID/report.md (ranking, best per part / category)
+omrbench sweep --id ID --resume                    # after a crash: skips finished engines and PDFs
+omrbench sweep --id ID --rebench | --report-only   # re-score finished engines / rebuild the report
+python scripts/reassemble.py ghost --from WORKRUN --to NEWRUN [--engine pipeline-raw] [--songs 20]
+                                                   # assembly only, on a run's work dirs (~90 s)
 omrbench run --engines pipeline,homr --samples demo-*      # multi-engine run on data/samples
 omrbench components layout|ocr <show> --run <run>  # P6 component benchmarks
 bash scripts/smoke_docker.sh                       # demo sample through the containers
@@ -69,9 +76,9 @@ python -m pytest -q tests                          # no Docker needed; must pass
 python -m pyflakes omrbench tests                  # 4 old warnings: report.py, runner.py, _olimpic_tedn.py, pipeline/vocal.py
 ```
 
-Fast iteration: `PipelineEngine.reassemble(sample, workdir)` (`omrbench/pipeline/engine.py`) reruns only the
-assembly on a finished work dir (`results/<show>/runs/<id>/pipeline/<sid>/`). All Anastasia 1/2/4A parts take
-about 90 s. Use it for every assembly change; then `omrbench bench <show> --run <id>`.
+Fast iteration: `scripts/reassemble.py` (`PipelineEngine.reassemble`) reruns only the assembly on a finished
+work dir (`results/<show>/runs/<id>/pipeline/<sid>/`). All Anastasia 1/2/4A parts take about 90 s. Use it for
+every assembly change; then `omrbench bench <show> --run <id>`.
 
 Gotcha: `omrbench transcribe --engine X` overwrites `results/<show>/<song>/`. Back it up or rerun `pipeline` after.
 
@@ -105,9 +112,9 @@ Code map:
 - PDF kind: `omrbench/pdfkind.py`, per page `scan | scan+ocr | vector | vector-outlined | text`.
 - Converters: `omrbench/convert/kern.py` (**kern/bekern -> MusicXML via music21, header/terminator and
   spine-count repair), `convert/mozart.py`.
-- Metrics: `metrics/notef1.py` (note F1 by bar index + bar-aligned), `metrics/elements.py` (LCS per element
-  category, used by `run`), `metrics/omrned.py` (OMR-NED, musicdiff), `metrics/tedn.py`, `metrics/flags.py`.
-  `omrbench/bench.py` = show benchmark.
+- Metrics: `metrics/edits.py` (**edit penalty**, the headline), `metrics/notef1.py` (note F1 by bar index +
+  bar-aligned), `metrics/elements.py` (LCS F1 per element category), `metrics/omrned.py` (OMR-NED, musicdiff),
+  `metrics/tedn.py`, `metrics/flags.py`. `omrbench/bench.py` = show benchmark, `omrbench/sweep.py` = all engines.
 - Components: `omrbench/components.py`.
 
 Design rules:
@@ -159,7 +166,7 @@ Images (all built and verified on the PC, GPU visible where used):
 | Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "Xylophon" = placeholder for drum-set x-notes (Drums row truth `-`) |
 | Anastasia 4 | coming shortly (includes choir) | no | transcribed 2026-10-13, run `20261013-222736` |
 | Ghost 20 | `truth/#20 - I'm Outta Here_Fertig.mscz` | yes | 7377 truth notes (Anastasia 1/2/4A together: 2708) |
-| Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | **no** (finished, needs B2 + `truth` column) | not transcribed yet |
+| Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261013`) | TACET rows `-` |
 
 Theresa's earlier song 4 corrections are deleted and no longer relevant.
 
@@ -174,17 +181,25 @@ Most truth songs contain keyboard, guitar and drums; Anastasia 4 adds choir.
 
 ### Baselines (kept run dirs)
 
-| Show | Work dirs (reassemble from these) | Scored outputs | Bench id | Total note F1 | bar-aligned |
-|---|---|---|---|---|---|
-| Anastasia 1/2/4A | `results/anastasia/runs/20261013-020114` (also holds `crops-zeus`, `crops-clarity`, `crops-smt-sys`, `ocr-doctr/easyocr/paddle`, `ola` caches) | `runs/fix3` | `fix3` | **0.955** (1: 0.935, 2: 0.968, 4A: 0.985) | 0.957 |
-| Ghost 20 | `results/ghost/runs/ghost20-pc` | `runs/g20-fix3` | `g20-fix3` | **0.719** | 0.781 |
+Edit penalty = MuseScore actions to reach the truth (lower is better; section 6); "left" = penalty / typing the
+parts in from scratch.
+
+| Show | Work dirs (reassemble from these) | Scored outputs | Bench id | Edit penalty (left) | Total note F1 | bar-aligned |
+|---|---|---|---|---|---|---|
+| Anastasia 1/2/4A | `results/anastasia/runs/20261013-020114` (also holds `crops-zeus`, `crops-clarity`, `crops-smt-sys`, `ocr-doctr/easyocr/paddle`, `ola` caches) | `runs/fix4` | `edits-fix4` | **1528** (32.0 %) | **0.953** (1: 0.933, 2: 0.966, 4A: 0.985) | 0.955 |
+| Ghost 20 | `results/ghost/runs/ghost20-pc` | `runs/g20-fix4` | `edits-g20-fix4` | **3458** (35.7 %) | **0.705** | 0.766 |
+| Ghost 1a | `results/ghost/runs/g1a-base` | `runs/g1a-fix4` | `edits-g1a-fix4` | **235** (32.5 %) | 0.622 | 0.941 |
 | Ghost 11a (smoke, no truth) | `results/ghost/runs/ghost11a-final` | `runs/g11a-fix` | – | – | – |
 | Anastasia 4 | `results/anastasia/runs/20261013-222736` | | – | waits for truth | |
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
 
-Ghost 20 per part (note F1 / aligned): Violin 0.992, Cello 0.978, Bass 0.998, Reed 0.947, Trumpet 0.521 / 0.883
+Note F1 changed slightly on 2026-10-14: drum notes are keyed by staff position (was rhythm only) and truth
+slashes are scored on rhythm (Ghost 20 0.719 -> 0.705: Drums 0.481 -> 0.333, Guitar 0.067 -> 0.150).
+Ghost 1a: index note F1 0.622 vs aligned 0.941 = bar-count errors (Cello 25/28, Guitar 25/28, Piano 29/28).
+
+Ghost 20 per part (note F1 / aligned, before 2026-10-14): Violin 0.992, Cello 0.978, Bass 0.998, Reed 0.947, Trumpet 0.521 / 0.883
 (134/135 bars), **Guitar 0.067** (slash notation, 608 of 725 truth notes are slashes), **Utility (E-piano) 0.582**
 (pitch class 0.772: octave convention), **Drums 0.481** (692 notes out vs 1329; chords of hits lost),
 PianoReduction 0.856. Truth part "Voice 1" has no workbook row.
@@ -194,49 +209,32 @@ Triangle and Schlagzeug no output; several parts one bar short or long.
 
 ## 6. Metrics
 
-### Exists
+### Edit penalty (headline, `metrics/edits.py`)
 
-- `omrbench bench`: note F1 (bar index, staff, onset, sounding pitch, duration), pitch, pitch class, rhythm,
-  bar-aligned note F1 (DP bar matching), bars pred/truth, list of differing bars, runtime and memory per PDF
-  (time, s/page, CPU, peak RAM, peak VRAM; homr pool RAM is the shared pool's, VRAM is whole-GPU NVML).
-  `--full` adds OMR-NED (musicdiff edit cost) and TEDn.
-- `metrics/elements.py` (LCS F1 per category, only used by `omrbench run` on samples so far): notes, pitch,
-  rhythm, rests, clefs, keys, times, dynamics, hairpins, articulations, slurs, ties, lyrics, words (`<words>`),
-  tempo (`<metronome>`).
-- Not scored: grace notes and cue notes (excluded in `notef1.py`).
+Number of MuseScore actions that turn the output into the truth; minimise it. Every action costs 1 (user
+decisions 2026-10-13): a wrong note (pitch and/or duration) = 1 retype; a missing / made-up / changed / moved
+element (p -> f, fermata, slur, tie, hairpin, lyric, chord symbol, tuplet, tremolo, word, clef / key / time
+change, barline, repeat / volta / navigation, instrument change) = 1; rests free. Bars aligned by DP: delete an
+extra bar = 1 (contents go with it), insert a missing bar = 1 + its contents. A whole part off by an octave /
+transposition = 1 bulk action (the `shift` column; also logged as a warning). A part with no output = 1 (add the
+instrument; bars are score-wide) + contents = `from_scratch`. Rehearsal marks, tempi and system text
+(`system="only-top"` words in the truth, e.g. rit.) count once per song over the union of all output parts.
+Slash noteheads: rhythm only; drums: by staff position (kit instrument), simultaneous hits kept.
+Known limits: an octave-off *region* (Celesta after an instrument change in Ghost 20 Utility) is charged per
+note; a chord with a wrong duration costs one per note; split-instrument outputs compare instrument changes by
+position only.
 
-### To build (step 2 of section 8)
+### In `omrbench bench`
 
-Everything below goes into `omrbench bench` (report table, scores.json, metrics.csv), per part and totals.
+Per part, per song (+ system items) and total: edit penalty, from scratch, left %, bars to fix (insert / delete
+/ change), shift, penalty by category; note F1 (notes, pitch, pc, rhythm, aligned); element F1 per category
+(`musicxml.CATEGORIES`: notes, pitch, rhythm, rests, clefs, keys, times, dynamics, hairpins, articulations,
+slurs, ties, lyrics, words, tempo, fermatas, tuplets, tremolos, instruments, structure, barlines, rehearsal,
+chords, multirest, systemtext); runtime / memory per PDF; `--full` adds OMR-NED + TEDn. Every bench appends to
+`results/<show>/bench/trend.csv`. `omrbench check` suggests `truth` cells for rows without one.
 
-1. **Element F1 in bench**: wire `elements.element_scores` into `bench.py` (bar-aligned pairing), so every
-   category above is reported per part.
-2. **New categories** (new entries in `musicxml.CATEGORIES` + `Staff.seq`):
-   - `tuplets`: `<time-modification>` / `<tuplet>` as (bar, onset, actual:normal, span).
-   - `fermatas`: `<fermata>` on notes, rests and barlines.
-   - `tremolos`: `<ornaments><tremolo type=single|start|stop>` with stroke count.
-   - `instruments`: instrument changes per part as (bar, instrument / transposition). Must cover both output
-     forms: `<sound><instrument-change>` / mid-part `<transpose>`, and split parts (`split_instruments: true`,
-     where the change shows as which bars land in which part). First check what MuseScore writes for an
-     instrument change when exporting the truth `.mscz` (MuseScore drops them on import, see section 7).
-   - `structure`: repeats, voltas (endings), segno / coda / D.S. / D.C. / fine / to coda.
-   - `barlines`: double and final barlines.
-   - `rehearsal`: rehearsal marks; `chords`: chord symbols (`<harmony>`); `multirest`: multi-rest counts.
-3. **Bars to fix** (the headline number, matches the hand-correction workflow): after the DP bar alignment,
-   count per part
-   - bars to insert (truth bar with no output bar) and bars to delete (output bar with no truth bar),
-   - matched bars that differ in any scored element (notes, rests, ties, dynamics, articulations, ...),
-   - bars to fix = sum of the three, also as a share of the truth bars.
-   Next to it an **edit estimate**: per matched bar the note-level edit distance (insert / delete / change pitch /
-   change duration, same LCS as `elements.py`) plus element edits, summed per part. Cross-check against
-   OMR-NED from `--full` on a few parts (OMR-NED is the slow, exact musicdiff edit cost).
-4. **Octave check**: warn when output and truth differ by exactly one octave on most notes of a part
-   (E-piano / guitar / bass conventions; fix via the workbook `transpose`).
-5. **Slash notation**: score slash noteheads on rhythm only (any note at that onset and duration matches).
-6. **Drum kit**: score unpitched notes by (display step/octave or instrument, onset, duration), keeping
-   simultaneous hits; report per kit instrument.
-7. **Trend file**: one CSV line per bench id (show, commit, total note F1, aligned, bars to fix, edit estimate),
-   so regressions show as a dip.
+Not scored: grace notes and cue notes; per-kit-instrument drum report (penalty covers it).
+Open: cross-check the penalty against OMR-NED (`--full`) on a few parts.
 
 ## 7. Findings and learnings
 
@@ -314,7 +312,22 @@ with the current truth. Revisit only with new readers or truth of new score type
   (no sung / spoken text); `spoken_text: drop|text`; uncertain articulations / dynamics dropped; hairpins at most 2 bars.
 - Reed 2 song 2 bar 17: "(Flute)" is a cue label; parenthesised labels are ignored by the matcher unless `paren_aliases`.
 
+### What the edit penalty shows (2026-10-14, baselines fix4)
+
+- Anastasia 1/2/4A (1528): words 196, articulations 168, slurs 151, notes 156, ties 121, dynamics 115, barlines
+  ~130, systemtext 99, hairpins 89, structure (repeats) 68, keys 62. Notes are no longer the main cost.
+- Ghost 20 (3458): notes 2130 (Guitar slashes, Drums, Utility), ties 303, chords 253 (no chord symbols in the
+  output), slurs 217, articulations 203.
+- Pipeline outputs had no barlines at all (`bars.part_bars` drops them) and wrote boxed bar numbers as rehearsal
+  marks. Fixed 2026-10-14: final light-heavy barline on every part, numeric rehearsal marks dropped (Anastasia
+  -42, Ghost 20 -100, 1a -12). Double barlines and repeats (Audiveris reads some) are still not carried over.
+- `pipeline-ensemble*` used to read `crops-<reader>/` caches only, so on a fresh run it equalled `pipeline`; the
+  pipeline now runs the ensemble readers on the same crops itself.
+
 ### Open workbook / data items
+
+- Ghost 20 truth "Voice 1" = Oda Mae, not finished: workbook `unfinished: Voice 1` (bench skips it), PianoReduction
+  row already maps `Oda Mae=Voice 1`.
 
 - Drums song 4 p15 sys 1 (bars 90–97): upper staff Timpani, lower unlabeled = Triangle -> instruments cell
   `Triangle (lower_staff)`. Drums song 4 p17 sys 3 (bars 174–177): x-heads marked "sticks" are still Castanets;
@@ -328,42 +341,32 @@ with the current truth. Revisit only with new readers or truth of new score type
 
 ## 8. Next steps (in order)
 
-1. **Truth wiring.**
-   - Link Ghost 1a (B2 + `truth` column; back up `songs.xlsx` first) and transcribe + bench it.
-   - When the Anastasia 4 truth arrives: link it (incl. choir parts) and bench run `20261013-222736`.
-   - Build the truth-mapping helper (IMPROVEMENTS #2): list the truth parts, propose the mapping from names, print
-     the cells to paste. Every new hand-corrected song should take minutes to add.
-   - Add a workbook row for Ghost 20 "Voice 1" (or mark it `-`).
-2. **Metrics (section 6 "To build")**: element F1 in bench, tuplets, fermatas, tremolos, instrument changes,
-   structure / barlines / rehearsal / chords / multi-rest, **bars to fix + edit estimate**, octave check, slash
-   rhythm, drum kit, trend CSV. Each with a pytest on a tiny MusicXML pair. Then re-bench all baselines with
-   `--run` (no transcription needed) to get the new starting numbers.
+1. **Big run** (user decision 2026-10-13): a weed-out sweep of every engine on Anastasia 1 + 4A and Ghost 1a
+   (`--id weed`; 17 of 19 engines done when the PC crashed on 2026-10-14 in `smt-fp`; resume with
+   `omrbench sweep --id weed --resume`), then the full grid on all truth songs (`CHECKS.md` #1: base
+   `pipeline-allreaders` + 168 reassembled variants). Weed so far: `pipeline` 1186 = best within 0.3 %
+   (`ensemble-wk` 1182 at 18x the time); OCR variants within 1 %; other main readers 40-110 % worse; page
+   engines 2.3-4.3x worse. Open questions: `CHECKS.md`. Includes the gated SMT models once the Hugging Face access is approved
+   (`HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).
+2. **Truth wiring**: link Anastasia 4 when its truth arrives (incl. choir; `omrbench check` suggests the cells)
+   and bench run `20261013-222736`; remove `unfinished: Voice 1` from Ghost 20 when Oda Mae is done.
 3. **Regression safety** (IMPROVEMENTS #3): small regression samples from real failures (Ghost Trumpet system 8,
-   Reed system 1, Anastasia 2 Violin 1) with stored work dirs, checked in pytest via `reassemble()`. A Ghost fix
-   must not silently break Anastasia.
-4. **Quality work, biggest losses first** (decide from the bars-to-fix numbers of step 2; expected order):
-   - Ghost Guitar slash notation + chord symbols (IMPROVEMENTS #7, #11).
-   - Drums: kit mapping (staff line -> instrument), keep simultaneous hits, `x` heads (#8); Anastasia percussion
-     (Triangle, Mark Tree, Cymbal, Schlagzeug with no or bad output).
-   - Octave conventions for E-piano / guitar (#9); Utility part.
-   - Generic bar-count guards: reject a crop reading with more than 2x the Audiveris stacks (#10).
-   - Elements homr / the pipeline don't carry yet: tuplets, fermatas, tremolos, instrument changes, repeats /
-     voltas / navigation, 8va lines (truth is sounding pitch).
-   - MuseScore instrument mapping in the output (`<instrument-sound>` per part; #18).
-5. **Speed before the big run** (#13–#15): two songs in parallel (28 GB allows it), per-page Audiveris cache,
-   homr GPU fp32 with larger batches (re-bench before switching).
-6. **Big benchmark on the PC** (may take days): every engine and pipeline variant in `bench.yaml` on all linked
-   truth songs of both shows, `--full`, with runtime and memory. Includes the gated SMT models once the Hugging Face
-   access is approved (requested; needs `HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).
-7. **Routing / ensemble revisit** (P7): with choir, drums, keyboard and guitar truth, write the per-(score type x
-   pdfkind x element) matrix (`routing.yaml`) and route elements (e.g. text / chords from Audiveris or the text
-   layer, notes from homr) where another source wins. No leave-one-out needed (goal is these two shows).
-8. **Optional / later**: results viewer (page image, our bars, truth side by side; #16), `transcribe` refuses to start
-   on workbook errors (#17), README per song folder (#18), container script tests (`pytest -m docker`; #19), pin
-   remaining assets (Clarity weights on HF main, OCR model downloads; #20), native vector glyph parsing for born-digital
-   PDFs (#12: read SMuFL glyphs and drawn paths — staff lines, stems, beams — with PyMuPDF and rebuild the
-   notation geometrically; Ghost fonts are `Maestro` / `EngraverFontSet`), vector pages at a higher render dpi, report split by pdfkind, Qwen per-bar-segment
-   bar numbers, re-test the Audiveris parallel race on a newer Audiveris.
+   Reed system 1, Anastasia 2 Violin 1) with stored work dirs, checked in pytest via `reassemble()`.
+4. **Quality work, biggest penalty first** (from the sweep's "penalty by category"; current order):
+   - Ghost Guitar slash notation + chord symbols (IMPROVEMENTS #7, #11); chords 253 actions in Ghost 20.
+   - Drums: kit mapping, keep simultaneous hits (#8); Anastasia percussion without output (Triangle, Schlagzeug).
+   - Words / system text / dynamics / hairpins / ties / slurs: route from the best source per element.
+   - Barlines + repeats / voltas from Audiveris onto the output bars.
+   - Octave regions after instrument changes (Celesta in Ghost Utility; #9).
+   - Generic bar-count guards (#10); tuplets, fermatas, tremolos (homr reads single tremolos as two-note).
+   - MuseScore instrument mapping in the output (#18).
+5. **Speed** (#13–#15): two songs in parallel, per-page Audiveris cache, homr GPU fp32 with larger batches.
+6. **Routing / ensemble revisit** (P7): from the sweep's best-per-part and best-per-category tables, write
+   `routing.yaml` (score type x pdfkind x element).
+7. **Optional / later**: results viewer (#16), `transcribe` refuses to start on workbook errors (#17), README per
+   song folder (#18), container script tests (#19), pin remaining assets (#20), native vector glyph parsing for
+   born-digital PDFs (#12), vector pages at a higher render dpi, report split by pdfkind, Qwen per-bar-segment bar
+   numbers, re-test the Audiveris parallel race on a newer Audiveris.
 
 ## 9. Conventions
 

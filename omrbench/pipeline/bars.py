@@ -151,8 +151,9 @@ def _keep_direction(d: etree._Element) -> bool:
             if not re.fullmatch(r"\d{2,3}(\.\d+)?", (mm.findtext("per-minute") or "").strip()):
                 dt.remove(mm)
         for r in dt.findall("rehearsal"):
-            # Audiveris turns boxed labels ("Bell", "Glock mallets") into rehearsal marks
-            if not re.fullmatch(r"[A-Z0-9]{1,3}", (r.text or "").strip()):
+            # Audiveris turns boxed labels ("Bell", "Glock mallets") and boxed bar numbers
+            # into rehearsal marks; the truth scores keep letters only
+            if not re.fullmatch(r"[A-Z]{1,2}\d?", (r.text or "").strip()):
                 dt.remove(r)
         kids = [k for k in dt if k.tag in KEEP_DIRECTION_TYPES]
         if not kids:

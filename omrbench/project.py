@@ -9,6 +9,8 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
 
   A1 "title"  B1 <song title>
   A2 "truth"  B2 <truth file, relative to the show folder>   (optional; empty = no benchmark)
+  A3 "unfinished"  B3 <truth part names not hand-corrected yet, "Voice 1, Drum Kit"> (optional;
+               bench leaves them out until they are removed here)
   header row: file | pages | skip | instruments | extra | truth | notes
   file         PDF stem in pdfs/ (e.g. "Reed 1")
   pages        "11-16"; empty = part not in this song
@@ -21,8 +23,8 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   truth        part name(s) in the truth score this row is compared with (optional column)
   notes        ignored
 
-Every key/value row above the header (column A = key) is a song setting; `title` and
-`truth` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
+Every key/value row above the header (column A = key) is a song setting; `title`, `truth` and
+`unfinished` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
 `check` validates the workbook and shows what each part resolves to.
 """
 from __future__ import annotations
@@ -57,6 +59,7 @@ class Song:
     truth: Path | None
     parts: list[Part]
     errors: list[str] = field(default_factory=list)   # rows that could not be resolved
+    unfinished: list[str] = field(default_factory=list)   # truth parts not hand-corrected yet
 
 
 @dataclass
@@ -216,7 +219,8 @@ def load(folder: Path) -> Project:
         st = sheet["settings"]
         ctx = {"song": sid, "title": st.get("title", "")}
         folder_meta = {k: _fmt(v, ctx) for k, v in (show.get("meta") or {}).items()}
-        song = Song(sid, ctx["title"], folder / st["truth"] if st.get("truth") else None, [])
+        song = Song(sid, ctx["title"], folder / st["truth"] if st.get("truth") else None, [],
+                    unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()])
         for row in sheet["rows"]:
             if not row["pages"]:
                 continue
@@ -236,6 +240,26 @@ def truth_names(part: Part) -> list[str]:
     """The truth part names a row's `truth` cell refers to ("Out=Truth" -> Truth; "-" = none)."""
     names = [e.partition("=")[2].strip() if "=" in e else e.strip() for e in part.truth]
     return [n for n in names if n and n != "-"]
+
+
+def _suggest_truth(proj: Project, part: Part, tparts: dict[str, int]) -> str | None:
+    """A `truth` cell for a row without one: the cell the same PDF has in another song if all its
+    names are in this truth score, else the truth part names closest to the row's name /
+    instruments (truth parts with notes only)."""
+    import difflib
+
+    names = {" ".join(n.lower().split()): n for n, c in tparts.items() if c}
+    for other in proj.songs.values():
+        for p in other.parts:
+            if p.name == part.name and p.truth and all(
+                    n == "-" or " ".join(n.lower().split()) in names for n in truth_names(p)):
+                return ", ".join(p.truth)
+
+    def close(word: str) -> str:
+        hit = difflib.get_close_matches(word.lower(), list(names), n=1, cutoff=0.5)
+        return names[hit[0]] if hit else "-"
+    picks = [close(i) for i in part.instruments] if len(part.instruments) > 1 else [close(part.name)]
+    return ", ".join(picks) if any(p != "-" for p in picks) else None
 
 
 def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = False,
@@ -276,6 +300,13 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                 problem(f"ERROR    truth file {song.truth.name}: {e}")
         for e in song.errors:
             problem(f"ERROR    {e}")
+        if song.unfinished:
+            print(f"  note     unfinished truth parts (not scored): {', '.join(song.unfinished)}")
+            if tparts is not None:
+                known_t = {" ".join(n.lower().split()) for n in tparts}
+                for n in song.unfinished:
+                    if " ".join(n.lower().split()) not in known_t:
+                        problem(f"ERROR    unfinished: no part '{n}' in {song.truth.name}")
         for part in song.parts:
             if not part.pdf.exists():
                 problem(f"ERROR    {part.name}: {part.pdf} missing")
@@ -289,12 +320,14 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                 continue
             unknown = [i for i in part.instruments if i not in library]
             if song.truth and not part.truth:
-                problem(f"WARN     {part.name}: no `truth` part name (not benchmarked)")
+                hint = _suggest_truth(proj, part, tparts) if tparts else None
+                problem(f"WARN     {part.name}: no `truth` part name (not benchmarked)"
+                        + (f"; suggest: {hint}" if hint else ""))
             if tparts is not None:
                 known = {" ".join(n.lower().split()) for n in tparts}
-                for n in truth_names(part):
-                    if " ".join(n.lower().split()) not in known:
-                        problem(f"ERROR    {part.name}: no part '{n}' in {song.truth.name}")
+                for tn in truth_names(part):
+                    if " ".join(tn.lower().split()) not in known:
+                        problem(f"ERROR    {part.name}: no part '{tn}' in {song.truth.name}")
             info = f"{n:>2} pages ({part.meta['pages']})"
             if part.instruments:
                 info += f"  [{', '.join(part.instruments)}]"
@@ -313,6 +346,7 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                                encoding="utf-8")
         if tparts is not None:
             named = {" ".join(n.lower().split()) for p in song.parts for n in truth_names(p)}
+            named |= {" ".join(n.lower().split()) for n in song.unfinished}
             if rest := [f"{n} ({c})" for n, c in tparts.items()
                         if c and " ".join(n.lower().split()) not in named]:
                 print(f"  note     truth parts with notes no row names (notes): {', '.join(rest)}")
