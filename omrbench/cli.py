@@ -261,7 +261,7 @@ def cmd_sweep(cfg: dict, args) -> int:
                 "songs": _csv(args.songs), "full": args.full, "jobs": args.jobs}
         sweep.save_plan(cfg, args.id, plan)
     sweep.sweep(cfg, plan["shows"], plan["engines"], sweep_id=args.id, songs=plan["songs"],
-                full=plan["full"], jobs=args.jobs or plan["jobs"], force=args.force,
+                full=args.full or plan["full"], jobs=args.jobs or plan["jobs"], force=args.force,
                 resume=args.resume, rebench=args.rebench, reuse=plan.get("reuse"))
     return 0
 

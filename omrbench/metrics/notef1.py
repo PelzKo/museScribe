@@ -47,10 +47,12 @@ def notes(part: etree._Element) -> list[tuple[int, int, Fraction, int | str | No
     shift = 0
     for mi, measure in enumerate(part.findall("measure")):
         cur = last = Fraction(0)
+        if measure.find(".//instrument-change") is not None and measure.find("attributes/transpose") is None:
+            shift = 0       # MuseScore writes <transpose> only for a non-zero interval
         for el in measure:
             if el.tag == "attributes":
                 if el.findtext("divisions"):
-                    divisions = _num(el, "divisions", "1") or Fraction(1)
+                    divisions = _num(el, "divisions", "0") or divisions     # Audiveris writes <divisions>0
                 tr = el.find("transpose")
                 if tr is not None:
                     shift = int(_num(tr, "chromatic")) + 12 * int(_num(tr, "octave-change"))

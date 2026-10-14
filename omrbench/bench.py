@@ -45,6 +45,17 @@ def _norm(s: str) -> str:
     return " ".join(s.lower().split())
 
 
+def _unique(named: list[tuple]) -> list[tuple]:
+    """Page engines name every part alike ("Voice", "Voice"): number the repeats ("Voice #2"), so
+    each part is compared once."""
+    seen: dict[str, int] = {}
+    out = []
+    for n, *rest in named:
+        k = seen[_norm(n)] = seen.get(_norm(n), 0) + 1
+        out.append((n if k == 1 else f"{n} #{k}", *rest))
+    return out
+
+
 def resolve(part: project_mod.Part, outputs: list[tuple[str, object]]) -> tuple[dict, list[str], list[str]]:
     """Map the row's `truth` cell onto its output parts.
 
@@ -54,32 +65,33 @@ def resolve(part: project_mod.Part, outputs: list[tuple[str, object]]) -> tuple[
     mapping: dict[str, list[str]] = {}
     problems = []
     by_name = {_norm(n): n for n, _ in outputs}
+    unused = dict(by_name)      # an output part may feed several truth parts (duet label -> both)
     positional = []
     for entry in part.truth:
         out, eq, tru = entry.partition("=")
         if eq:
             out, tru = out.strip(), tru.strip()
+            unused.pop(_norm(out), None)
             if tru == "-":
-                by_name.pop(_norm(out), None)
                 continue
             if _norm(out) not in by_name:   # nothing read for it: scored as all missed
                 mapping.setdefault(tru, [])
                 continue
-            mapping.setdefault(tru, []).append(by_name.pop(_norm(out)))
+            mapping.setdefault(tru, []).append(by_name[_norm(out)])
         else:
             positional.append(entry.strip())
     if positional:
         if len(positional) == 1 and len(part.instruments) <= 1:
             # several output parts for one truth part (a page engine splitting a keyboard book):
             # compared together, like split instruments
-            names = [n for n, _ in outputs]
+            names = [n for n, _ in outputs if _norm(n) in unused]
             if positional[0] != "-":
                 mapping.setdefault(positional[0], []).extend(names)
             for n in names:
-                by_name.pop(_norm(n), None)
+                unused.pop(_norm(n), None)
         elif len(positional) == len(part.instruments):
             for inst, tru in zip(part.instruments, positional):
-                hit = by_name.pop(_norm(inst), None)
+                hit = unused.pop(_norm(inst), None)
                 if tru == "-":
                     continue
                 mapping.setdefault(tru, []).extend([hit] if hit else [])
@@ -88,7 +100,7 @@ def resolve(part: project_mod.Part, outputs: list[tuple[str, object]]) -> tuple[
                             f"names for {len(part.instruments) or len(outputs)} "
                             f"{'instruments' if part.instruments else 'output parts'}; "
                             "use 'Output=Truth' entries")
-    return mapping, sorted(by_name.values()), problems
+    return mapping, sorted(unused.values()), problems
 
 
 def _sum(rows: list[dict], variant: str) -> dict:
@@ -230,12 +242,13 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                     problems.append(f"{song.id}/{part.name}: no output in {src_root / song.id} "
                                     f"(omrbench transcribe {proj.name} --songs {song.id})")
                     LOG.error(problems[-1])
-                    outputs, oroots = [], []
+                    oroots = []
                 else:
                     oroots = [musicxml.load(f) for f in files]
                     song_roots += oroots
-                    outputs = [x for r in oroots for x in truth_mod.parts(r)]
-                owner = {n: r for r in oroots for n, _ in truth_mod.parts(r)}
+                named = _unique([(n, p, r) for r in oroots for n, p in truth_mod.parts(r)])
+                outputs = [(n, p) for n, p, _ in named]
+                owner = {n: r for n, _, r in named}
                 mapping, unmapped, probs = resolve(part, outputs)
                 problems += [f"{song.id}/{p}" for p in probs]
                 for p in probs:
@@ -258,6 +271,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                     pred = [n for o in onames for n in notef1.notes(el[o])]
                     tru = notef1.notes(tpart)
                     row = {"song": song.id, "part": part.name, "outputs": onames, "truth": tn,
+                           "split": len(files) > 1,      # piano reduction: Voices + Piano files
                            "bars_pred": max((len(el[o].findall("measure")) for o in onames), default=0),
                            "bars_truth": t_bars, "metrics": notef1.compare(pred, tru),
                            "wrong_bars": notef1.wrong_bars(pred, tru),
@@ -296,7 +310,9 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
     data["total"]["edits"] = _sum_edits(rows, [s["system"] for s in songs_out])
     data["total"]["elements"] = _sum_elements(rows)
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "scores.json").write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+    tmp = out_dir / "scores.json.tmp"      # the sweep report reads it: never half-written
+    tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(out_dir / "scores.json")
     _csv(out_dir / "metrics.csv", rows)
     _trend(root / "bench" / "trend.csv", out_dir.name, data)
     text = _report(data, prev)

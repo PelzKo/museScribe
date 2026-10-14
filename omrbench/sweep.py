@@ -135,6 +135,11 @@ def sweep(cfg: dict, shows: list[str], engines: list[str], *, sweep_id: str, son
     out.mkdir(parents=True, exist_ok=True)
     status_f = out / "status.json"
     status = json.loads(status_f.read_text()) if status_f.exists() else {}
+    if songs:
+        found = {i for show in shows for i in _truth_songs(cfg, show, songs)}
+        if missing := [s for s in songs if s not in found]:
+            LOG.warning(f"--songs {', '.join(missing)}: no song with a truth file in {', '.join(shows)} "
+                        "(song ids are case-sensitive: 4A, 1a)")
     for engine in engines:
         for show in shows:
             sel = _truth_songs(cfg, show, songs)
@@ -143,6 +148,9 @@ def sweep(cfg: dict, shows: list[str], engines: list[str], *, sweep_id: str, son
             run_id = f"{sweep_id}-{engine}"
             key = f"{show}/{engine}"
             done = (status.get(key) or {}).get("ok")
+            if done and resume and not rebench and status[key].get("failed_pdfs"):
+                LOG.info(f"=== {key}: {status[key]['failed_pdfs']} PDF(s) failed earlier, retried")
+                done = False
             if done and not rebench and (resume or not force):
                 LOG.info(f"=== {key}: finished earlier, skipped")
                 continue
@@ -208,23 +216,33 @@ def _engines_of(cfg: dict, shows: list[str], sweep_id: str) -> list[str]:
 
 def report(cfg: dict, shows: list[str], engines: list[str] | None, sweep_id: str) -> Path:
     engines = engines or _engines_of(cfg, shows, sweep_id)
-    data = _load(cfg, shows, engines, sweep_id)
     out = Path(cfg["results_dir"]) / "sweeps" / sweep_id
     out.mkdir(parents=True, exist_ok=True)
     status = json.loads((out / "status.json").read_text()) if (out / "status.json").exists() else {}
+    # a failed (re)bench leaves an older scores.json behind: not ranked, its error is listed
+    data = {e: d for e, by_show in _load(cfg, shows, engines, sweep_id).items()
+            if (d := {sh: x for sh, x in by_show.items() if (status.get(f"{sh}/{e}") or {"ok": True}).get("ok")})}
     # parts every engine was scored on, so totals compare like with like
     keys = {}
     for e, by_show in data.items():
-        keys[e] = {(sh, r["song"], r["part"], r["truth"]): r for sh, d in by_show.items() for r in d["rows"]}
+        # page engines can't write a piano reduction's Voices / Piano files: those rows leave the
+        # ranking (user decision 2026-10-14), for every engine via `common`
+        page = (cfg.get("engines", {}).get(e) or {}).get("type") != "pipeline"
+        keys[e] = {(sh, r["song"], r["part"], r["truth"]): r for sh, d in by_show.items() for r in d["rows"]
+                   if not (page and r.get("split"))}
     complete = [e for e in engines if e in keys]
     common = set.intersection(*(set(keys[e]) for e in complete)) if complete else set()
 
     def tot(e, field):
         return sum(keys[e][k]["edits"][field] for k in common)
 
+    songs = {(k[0], k[1]) for k in common}
+
+    def systems(e):
+        return [s["system"] for sh in shows if sh in data[e] for s in data[e][sh]["songs"] if (sh, s["song"]) in songs]
+
     def sys_pen(e):
-        return sum(s["system"]["penalty"] for sh in shows if sh in data[e]
-                   for s in data[e][sh]["songs"] if any(k[0] == sh and k[1] == s["song"] for k in common))
+        return sum(s["penalty"] for s in systems(e))
 
     def wall(e):
         return sum(p.get("wall_s") or 0 for d in data[e].values() for p in d.get("perf") or [])
@@ -234,20 +252,29 @@ def report(cfg: dict, shows: list[str], engines: list[str] | None, sweep_id: str
         n = sum(keys[e][k]["metrics"][variant]["pred"] + keys[e][k]["metrics"][variant]["truth"] for k in common)
         return 2 * tp / n if n else None
 
+    def ned(e):
+        # mean OMR-NED over the common parts (bench --full); None without it
+        v = [x for k in common if (x := (keys[e][k].get("full") or {}).get("omr_ned_all")) is not None]
+        return sum(v) / len(v) if v else None
+
+    show_ned = any(ned(e) is not None for e in complete)
     rank = sorted(complete, key=lambda e: tot(e, "penalty") + sys_pen(e))
-    scratch = sum(keys[rank[0]][k]["edits"]["from_scratch"] for k in common) if rank else 0
+    scratch = (sum(keys[rank[0]][k]["edits"]["from_scratch"] for k in common)
+               + sum(s["from_scratch"] for s in systems(rank[0]))) if rank else 0
     lines = [f"# Sweep {sweep_id}", "",
              f"Shows: {', '.join(shows)}; {len(common)} truth parts scored by all {len(complete)} engines "
              "(totals use only those). Penalty = MuseScore actions to turn the output into the truth "
              "(lower is better; `omrbench/metrics/edits.py`); system = rehearsal marks / tempi / system "
              f"text once per song. Typing every part in from scratch: {scratch} actions.", "",
              "## Ranking", "",
-             "| # | engine | penalty | parts | system | left | bars to fix | notes F1 | aligned | time s |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "| # | engine | penalty | parts | system | left | bars to fix | notes F1 | aligned | "
+             + ("OMR-NED | " if show_ned else "") + "time s |",
+             "|---" * (11 if show_ned else 10) + "|"]
     for i, e in enumerate(rank, 1):
         p, sp = tot(e, "penalty"), sys_pen(e)
         lines.append(f"| {i} | {e} | **{p + sp}** | {p} | {sp} | {_pct((p + sp) / scratch if scratch else None)} | "
-                     f"{tot(e, 'bars_to_fix')} | {_f(f1(e, 'notes'))} | {_f(f1(e, 'aligned'))} | {wall(e):.0f} |")
+                     f"{tot(e, 'bars_to_fix')} | {_f(f1(e, 'notes'))} | {_f(f1(e, 'aligned'))} | "
+                     + (f"{_f(ned(e))} | " if show_ned else "") + f"{wall(e):.0f} |")
     bad = {k: v for k, v in status.items() if not v.get("ok") and k.split("/", 1)[1] not in keys}
     missing = [e for e in engines if e not in keys]
     if bad or missing:
@@ -276,8 +303,9 @@ def report(cfg: dict, shows: list[str], engines: list[str] | None, sweep_id: str
             saved -= d
             lines.append(f"| {sh} | {part} | {best} | {g[best]} | "
                          f"{f'{second} ({g[second]})' if second else '-'} | {g[ref]} | {d:+d} |")
+        ref_pen = tot(ref, 'penalty') + sys_pen(ref)
         lines += ["", f"Routing per part would save {saved} actions "
-                      f"({_pct(saved / (tot(ref, 'penalty') + sys_pen(ref)) if rank else None)} of {ref}'s penalty)."]
+                      f"({_pct(saved / ref_pen if ref_pen else None)} of {ref}'s penalty)."]
 
         # per category
         cats: dict[str, dict[str, int]] = {}
@@ -286,11 +314,10 @@ def report(cfg: dict, shows: list[str], engines: list[str] | None, sweep_id: str
                 for c, v in keys[e][k]["edits"]["by_cat"].items():
                     cats.setdefault(c, {}).setdefault(e, 0)
                     cats[c][e] += v
-            for sh in shows:
-                for s in (data[e].get(sh) or {}).get("songs", []):
-                    for c, v in s["system"]["by_cat"].items():
-                        cats.setdefault(c, {}).setdefault(e, 0)
-                        cats[c][e] += v
+            for s in systems(e):
+                for c, v in s["by_cat"].items():
+                    cats.setdefault(c, {}).setdefault(e, 0)
+                    cats[c][e] += v
         lines += ["", "## Penalty by category", "",
                   "Where the actions go (top 5 engines); best per category in bold.", ""]
         top = rank[:5]

@@ -164,7 +164,7 @@ Images (all built and verified on the PC, GPU visible where used):
 | Anastasia 1 | `truth/01_Opening_Fanfare_and_Opening_Scene.mscz` | yes | |
 | Anastasia 2 | `truth/02_Prologue_Once_upon_a_december_fertig.mscz` | yes | Klavierauszug empty = not annotated (`Piano=-`) |
 | Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "Xylophon" = placeholder for drum-set x-notes (Drums row truth `-`) |
-| Anastasia 4 | coming shortly (includes choir) | no | transcribed 2026-10-13, run `20261013-222736` |
+| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | partial: Reed 2 / 3, Keyboard 2 and all percussion empty (rows without `truth`); soloists so far Dmitry, Vlad; 217 bars (expected 213); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output (tenor / baritone clef; 1 bulk shift each) |
 | Ghost 20 | `truth/#20 - I'm Outta Here_Fertig.mscz` | yes | 7377 truth notes (Anastasia 1/2/4A together: 2708) |
 | Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261013`) | TACET rows `-` |
 
@@ -186,11 +186,11 @@ parts in from scratch.
 
 | Show | Work dirs (reassemble from these) | Scored outputs | Bench id | Edit penalty (left) | Total note F1 | bar-aligned |
 |---|---|---|---|---|---|---|
-| Anastasia 1/2/4A | `results/anastasia/runs/20261013-020114` (also holds `crops-zeus`, `crops-clarity`, `crops-smt-sys`, `ocr-doctr/easyocr/paddle`, `ola` caches) | `runs/fix4` | `edits-fix4` | **1528** (32.0 %) | **0.953** (1: 0.933, 2: 0.966, 4A: 0.985) | 0.955 |
+| Anastasia 1/2/4A | `results/anastasia/runs/20261013-020114` (`ocr-doctr/easyocr/paddle`, `ola` caches; its `crops-zeus/clarity/smt-sys` links are broken since the `full-pipeline-*` runs were deleted: reassemble ensembles from `weed-pipeline-ensemble` with `--work-engine pipeline-ensemble`) | `runs/fix4` | `edits-fix4` | **1528** (32.0 %) | **0.953** (1: 0.933, 2: 0.966, 4A: 0.985) | 0.955 |
 | Ghost 20 | `results/ghost/runs/ghost20-pc` | `runs/g20-fix4` | `edits-g20-fix4` | **3458** (35.7 %) | **0.705** | 0.766 |
 | Ghost 1a | `results/ghost/runs/g1a-base` | `runs/g1a-fix4` | `edits-g1a-fix4` | **235** (32.5 %) | 0.622 | 0.941 |
 | Ghost 11a (smoke, no truth) | `results/ghost/runs/ghost11a-final` | `runs/g11a-fix` | – | – | – |
-| Anastasia 4 | `results/anastasia/runs/20261013-222736` | | – | waits for truth | |
+| Anastasia 4 | `results/anastasia/runs/20261013-222736` | same | `a4-first` | **6121** (30.4 %) | 0.667 | |
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
@@ -220,9 +220,10 @@ transposition = 1 bulk action (the `shift` column; also logged as a warning). A 
 instrument; bars are score-wide) + contents = `from_scratch`. Rehearsal marks, tempi and system text
 (`system="only-top"` words in the truth, e.g. rit.) count once per song over the union of all output parts.
 Slash noteheads: rhythm only; drums: by staff position (kit instrument), simultaneous hits kept.
-Known limits: an octave-off *region* (Celesta after an instrument change in Ghost 20 Utility) is charged per
-note; a chord with a wrong duration costs one per note; split-instrument outputs compare instrument changes by
-position only.
+A section one or two octaves off (Celesta after an instrument change in Ghost 20 Utility) = 1 action per section
+(`octave`, 2026-10-14). Known limits: a chord with a wrong duration costs one per note; split-instrument outputs
+compare instrument changes by position only; a dynamic printed in two overlaid split parts counts twice; a short
+(underfilled) output bar puts its final barline at a different onset (+1).
 
 ### In `omrbench bench`
 
@@ -312,6 +313,19 @@ with the current truth. Revisit only with new readers or truth of new score type
   (no sung / spoken text); `spoken_text: drop|text`; uncertain articulations / dynamics dropped; hairpins at most 2 bars.
 - Reed 2 song 2 bar 17: "(Flute)" is a cue label; parenthesised labels are ignored by the matcher unless `paren_aliases`.
 
+### Code review fixes (2026-10-14)
+
+Bench: page engines name every part alike ("Voice", "Voice"): only the last was scored, N times (weed rankings of
+audiveris, homr, clarity, transcoda wrong until `omrbench sweep --id weed --rebench`); one output part may feed two
+truth parts. Metrics: an instrument change without `<transpose>` resets the transposition (MuseScore writes it only
+when non-zero; Ghost 20 E-piano from bar 109 was an octave off), right barlines after `<backup>`, `<words>` runs
+joined, system marks prefer the truth's bar in a cluster. Pipeline: printed / boxed bar numbers at the system start
+count as bar-number evidence in all score types (Ghost 20 note F1 0.705 -> 0.736, Guitar / Drums 135 bars; Ghost 1a
+0.622 -> 0.745; Anastasia 2 Drums 76 -> 75 of 78, +5); ensemble readers' divisions in `D`; fallback Audiveris bars no
+longer get Audiveris directions twice; agree-keep KeyError on multi-rests; F# transposition. Sweep: `--resume`
+retries failed PDFs, `--full` on resume / rebench, failed rebench not ranked, totals include system from-scratch.
+Baselines with all of it (reassembled, not yet saved as runs): Anastasia 1531, Ghost 20 3360, Ghost 1a 232.
+
 ### What the edit penalty shows (2026-10-14, baselines fix4)
 
 - Anastasia 1/2/4A (1528): words 196, articulations 168, slurs 151, notes 156, ties 121, dynamics 115, barlines
@@ -342,11 +356,11 @@ with the current truth. Revisit only with new readers or truth of new score type
 ## 8. Next steps (in order)
 
 1. **Big run** (user decision 2026-10-13): a weed-out sweep of every engine on Anastasia 1 + 4A and Ghost 1a
-   (`--id weed`; 17 of 19 engines done when the PC crashed on 2026-10-14 in `smt-fp`; resume with
-   `omrbench sweep --id weed --resume`), then the full grid on all truth songs (`--id full`: base
-   `pipeline-allreaders` + 42 variants reassembled from it, Tesseract only). Weed so far: `pipeline` 1186 = best within 0.3 %
-   (`ensemble-wk` 1182 at 18x the time); OCR variants within 1 %; other main readers 40-110 % worse; page
-   engines 2.3-4.3x worse. Open questions: `CHECKS.md`. Includes the gated SMT models once the Hugging Face access is approved
+   (`--id weed`; 17 of 19 engines done, `smt-fp` stopped by the user 2026-10-14, `mozart` not run), then the
+   full grid on all truth songs incl. Anastasia 4 (`--id full --full`: base `pipeline-allreaders` + 42 variants
+   reassembled from it, Tesseract only, OMR-NED on every variant). Weed rebenched 2026-10-14 (page-engine part
+   names fixed, PianoReduction rows out of the ranking): `pipeline` 932 = `ensemble-wk` 932 (18x the time); OCR
+   variants within 1.5 %; other main readers 37-130 % worse; homr page 1697, Audiveris 2316, Clarity 2555. Open questions: `CHECKS.md`. Includes the gated SMT models once the Hugging Face access is approved
    (`HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).
 2. **Truth wiring**: link Anastasia 4 when its truth arrives (incl. choir; `omrbench check` suggests the cells)
    and bench run `20261013-222736`; remove `unfinished: Voice 1` from Ghost 20 when Oda Mae is done.

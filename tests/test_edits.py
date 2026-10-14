@@ -58,6 +58,15 @@ def test_whole_part_octave_is_one_bulk_action():
     assert e["penalty"] == 1 and e["shift"] == -12
 
 
+def test_octave_off_section_is_one_action():
+    up = note("C5") + note("D5") + note("E5") + note("F5")
+    t = part(Q4, Q4, Q4, Q4, Q4)
+    e = pen(part(Q4, up, "", up, Q4), t)     # bars 2-4 an octave up (bar 3 empty: part of the section)
+    assert e["penalty"] == 1 + 4 and e["by_cat"]["octave"] == 1 and e["shift"] == 0
+    e = pen(part(Q4, note("C5") + note("D4") + note("E4") + note("F4"), Q4), part(Q4, Q4, Q4))
+    assert e["penalty"] == 1 and "octave" not in e["by_cat"]       # one wrong note: retype, no section
+
+
 def test_dynamics_and_fermata():
     def dyn(d):
         return f'<direction><direction-type><dynamics><{d}/></dynamics></direction-type></direction>'
@@ -150,3 +159,30 @@ def test_system_text_in_every_output_part_is_not_made_up():
              for p in (p1, p2)]
     assert edits.system_penalty(roots, t)["penalty"] == 0
     assert edits.system_penalty(roots[:0], t)["by_cat"] == {"systemtext": 1}
+
+
+def test_barline_after_backup_and_split_words():
+    p = part(note("C4", 4) + "<backup><duration>4</duration></backup>"
+             + '<direction><direction-type><words>Spoken</words><words> line</words></direction-type></direction>'
+             + '<barline location="right"><bar-style>light-heavy</bar-style></barline>')
+    ev = musicxml.part_staves(p)[0].events
+    assert ev["barlines"] == [(0, 4, "bar:light-heavy")]
+    assert [t for *_, t in ev["words"]] == ["spoken line"]
+
+
+def test_instrument_change_without_transpose_resets_it():
+    tr = "<attributes><transpose><diatonic>0</diatonic><chromatic>0</chromatic><octave-change>1</octave-change></transpose></attributes>"
+    ic = '<sound><instrument-change><instrument-sound>strings</instrument-sound></instrument-change></sound>'
+    p = part(tr + note("C4", 4), ic + note("C4", 4))
+    assert [n[3] for n in notef1.notes(p)] == [72, 60]
+
+
+def test_chord_with_wrong_duration_is_one_retype_in_chord_only_bars():
+    def chord(d, *ps):
+        return note(ps[0], d) + "".join(note(p, d).replace("<note>", "<note><chord/>") for p in ps[1:])
+    t = part(chord(2, "C4", "E4", "G4") + chord(2, "D4", "F4", "A4"))
+    fwd = "<forward><duration>1</duration></forward>"
+    assert pen(part(chord(1, "C4", "E4", "G4") + fwd + chord(1, "D4", "F4", "A4") + fwd), t)["penalty"] == 2
+    # a bar with a single note too: per note as before
+    t = part(chord(2, "C4", "E4", "G4") + note("D4", 2))
+    assert pen(part(chord(1, "C4", "E4", "G4") + fwd + note("D4", 2)), t)["penalty"] == 3

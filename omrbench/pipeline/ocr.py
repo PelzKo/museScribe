@@ -278,11 +278,19 @@ def _engine_pages(pages: list[Page], images: list[Path], todo: list[int], cache:
         return
     stats = json.loads((cache / "stats.json").read_text()) if (cache / "stats.json").exists() else {}
     for i, m in masks.items():
-        (cache / f"page{i + 1:02d}.json").write_text(json.dumps(_finish(pages[i], images[i], raw.get(m.name, []))))
+        if m.name in raw:       # a page the engine skipped is not cached: the next run retries it
+            _write_json(cache / f"page{i + 1:02d}.json", _finish(pages[i], images[i], raw[m.name]))
         m.unlink(missing_ok=True)
     # runtime / memory of the OCR call, for the component report
     (cache / "run.json").write_text(json.dumps({"engine": engine, "pages": len(todo), **stats}))
     out.unlink(missing_ok=True)
+
+
+def _write_json(f: Path, obj) -> None:
+    """Cache files are reused as they are: never leave a half-written one (crash, power cut)."""
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj))
+    tmp.replace(f)
 
 
 def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | None, cache: Path,
@@ -314,7 +322,7 @@ def read_pages(pages: list[Page], images: list[Path], tess: tuple[str, dict] | N
         if tess is None or i >= len(images) or engine != "tesseract":
             return []
         words = _read_page(pages[i], images[i], tess, cache / f"page{i + 1:02d}-mask.png")
-        f.write_text(json.dumps(words))
+        _write_json(f, words)
         return words
 
     with ThreadPoolExecutor(max(1, jobs)) as ex:

@@ -367,7 +367,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     cands = with_notes + [c for c in cands if c not in with_notes]
                 ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
                 st_i = sy.stacks[i] if i < len(sy.stacks) else None
-                if st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right):
+                multirest = st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right)
+                if multirest:
                     # Audiveris' multi-rest (its stack kept for this bar): homr reads the printed
                     # count above it as notes. Its rest bar, else a rest bar of the right length
                     ab_i = options["audiveris"][i] if options.get("audiveris") else None
@@ -375,7 +376,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                         [("rest", B.rest_bar(len(group), length, D))]
                 if pick_mode == "fallback" and any(not s.startswith("alt:") for s, _ in ok):
                     ok = [c for c in ok if not c[0].startswith("alt:")]
-                if pick_mode == "agree-keep":
+                if pick_mode == "agree-keep" and not multirest:
                     # homr's reading stays a candidate even when its voices don't fill the bar
                     ok += [c for c in cands if c[0] == "crop" and not c[1].empty and c not in ok]
                 if alt_opts and pick_mode.startswith("agree") and len(ok) >= 2:
@@ -412,7 +413,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     bar.key = a_key
                     stats.keys_respelled += 1
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
-                if s != "audiveris" and a_n:
+                if s != "audiveris" and bar.source != "audiveris" and a_n:   # a fallback bar may be Audiveris'
                     src = a_bars.get(gi)
                     if src:
                         j = i if len(src) == n else min(len(src) - 1, round(i * len(src) / n))
@@ -630,12 +631,11 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if not plan or not plan.n or 0 not in plan.chosen:
                 continue
             i = _bar_at(plan, pl.line.x + 1)
-            if vocal and value.isdigit():
-                # vocal scores box the bar number at the system start
+            if value.isdigit():
+                # a bar number printed (or boxed) at the system start: evidence for the bar
+                # count; the truth scores keep letter rehearsal marks only
                 plan.printed.setdefault(i, int(value))
                 continue
-            if value.isdigit():
-                continue        # a boxed bar number; the truth scores keep letters only
             d = etree.Element("direction", placement="above")
             etree.SubElement(etree.SubElement(d, "direction-type"), "rehearsal").text = value
             B.add_direction(plan.chosen[0][i], d, 0, 1)
@@ -1337,7 +1337,7 @@ def _clef_class(bar: B.Bar) -> str:
 
 
 TRANSPOSE_KEYS = {"C": (0, 0), "B": (-1, -1), "Bb": (-1, -2), "A": (-2, -3), "Ab": (-2, -4),
-                  "G": (-3, -5), "F#": (-3, -6), "F": (-4, -7), "E": (-5, -8), "Eb": (-5, -9),
+                  "G": (-3, -5), "F#": (-4, -6), "F": (-4, -7), "E": (-5, -8), "Eb": (-5, -9),
                   "D": (-6, -10), "Db": (-6, -11)}
 
 

@@ -71,7 +71,9 @@ def _timewise_to_partwise(tw: etree._Element) -> etree._Element:
         parts[sp.get("id")] = etree.SubElement(pw, "part", id=sp.get("id"))
     for m in tw.iterfind("measure"):
         for p in m.iterfind("part"):
-            dst = parts.setdefault(p.get("id"), etree.SubElement(pw, "part", id=p.get("id")))
+            if p.get("id") not in parts:
+                parts[p.get("id")] = etree.SubElement(pw, "part", id=p.get("id"))
+            dst = parts[p.get("id")]
             nm = etree.SubElement(dst, "measure", dict(m.attrib))
             for c in p:
                 nm.append(copy.deepcopy(c))
@@ -367,11 +369,14 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
     transpose = None
     measures = part.findall("measure")
     for mi, measure in enumerate(measures):
-        cur = Fraction(0)
+        cur = mend = Fraction(0)
         last_onset = Fraction(0)
         changed = False     # instrument change in this measure
+        if measure.find(".//instrument-change") is not None and measure.find("attributes/transpose") is None:
+            transpose = ("0", "0")    # MuseScore writes <transpose> only for a non-zero interval
         for el in measure:
             tag = el.tag
+            mend = max(mend, cur)
             if tag == "attributes":
                 d = _txt(el, "divisions")
                 if d and Fraction(d) > 0:      # Audiveris sometimes writes <divisions>0
@@ -474,9 +479,10 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                         if w.get("type") in ("crescendo", "diminuendo"):
                             s.events["hairpins"].append((mi, onset, w.get("type")))
                     cat = "systemtext" if el.get("system") in ("only-top", "also-top") else "words"
-                    for w in dt.findall("words"):
-                        if w.text and w.text.strip():
-                            s.events[cat].append((mi, onset, _norm_text(w.text)))
+                    # one text split over several <words> runs (line break, tempo glyph) is one token
+                    text = re.sub(r"[\ue000-\uf8ff]", "", "".join(w.text or "" for w in dt.findall("words")))
+                    if text.strip():
+                        s.events[cat].append((mi, onset, _norm_text(text)))
                     for mm in dt.findall("metronome"):
                         unit = _txt(mm, "beat-unit", "?") + "." * len(mm.findall("beat-unit-dot"))
                         s.events["tempo"].append((mi, onset, f"{unit}={_txt(mm, 'per-minute', '?')}"))
@@ -506,7 +512,7 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                 s.events["chords"].append((mi, onset, tok))
             elif tag == "barline":
                 s = st(1)
-                at = cur if el.get("location", "right") != "left" else Fraction(0)
+                at = max(mend, cur) if el.get("location", "right") != "left" else Fraction(0)
                 if el.find("fermata") is not None:
                     s.events["fermatas"].append((mi, at, "fermata"))
                 rep = el.find("repeat")

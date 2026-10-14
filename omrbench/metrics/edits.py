@@ -7,6 +7,8 @@ action costs 1:
              output and truth notes pair up as changes (retype pitch and/or duration = 1), the
              rest are inserts / deletes: cost = max(unmatched output, unmatched truth). Rests are
              free (they follow from the notes). Slash noteheads: rhythm only; drums: staff position.
+             In truth bars written only in chords (guitar voicings), a chord with the right pitches
+             and one wrong duration is 1 retype.
   elements   per category and bar: exact (staff, onset, token) matches are free, the rest costs
              max(unmatched output, unmatched truth): a move to another beat, p -> f, a made-up
              fermata are one action each. Clef / key / time count only where they change.
@@ -14,6 +16,8 @@ action costs 1:
              contents go with it), inserting a missing bar = 1 + everything in it.
   shift      a whole part off by an octave or a transposition = 1 bulk action (select all,
              transpose), then scored after the shift.
+  octave     a section of bars one or two octaves off (Celesta after an instrument change) = 1
+             action per section (select the bars, Ctrl+Up/Down), then scored after the shift.
   system     rehearsal marks, tempi and system text (rit., a tempo: <words system="only-top"> in
              the truth) are entered once per score: `system_penalty` scores them per song (union of
              all output parts), not per part; output words equal to a truth system text go there too.
@@ -89,6 +93,31 @@ def _shifted(bars: list[Bar], s: int) -> list[Bar]:
             for n, i in bars]
 
 
+def _chord_retypes(p: Counter, t: Counter) -> tuple[int, Counter, Counter]:
+    """Truth bars written only in chords (guitar voicings; user decision 2026-10-14): a chord read
+    with the right pitches and one wrong duration is 1 retype (select the chord, new duration), not
+    one per note. Returns (retypes, rest of p, rest of t)."""
+    def by_onset(c: Counter) -> dict:
+        out: dict = {}
+        for (st, o, pitch, d), n in c.items():
+            out.setdefault((st, o), Counter())[(pitch, d)] += n
+        return out
+    tc = by_onset(t)
+    if not tc or any(sum(v.values()) < 2 for v in tc.values()):
+        return 0, p, t
+    pc = by_onset(p)
+    cost, p, t = 0, p.copy(), t.copy()
+    for k, tv in tc.items():
+        pv = pc.get(k)
+        if not pv or pv == tv or len({d for _, d in tv}) > 1 or len({d for _, d in pv}) > 1:
+            continue
+        if Counter(x for x, _ in tv.elements()) == Counter(x for x, _ in pv.elements()):
+            cost += 1
+            t -= Counter({(*k, x, d): n for (x, d), n in tv.items()})
+            p -= Counter({(*k, x, d): n for (x, d), n in pv.items()})
+    return cost, p, t
+
+
 def _notes_cost(p: Counter, t: Counter) -> int:
     slash = {(st, o) for st, o, pitch, _ in t if pitch is None}
     if slash:
@@ -99,7 +128,8 @@ def _notes_cost(p: Counter, t: Counter) -> int:
             else:
                 folded[(st, o, pitch, d)] += c
         p = folded
-    return max(sum((p - t).values()), sum((t - p).values()))
+    chords, p, t = _chord_retypes(p, t)
+    return chords + max(sum((p - t).values()), sum((t - p).values()))
 
 
 def _items_cost(p: Counter, t: Counter, detail: Counter | None = None) -> int:
@@ -179,6 +209,39 @@ def _best_shift(pred: list[Bar], truth: list[Bar]) -> int:
     return s if score[s] > score[0] else 0
 
 
+REGION_SHIFTS = (0, 12, -12, 24, -24)
+
+
+def _octave_regions(pred: list[Bar], truth: list[Bar], path: list) -> tuple[int, list[Bar]]:
+    """Sections an octave off (e.g. after an instrument change): select the bars + Ctrl+Up/Down =
+    1 action per section. Viterbi over the matched bars; state = the bar's octave shift, entering a
+    shifted section costs 1, bars without notes keep the state for free. Returns (sections, pred
+    with the chosen bars shifted)."""
+    pairs = [(i, j) for i, j in path if i is not None and j is not None]
+    if not pairs:
+        return 0, pred
+    shifted = {s: _shifted(pred, s) for s in REGION_SHIFTS}
+    best = {s: (0 if s == 0 else 1, [s]) for s in REGION_SHIFTS}
+    for k, (i, j) in enumerate(pairs):
+        cost = {s: _notes_cost(shifted[s][i][0], truth[j][0]) for s in REGION_SHIFTS}
+        if k == 0:
+            best = {s: (cost[s] + (s != 0), [s]) for s in REGION_SHIFTS}
+            continue
+        best = {s: min(((c + (s != 0 and s != p) + cost[s], seq + [s]) for p, (c, seq) in best.items()),
+                       key=lambda x: x[0]) for s in REGION_SHIFTS}
+    _, seq = min(best.values(), key=lambda x: (x[0], sum(1 for s in x[1] if s)))
+    if not any(seq):
+        return 0, pred
+    out = list(pred)
+    sections = 0
+    prev = 0
+    for (i, _), s in zip(pairs, seq):
+        out[i] = shifted[s][i]
+        sections += s != 0 and s != prev
+        prev = s
+    return sections, out
+
+
 def system_words(truth_root: etree._Element) -> frozenset:
     """The truth's system text tokens (output words equal to one are scored per song)."""
     from ..musicxml import extract_staves
@@ -206,7 +269,8 @@ def penalty(pred_parts: list[etree._Element], truth_part: etree._Element,
         c2, p2 = _align(sp, truth)
         if c2 + 1 < cost:
             cost, path, pred, shift = c2 + 1, p2, sp, s
-    detail: Counter = Counter()
+    sections, pred = _octave_regions(pred, truth, path)
+    detail: Counter = Counter(octave=sections)
     ins = dele = changed = 0
     for i, j in path:
         if i is None:
@@ -220,7 +284,8 @@ def penalty(pred_parts: list[etree._Element], truth_part: etree._Element,
             changed += 1
     if shift:
         detail["shift"] += 1
-    assert sum(detail.values()) == cost, (dict(detail), cost)
+    assert sum(detail.values()) <= cost, (dict(detail), cost)    # sections only ever save actions
+    cost = sum(detail.values())
     return {"penalty": cost, "from_scratch": scratch, "ratio": cost / scratch if scratch else None,
             "bars_insert": ins, "bars_delete": dele, "bars_changed": changed,
             "bars_to_fix": ins + dele + changed, "bars_truth": len(truth), "shift": shift,
@@ -229,10 +294,11 @@ def penalty(pred_parts: list[etree._Element], truth_part: etree._Element,
 
 # --------------------------------------------------------------------------- system items
 
-def _system_items(staves: list[Staff], cluster: int = 0, words: frozenset = frozenset()) -> Counter:
+def _system_items(staves: list[Staff], cluster: int = 0, words: frozenset = frozenset(),
+                  truth: Counter = Counter()) -> Counter:
     """(cat, bar, token) of rehearsal marks, tempi and system text (plus <words> in `words`);
     with `cluster`, the same token within `cluster` bars (read in several parts, bars slightly off)
-    counts once."""
+    counts once, at the bar the truth has it if one part got it right."""
     seen: dict[tuple, list[int]] = {}
     for s in staves:
         for cat in SYSTEM_CATS:
@@ -243,11 +309,13 @@ def _system_items(staves: list[Staff], cluster: int = 0, words: frozenset = froz
                 seen.setdefault(("systemtext", tok), []).append(mi)
     out = Counter()
     for (cat, tok), bars in seen.items():
-        start = None
+        groups: list[list[int]] = []
         for b in sorted(set(bars)):
-            if start is None or b - start > cluster:
-                out[(cat, b, tok)] = 1
-                start = b
+            if not groups or b - groups[-1][0] > cluster:
+                groups.append([])
+            groups[-1].append(b)
+        for g in groups:
+            out[(cat, next((b for b in g if (cat, b, tok) in truth), g[0]), tok)] = 1
     return out
 
 
@@ -257,8 +325,8 @@ def system_penalty(pred_roots: list[etree._Element], truth_root: etree._Element)
     from ..musicxml import extract_staves
     t_staves = extract_staves(truth_root)
     sw = frozenset(t for s in t_staves for _, _, t in s.events["systemtext"])
-    p = _system_items([s for r in pred_roots for s in extract_staves(r)], cluster=2, words=sw)
     t = _system_items(t_staves)
+    p = _system_items([s for r in pred_roots for s in extract_staves(r)], cluster=2, words=sw, truth=t)
     detail = Counter({cat: max(sum(1 for k in p - t if k[0] == cat), sum(1 for k in t - p if k[0] == cat))
                       for cat in SYSTEM_CATS})
     detail = +detail

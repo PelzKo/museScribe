@@ -303,13 +303,12 @@ class Pipeline(Engine):
             bad = sum(err is not None for _, err in rec.recognize(mine, edir, log, total, self.timeout_s))
             LOG.info(f"ensemble {name}: {len(mine) - bad}/{len(mine)} crops read in {time.perf_counter() - t0:.0f}s")
 
-    def ensemble_bars(self, workdir: Path, systems: list, D: int) -> dict | None:
-        """`ensemble: [zeus, clarity, ...]`: bars of more crop readers, read from
-        <workdir>/crops-<reader>/s<k>-g<g>.musicxml (same crops as the main reader)."""
-        names = self.cfg.get("ensemble") or []
+    def ensemble_roots(self, workdir: Path, systems: list) -> dict:
+        """`ensemble: [zeus, clarity, ...]`: {reader: {(k, gi): <score>}} of more crop readers, read
+        from <workdir>/crops-<reader>/s<k>-g<g>.musicxml (same crops as the main reader)."""
         out = {}
-        for name in names:
-            bars = {}
+        for name in self.cfg.get("ensemble") or []:
+            roots = {}
             for f in sorted((workdir / f"crops-{name}").glob("s*-g*.musicxml")):
                 m = re.fullmatch(r"s(\d+)-g(\d+)", f.stem)
                 if not m:
@@ -318,10 +317,20 @@ class Pipeline(Engine):
                 if k >= len(systems) or gi >= len(systems[k].groups()):
                     continue
                 try:
-                    part = musicxml.load(f).find("part")
+                    roots[(k, gi)] = musicxml.load(f)
                 except Exception as e:  # noqa: BLE001 - one unreadable crop is no reading
                     LOG.debug(f"{name} {f.name}: {e}")
-                    continue
+            out[name] = roots
+        return out
+
+    @staticmethod
+    def ensemble_bars(ens: dict, systems: list, D: int) -> dict | None:
+        """Bars of the ensemble readers' crops (`ensemble_roots`) that have the crop's staves."""
+        out = {}
+        for name, roots in ens.items():
+            bars = {}
+            for (k, gi), r in roots.items():
+                part = r.find("part")
                 n_staves = len(systems[k].groups()[gi])
                 bs = B.part_bars(part, D, "crop", staves=n_staves) if part is not None else []
                 if bs and max(b.staves for b in bs) == n_staves:
@@ -333,8 +342,11 @@ class Pipeline(Engine):
                  roots: dict, stats: A.Stats, workdir: Path | None = None):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
         a_roots = book_roots(books)
-        D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values()))
         systems = [sy for p in pages for sy in p.systems]
+        ens = self.ensemble_roots(workdir, systems) if workdir else {}
+        # the ensemble readers' divisions too (Clarity / SMT 10080, Zeus 3 or 56): no rounding
+        D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values())
+                               + [r for e in ens.values() for r in e.values()])
         rec = self.recognizer.name
         crop_bars = {}
         for (k, gi), r in roots.items():
@@ -371,7 +383,7 @@ class Pipeline(Engine):
         # repairs: false = level 2 of the recognizer comparison (PLAN.md section 7): crop bars as read
         repairs = bool(self.cfg.get("repairs", True))
         votes = self.measure_votes(sample, pages, workdir) if workdir else None
-        alts = self.ensemble_bars(workdir, systems, D) if workdir else None
+        alts = self.ensemble_bars(ens, systems, D)
         plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
                                  weights=self.cfg.get("ensemble_weights"))

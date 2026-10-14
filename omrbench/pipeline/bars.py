@@ -610,7 +610,7 @@ def fix_graces(bars: list[Bar]) -> tuple[int, int]:
     of half or whole length are misreads and are dropped. Returns (retyped, dropped)."""
     graces = [n for b in bars for n in b.notes() if n.find("grace") is not None]
     flagged = [n.findtext("type") for n in graces if n.findtext("type") in GRACE_FLAGGED]
-    typ = max(set(flagged), key=flagged.count) if flagged else "eighth"
+    typ = Counter(flagged).most_common(1)[0][0] if flagged else "eighth"
     retyped = dropped = 0
     for b in bars:
         keep = []
