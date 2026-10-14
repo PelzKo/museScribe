@@ -343,8 +343,8 @@ with the current truth. Revisit only with new readers or truth of new score type
 
 1. **Big run** (user decision 2026-10-13): a weed-out sweep of every engine on Anastasia 1 + 4A and Ghost 1a
    (`--id weed`; 17 of 19 engines done when the PC crashed on 2026-10-14 in `smt-fp`; resume with
-   `omrbench sweep --id weed --resume`), then the full grid on all truth songs (`CHECKS.md` #1: base
-   `pipeline-allreaders` + 168 reassembled variants). Weed so far: `pipeline` 1186 = best within 0.3 %
+   `omrbench sweep --id weed --resume`), then the full grid on all truth songs (`--id full`: base
+   `pipeline-allreaders` + 42 variants reassembled from it, Tesseract only). Weed so far: `pipeline` 1186 = best within 0.3 %
    (`ensemble-wk` 1182 at 18x the time); OCR variants within 1 %; other main readers 40-110 % worse; page
    engines 2.3-4.3x worse. Open questions: `CHECKS.md`. Includes the gated SMT models once the Hugging Face access is approved
    (`HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).

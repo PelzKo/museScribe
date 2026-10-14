@@ -4,19 +4,13 @@ Answer inline (or tell Claude); resolved items move into `docs/PLAN.md`.
 
 ## Big run
 
-1. **Full grid scope.** Proposed (after the weed run): one fresh base run `pipeline-allreaders` (homr + crops of
-   zeus, clarity, smt-sys, transcoda) on every truth song, then 168 variants reassembled from it (assembly only,
-   reassembled = fresh run, checked on Ghost 1a / Anastasia 4A):
-   `ocr_engine` {tesseract, easyocr, paddle, doctr} x `measure_vote` {none, ola} x `prefer` {auto, crop first,
+1. ~~Full grid scope~~ **Decided 2026-10-14:** base `pipeline-allreaders` + 42 reassembled variants, Tesseract only
+   (OCR variants were within 1 % in the weed run): `measure_vote` {none, ola} x `prefer` {auto, crop first,
    audiveris first} x `ensemble` {none, [zeus, clarity, smt-sys], [clarity, transcoda], all four} x
-   `ensemble_pick` {agree, agree-keep}. Estimate ~20 h. Left out: `repairs: false`, other main readers and all page
-   engines (40 %+ worse in the weed run), `auto_beam` (beams don't count in the penalty), tuned
-   `ensemble_weights` (only `pipeline-ensemble-wk` has them; it scored 1182 vs `pipeline` 1186 at 18x the time).
-   OK, or add / drop axes?
+   `ensemble_pick` {agree, agree-keep}. Tuned `ensemble_weights` left out.
 2. **OMR-NED / TEDn (`--full`)** in the big run? It is the slow, exact musicdiff edit cost; on 168 variants it would
    add days. Proposal: only on the final top 3.
-3. **smt-fp and the crash.** The PC crashed while `smt-fp` ran (full-page model on CPU). If it crashes there again,
-   drop `smt-fp` from the weed run (it can't win: page engines are 2-4x worse than the pipeline)?
+3. ~~smt-fp and the crash~~ **Decided:** keep it and resume; drop it only if it crashes the PC again.
 4. **Page engines and piano reductions.** Page engines (homr, Audiveris, Clarity, ...) can't write the separate
    `- Voices` / `- Piano` files, so the PianoReduction row counts as "no output" (typed from scratch). Fine, or
    score their single file against the Piano truth part?
