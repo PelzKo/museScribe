@@ -22,3 +22,24 @@ def test_slash_bar_rhythm_ties_and_kept_directions():
     assert notes[2].find("tie").get("type") == "start" and notes[3].find("notations/tied").get("type") == "stop"
     assert A.slash_bar(SL.SlashBar(1, 0, 1, 0, 1, [SL.Event(0, "slash", F(5, 4))]), old, 2) is None
 
+
+def _bar(text=None, notes=("C4",)):
+    from lxml import etree
+    items = []
+    if text:
+        items.append(etree.fromstring(f"<direction><direction-type><words>{text}</words></direction-type></direction>"))
+    for p in notes:
+        items.append(etree.fromstring(f"<note><pitch><step>{p[0]}</step><octave>{p[1]}</octave></pitch>"
+                                      "<duration>4</duration><voice>1</voice></note>"))
+    return B.Bar(items, "crop")
+
+
+def test_patch_octaves_from_loco_8va_until_loco():
+    plan = A.SysPlan(None, 0, n=4)
+    plan.chosen = {0: [_bar(), _bar("STR. ENS. (loco &amp; 8va)"), _bar(), _bar("STR. ENS. (loco)")]}
+    A.patch_octaves([plan], A.Stats())
+    octs = [b.notes()[0].findtext("pitch/octave") for b in plan.chosen[0]]
+    assert octs == ["4", "5", "5", "4"]
+    assert plan.chosen[0][1].items[0].find("direction-type/octave-shift").get("type") == "down"
+    assert plan.chosen[0][3].items[0].find("direction-type/octave-shift").get("type") == "stop"
+

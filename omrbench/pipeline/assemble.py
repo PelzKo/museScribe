@@ -64,6 +64,7 @@ class Stats:
     cue_notes_removed: int = 0
     chord_symbols: int = 0
     slash_bars: int = 0
+    octave_bars: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -619,6 +620,40 @@ def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, s
                 plan.chosen[gi][i] = bar
                 stats.slash_bars += 1
             break
+
+
+OTTAVA_ON = re.compile(r"\(.*\b8va\)", re.I)       # "STR. ENS. (loco & 8va)": a patch an octave up
+OTTAVA_OFF = re.compile(r"\(loco\)", re.I)
+
+
+def _octave_shift(kind: str) -> etree._Element:
+    d = etree.Element("direction", placement="above")
+    etree.SubElement(etree.SubElement(d, "direction-type"), "octave-shift", type=kind, size="8")
+    return d
+
+
+def patch_octaves(plans: list[SysPlan], stats: Stats) -> None:
+    """Keyboard patch labels "(loco & 8va)" .. "(loco)": staff 1 an octave up with an 8va line
+    (the truths' convention, user 2026-10-15)."""
+    on: dict[int, bool] = {}
+    for plan in plans:
+        for gi, bars in plan.chosen.items():
+            for bar in bars:
+                texts = [w.text or "" for d in bar.items if d.tag == "direction" for w in d.iter("words")]
+                was = on.setdefault(gi, False)
+                if any(OTTAVA_ON.search(t) for t in texts):
+                    on[gi] = True
+                elif any(OTTAVA_OFF.search(t) for t in texts):
+                    on[gi] = False
+                if on.get(gi) != was:
+                    B.add_direction(bar, _octave_shift("down" if on[gi] else "stop"), 0, 1)
+                if not on.get(gi):
+                    continue
+                stats.octave_bars += 1
+                for n in bar.notes():
+                    o = n.find("pitch/octave")
+                    if o is not None and (n.findtext("staff") or "1") == "1":
+                        o.text = str(int(o.text) + 1)
 
 
 def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbol], D: int,

@@ -408,6 +408,7 @@ class Pipeline(Engine):
         if sample.score_type != "piano_reduction":     # the truths have no chord symbols there
             A.place_chords(plans, pages, symbols, D, stats)
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate, symbols)
+        A.patch_octaves(plans, stats)
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):
