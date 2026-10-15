@@ -67,6 +67,7 @@ class Stats:
     slash_bars: int = 0
     octave_bars: int = 0
     repeat_bars: int = 0
+    ties_copied: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -489,6 +490,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                             if el.tag == "direction":
                                 st = el.findtext("staff")
                                 B.add_direction(bar, el, on, int(st) if st and st.isdigit() else None)
+                        if len(src) == n:
+                            stats.ties_copied += B.copy_ties(bar, src[i])
                 chosen.append(bar)
             plan.chosen[gi] = chosen
         plans.append(plan)

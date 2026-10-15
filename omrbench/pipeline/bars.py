@@ -214,6 +214,36 @@ def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
     return out
 
 
+def _note_key(on: int, n: etree._Element) -> tuple | None:
+    p = n.find("pitch")
+    if p is None:
+        return None
+    return (on, n.findtext("staff") or "1", p.findtext("step"), p.findtext("alter") or "0", p.findtext("octave"))
+
+
+def copy_ties(bar: Bar, src: Bar) -> int:
+    """Ties of `src` (Audiveris' reading of the same bar) onto the notes of `bar` with the same
+    onset, staff and pitch (homr writes no ties). Returns the ties added."""
+    ties: dict[tuple, list[str]] = {}
+    for on, n in onsets(src):
+        if n.tag == "note" and (k := _note_key(on, n)) and n.find("tie") is not None:
+            ties[k] = [t.get("type") for t in n.findall("tie")]
+    added = 0
+    for on, n in onsets(bar):
+        if n.tag != "note" or n.find("tie") is not None or (k := _note_key(on, n)) not in ties:
+            continue
+        idx = max(i for i, c in enumerate(n) if c.tag in ("duration", "pitch", "chord", "grace")) + 1
+        nt = n.find("notations")
+        if nt is None:
+            nt = etree.SubElement(n, "notations")
+        for kind in ties[k]:
+            n.insert(idx, etree.Element("tie", type=kind))
+            idx += 1
+            etree.SubElement(nt, "tied", type=kind)
+            added += 1
+    return added
+
+
 def signature(bar: Bar) -> Counter:
     """The sounding notes of a bar as a multiset of (staff, onset, pitch, duration)."""
     out: Counter = Counter()

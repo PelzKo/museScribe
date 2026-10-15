@@ -58,3 +58,14 @@ def test_repeat_copies_the_bar_before_by_printed_number():
 def test_barlines_dedupe_double_bars():
     v = [(50, 0, 40), (51.5, 0, 40), (100, 0, 40), (30, 5, 20)]        # double bar; a stem
     assert SL._barlines(v, 0, 40, 0, 200) == [50, 100]
+
+
+def test_copy_ties_from_audiveris_by_onset_and_pitch():
+    from lxml import etree
+    aud = _bar(notes=("C4", "D4"))
+    aud.items[0].insert(2, etree.Element("tie", type="start"))
+    crop = _bar(notes=("C4", "D4"))
+    assert B.copy_ties(crop, aud) == 1
+    n = crop.notes()[0]
+    assert [c.tag for c in n][:3] == ["pitch", "duration", "tie"] and n.find("notations/tied").get("type") == "start"
+    assert crop.notes()[1].find("tie") is None
