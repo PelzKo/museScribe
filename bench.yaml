@@ -61,6 +61,15 @@ engines:
   pipeline-allreaders:    # base run of the full sweep grid: every crop reader's crops for the reassembled variants
     type: pipeline
     ensemble: [zeus, clarity, smt-sys, transcoda]
+  # full sweep 2026-10-14 (results/sweeps/full): top 5 by total penalty + the best outside Anastasia 4.
+  # Opt-in: omrbench sweep anastasia,ghost --id ID --engines pipeline,pipeline-full1,...,pipeline-full6
+  # 1-5 gain mostly on Anastasia 4 by agree-keep hiding misread time signatures (IMPROVEMENTS #21)
+  pipeline-full1: {type: pipeline, enabled: false, measure_vote: ola, ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10846
+  pipeline-full2: {type: pipeline, enabled: false, measure_vote: ola, ensemble: [zeus, clarity, smt-sys, transcoda], ensemble_pick: agree-keep}  # 10850
+  pipeline-full3: {type: pipeline, enabled: false, ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10860
+  pipeline-full4: {type: pipeline, enabled: false, ensemble: [zeus, clarity, smt-sys, transcoda], ensemble_pick: agree-keep}  # 10878
+  pipeline-full5: {type: pipeline, enabled: false, measure_vote: ola, prefer: [audiveris, crop], ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10950
+  pipeline-full6: {type: pipeline, enabled: false, prefer: [audiveris, crop]}  # 12018 total, 4922 without Anastasia 4 (best)
   # bar-number OCR engine (P6 OCR component); default ocr_engine: tesseract
   pipeline-easyocr: {type: pipeline, ocr_engine: easyocr}
   pipeline-doctr: {type: pipeline, ocr_engine: doctr}
