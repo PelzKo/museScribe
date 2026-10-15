@@ -59,6 +59,9 @@ class Stats:
     keys_respelled: int = 0
     crops_failed: int = 0
     cue_notes_removed: int = 0
+    times_set: int = 0
+    pickup: bool = False
+    letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
     words: int = 0
     notes: list[str] = field(default_factory=list)
     failed_crops: list = field(default_factory=list)   # (system, group, staves, image, reasons)
@@ -218,10 +221,44 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
     return min(ons, key=lambda o: abs(o - raw))
 
 
+def _main_time(song_time: list[tuple[int, str, str]]) -> tuple[str, str]:
+    """The time signature that covers most bars of the song (entries in bar order)."""
+    span: Counter = Counter()
+    for (n, _, v), nxt in zip(song_time, song_time[1:] + [(song_time[-1][0] + 1, "", "")]):
+        span[v] += max(nxt[0] - n, 1)
+    return tuple(span.most_common(1)[0][0].split("/"))
+
+
+def song_positions(spec: list[tuple[int, str, str]], letters: list, pickup: bool, n: int) -> list[str | None]:
+    """The song setting in force at each of the n output bars (after align_bars: output bar j is
+    printed position j + 1, or j with a pickup bar; lettered bars take positions of their own)."""
+    def position(num: int, letter: str) -> int:
+        return num + sum(1 for m, _ in letters if m < num) + (ord(letter) - ord("A") + 1 if letter else 0)
+    marks = sorted((position(num, letter), v) for num, letter, v in spec)
+    out, cur, k = [], marks[0][1] if marks else None, 0
+    for j in range(n):
+        pos = j if pickup else j + 1
+        while k < len(marks) and marks[k][0] <= pos:
+            cur = marks[k][1]
+            k += 1
+        out.append(cur)
+    return out
+
+
+def apply_song_time(plans: list[SysPlan], spec: list[tuple[int, str, str]], stats: Stats) -> None:
+    """The time signatures of the song's `time` row onto the aligned bars."""
+    flat = [(p, i) for p in plans for i in range(p.n)]
+    for (p, i), v in zip(flat, song_positions(spec, stats.letters, stats.pickup, len(flat))):
+        t = tuple(v.split("/")) if v else None
+        if t and p.times[i] != t:
+            p.times[i] = t
+            stats.times_set += 1
+
+
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
                  stats: Stats, raw: bool = False, extra_votes: dict | None = None,
                  alts: dict | None = None, pick_mode: str = "agree",
-                 weights: dict | None = None) -> list[SysPlan]:
+                 weights: dict | None = None, song_time: list | None = None) -> list[SysPlan]:
     """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
     bars only for groups whose crop failed. For comparing readers without homr tuning.
     extra_votes: {system index: bar count} of another layout provider (OLA), one more vote.
@@ -235,6 +272,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
     cur_time = None
+    allowed = {tuple(v.split("/")) for _, _, v in song_time or ()}
+    main_time = _main_time(song_time) if song_time else None
     # bar numbers printed below each system (one per bar in parts that number every bar)
     labels: dict[int, list[T.Placed]] = {}
     for p in pages:
@@ -314,6 +353,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             t = h_src[i].time if h_src and h_src[i].time else None
             if t is None:
                 t = cur_time or (a_src[i].time if a_src else None)
+            if allowed and t not in allowed:
+                t = main_time       # the song never has this time: a misread
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
@@ -1142,6 +1183,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
             return align_bars(plans, D, stats, log)
     # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
     base = -1 if chain and obs[chain[0]].offset == -1 else 0
+    stats.pickup, stats.letters = base == -1, sorted(extra)
     # numbers inside a step whose offsets lie between its two sides split it: the total
     # padding stays, part of it moves to where the evidence puts it (a cut mark whose
     # "[to]" OCR lost leaves only the number)
@@ -1692,8 +1734,18 @@ def _attr_clef(a, staff: int, clef: B.Clef, staves: int) -> None:
         etree.SubElement(c, "clef-octave-change").text = clef[2]
 
 
+def written_key(concert: int, chromatic: int) -> int:
+    """Key signature of a part whose written pitch is `chromatic` semitones above sounding."""
+    shift = (-chromatic * 7) % 12
+    f = concert + (shift - 12 if shift > 6 else shift)
+    return f - 12 if f > 7 else f + 12 if f < -7 else f
+
+
 def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int,
-                beam: bool = True, stats: Stats | None = None) -> etree._Element:
+                beam: bool = True, stats: Stats | None = None,
+                song_key: list[str | None] | None = None) -> etree._Element:
+    """song_key: the concert key (fifths) of every bar from the song's `key` row, written into
+    every pitched part in its own transposition."""
     root = etree.Element("score-partwise", version="4.0")
     ident = etree.SubElement(root, "identification")
     etree.SubElement(etree.SubElement(ident, "encoding"), "software").text = "omrbench pipeline"
@@ -1748,6 +1800,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
         state_key, state_time, state_clefs = None, None, {}
         state_tr = (0, 0, 0)
         first_clefs = next((b.clefs for b in p.bars if b is not None and b.clefs), {})
+        perc = bool(first_clefs) and all(c and c[0] == "percussion" for c in first_clefs.values())
         for g, bar in enumerate(p.bars):
             t = times[g] if g < len(times) else None
             length = B.bar_length(t, D)
@@ -1758,6 +1811,9 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
             if g == 0:
                 etree.SubElement(a, "divisions").text = str(D)
             key = bar.key if bar.key is not None else (state_key if g else "0")
+            if song_key and g < len(song_key) and song_key[g] is not None and not perc:
+                tr = parse_transpose(p.changes[g].get("transpose")) if g in p.changes else state_tr
+                key = str(written_key(int(song_key[g]), tr[1]))
             if key is not None and key != state_key:
                 etree.SubElement(etree.SubElement(a, "key"), "fifths").text = key
                 state_key = key

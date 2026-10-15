@@ -43,6 +43,7 @@ from ..engines.audiveris import Audiveris
 from ..engines.base import Engine, EngineResult
 from ..monitor import RunStats
 from ..pdfkind import is_scan
+from ..project import bar_map
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
@@ -385,9 +386,10 @@ class Pipeline(Engine):
         repairs = bool(self.cfg.get("repairs", True))
         votes = self.measure_votes(sample, pages, workdir) if workdir else None
         alts = self.ensemble_bars(ens, systems, D)
+        song_time = bar_map(sample.meta["song_time"]) if sample.meta.get("song_time") else None
         plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
-                                 weights=self.cfg.get("ensemble_weights"))
+                                 weights=self.cfg.get("ensemble_weights"), song_time=song_time)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
@@ -402,6 +404,8 @@ class Pipeline(Engine):
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):
             A.align_bars(plans, D, stats, LOG)
+        if song_time:
+            A.apply_song_time(plans, song_time, stats)
         beam = bool(self.cfg.get("auto_beam", True))
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))
         files: dict[str, object] = {}
@@ -414,8 +418,9 @@ class Pipeline(Engine):
             parts = voices + [piano]
             if max_wedge:
                 A.limit_wedges(parts, max_wedge, stats)
-            files = {"Voices": A.write_score(voices, times, credits, D, beam, stats),
-                     "Piano": A.write_score([piano], times, credits, D, beam, stats)}
+            sk = self.song_key(sample, stats, len(times))
+            files = {"Voices": A.write_score(voices, times, credits, D, beam, stats, sk),
+                     "Piano": A.write_score([piano], times, credits, D, beam, stats, sk)}
             score = musicxml.merge_parts([files["Voices"], files["Piano"]])
         else:
             names = {}
@@ -429,7 +434,7 @@ class Pipeline(Engine):
                                          transpose=sample.meta.get("transpose"))
             if max_wedge:
                 A.limit_wedges(parts, max_wedge, stats)
-            score = A.write_score(parts, times, credits, D, beam, stats)
+            score = A.write_score(parts, times, credits, D, beam, stats, self.song_key(sample, stats, len(times)))
             if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
                 LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
         for note in stats.notes:
@@ -444,6 +449,12 @@ class Pipeline(Engine):
                    "instruments": [i["name"] for i in instruments],
                    "parts": [p.name for p in parts]}
         return score, summary, files
+
+    def song_key(self, sample: Sample, stats: A.Stats, n: int) -> list | None:
+        """The concert key of each output bar from the song's `key` row (None: not given)."""
+        if not sample.meta.get("song_key"):
+            return None
+        return A.song_positions(bar_map(sample.meta["song_key"]), stats.letters, stats.pickup, n)
 
     def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path, pdf: Path) -> None:
         """Bar numbers where Audiveris' OCR has no text: the PDF text layer on vector pages,

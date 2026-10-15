@@ -23,8 +23,12 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   truth        part name(s) in the truth score this row is compared with (optional column)
   notes        ignored
 
-Every key/value row above the header (column A = key) is a song setting; `title`, `truth` and
-`unfinished` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
+  A4.. "time" <printed bar: time, ...> "1: 4/4, 68: 2/4, 69: 4/4" (optional; lettered bars "72A: 3/4",
+               pickup "0: 1/4"); "key" the same with concert fifths "1: 0, 54: -5"; "bars" the
+               expected bar count. Passed to every part as meta song_time / song_key / song_bars.
+
+Every key/value row above the header (column A = key) is a song setting; `title`, `truth`,
+`unfinished`, `time`, `key` and `bars` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
 `check` validates the workbook and shows what each part resolves to.
 """
 from __future__ import annotations
@@ -194,6 +198,21 @@ def read_workbook(path: Path) -> dict[str, dict]:
     return songs
 
 
+BAR_LABEL = re.compile(r"^(\d+)([A-Z]?)$")
+
+
+def bar_map(spec: str) -> list[tuple[int, str, str]]:
+    """"1: 4/4, 72A: 3/4" -> [(1, "", "4/4"), (72, "A", "3/4")] in bar order."""
+    out = []
+    for item in filter(None, (x.strip() for x in str(spec).split(","))):
+        label, _, value = item.partition(":")
+        m = BAR_LABEL.match(label.strip().upper())
+        if not m or not value.strip():
+            raise ValueError(f"bad bar entry {item!r} (want 'bar: value', e.g. '68: 2/4')")
+        out.append((int(m.group(1)), m.group(2), value.strip()))
+    return sorted(out)
+
+
 def find(data_dir: Path, name: str) -> Path | None:
     """The show folder for a name ("anastasia") or a path (folder or its show.yaml)."""
     for p in (Path(name), Path(data_dir) / name):
@@ -219,6 +238,7 @@ def load(folder: Path) -> Project:
         st = sheet["settings"]
         ctx = {"song": sid, "title": st.get("title", "")}
         folder_meta = {k: _fmt(v, ctx) for k, v in (show.get("meta") or {}).items()}
+        folder_meta.update({f"song_{k}": st[k] for k in ("time", "key", "bars") if st.get(k)})
         song = Song(sid, ctx["title"], folder / st["truth"] if st.get("truth") else None, [],
                     unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()])
         for row in sheet["rows"]:
@@ -302,6 +322,16 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                 problem(f"ERROR    truth file {song.truth.name}: {e}")
         for e in song.errors:
             problem(f"ERROR    {e}")
+        meta0 = song.parts[0].meta if song.parts else {}
+        for k in ("song_time", "song_key"):
+            if k in meta0:
+                try:
+                    for _, _, v in bar_map(meta0[k]):
+                        if k == "song_time" and not re.fullmatch(r"\d+(\+\d+)*/\d+", v) \
+                                or k == "song_key" and not re.fullmatch(r"-?[0-7]", v):
+                            raise ValueError(f"bad value {v!r}")
+                except ValueError as e:
+                    problem(f"ERROR    {k[5:]}: {e}")
         if song.unfinished:
             print(f"  note     unfinished truth parts (not scored): {', '.join(song.unfinished)}")
             if tparts is not None:
