@@ -844,18 +844,20 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
 
 
 SINGER_LABEL = re.compile(r"^[A-Z][A-Z0-9 .#'&+-]*:")              # "DMITRY:", "BLACK MARKETEER #3:"
+SHOW_FLOW = re.compile(r"\b(attacca|segue|applause|safety|jump on cue)\b", re.I)    # stage-management notes
 ORCH_CUE = re.compile(r"^(\+\s*\w|w/)|\b[A-Z][a-z]{0,3}\.? ?\d? ?/ ?[A-Z][a-z]{1,3}\b")   # "+ Kbd", "w/ Hn", "Cl 2/Bsn"
 
 
 def _cue_text(text: str, pl: T.Placed) -> bool:
     """Text of an instrument part that the truths leave out: the part name left of every system
     ("Util."), the show's cue lines (singer labels, spoken dialogue, "+ Kbd" / "w/ Hn"
-    orchestration cues) and cut marks ("[to] 29")."""
+    orchestration cues), stage-management notes ("attacca", "Safety (jump on cue)") and cut
+    marks ("[to] 29")."""
     if OTTAVA_ON.search(text) or OTTAVA_OFF.search(text):
         return False        # keyboard patch labels drive patch_octaves
     return (pl.line.right <= pl.staff.left or SINGER_LABEL.match(text) is not None
             or len(text.split()) >= 6 or ORCH_CUE.search(text) is not None
-            or text.lower().startswith("[to]"))
+            or text.lower().startswith("[to]") or SHOW_FLOW.search(text) is not None)
 
 
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,

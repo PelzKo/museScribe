@@ -74,7 +74,7 @@ def test_copy_ties_from_audiveris_by_onset_and_pitch():
 def test_cue_text_of_instrument_parts():
     from types import SimpleNamespace as NS
     pl = NS(line=NS(right=500), staff=NS(left=100))
-    for t in ["DMITRY:", "GLEB: (cont)", "+ Kbd", "w/ Hn, Tbn", "Cl 2/Bsn", "[to] 29",
+    for t in ["DMITRY:", "GLEB: (cont)", "+ Kbd", "w/ Hn, Tbn", "Cl 2/Bsn", "[to] 29", "attacca", "Fast applause Segue",
               "We hear you, comrades, the Revolution hears you."]:
         assert A._cue_text(t, pl), t
     for t in ["arco", "pizz.", "solo 1", "cresc.", "STR. ENS. (loco & 8va)", "Moderato"]:
