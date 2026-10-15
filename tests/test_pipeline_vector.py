@@ -43,3 +43,7 @@ def test_patch_octaves_from_loco_8va_until_loco():
     assert plan.chosen[0][1].items[0].find("direction-type/octave-shift").get("type") == "down"
     assert plan.chosen[0][3].items[0].find("direction-type/octave-shift").get("type") == "stop"
 
+
+def test_barlines_dedupe_double_bars():
+    v = [(50, 0, 40), (51.5, 0, 40), (100, 0, 40), (30, 5, 20)]        # double bar; a stem
+    assert SL._barlines(v, 0, 40, 0, 200) == [50, 100]

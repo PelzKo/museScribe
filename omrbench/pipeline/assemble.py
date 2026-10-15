@@ -264,7 +264,8 @@ def apply_song_time(plans: list[SysPlan], spec: list[tuple[int, str, str]], stat
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
                  stats: Stats, raw: bool = False, extra_votes: dict | None = None,
                  alts: dict | None = None, pick_mode: str = "agree",
-                 weights: dict | None = None, song_time: list | None = None) -> list[SysPlan]:
+                 weights: dict | None = None, song_time: list | None = None,
+                 vector_bars: dict | None = None) -> list[SysPlan]:
     """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
     bars only for groups whose crop failed. For comparing readers without homr tuning.
     extra_votes: {system index: bar count} of another layout provider (OLA), one more vote.
@@ -330,6 +331,16 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             for gi, group in enumerate(groups):
                 bar = B.rest_bar(len(group), B.bar_length(cur_time, D), D)
                 h_bars[gi] = [bar]
+        vx = None
+        if not raw and vector_bars and len(sy.staves) == 1:
+            # born-digital part: the printed barlines are the bar count and the bar x ranges
+            # (multi-staff systems: piano and vocal staves are barred apart, not handled)
+            top = sy.staves[0].top
+            vx = next((xs for t, xs in vector_bars.get(sy.page, ()) if abs(t - top) < il), None)
+            if vx:
+                n, how = len(vx), "vector"
+            else:
+                vx = None
         stats.systems[how] += 1
         plan.n = n
         if n == 0:
@@ -337,7 +348,9 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             continue
         # x-range per bar: Audiveris stacks if they match, else an even split
         staff_right = max(s.right for s in sy.staves) if sy.staves else 0
-        if len(sy.stacks) == n:
+        if vx:
+            plan.xs = vx
+        elif len(sy.stacks) == n:
             plan.xs = [(s.left, s.right) for s in sy.stacks]
         elif sy.stacks and len(sy.stacks) < n and staff_right - sy.stacks[-1].right >= 8 * il:
             # Audiveris missed the last barline(s): its stacks for the bars they cover, the
@@ -414,7 +427,10 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     cands = with_notes + [c for c in cands if c not in with_notes]
                 ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
                 st_i = sy.stacks[i] if i < len(sy.stacks) else None
-                multirest = st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right)
+                if vx:      # printed bars: the Audiveris stack in this bar
+                    st_i = next((st for st in sy.stacks if l <= (st.left + st.right) / 2 < r), None)
+                multirest = st_i is not None and st_i.special == "MULTI_REST" and \
+                    (vx is not None or plan.xs[i] == (st_i.left, st_i.right))
                 if multirest:
                     # Audiveris' multi-rest (its stack kept for this bar): homr reads the printed
                     # count above it as notes. Its rest bar, else a rest bar of the right length

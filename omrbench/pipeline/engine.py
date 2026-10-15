@@ -391,7 +391,8 @@ class Pipeline(Engine):
         song_time = bar_map(sample.meta["song_time"]) if sample.meta.get("song_time") else None
         plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
-                                 weights=self.cfg.get("ensemble_weights"), song_time=song_time)
+                                 weights=self.cfg.get("ensemble_weights"), song_time=song_time,
+                                 vector_bars=None if is_scan(sample.pdf) else SL.read_all_systems(sample.pdf, pages))
         if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction"):
             A.place_slashes(plans, SL.read(sample.pdf, pages), D, stats)
         if vocal:
