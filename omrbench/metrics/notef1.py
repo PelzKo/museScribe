@@ -84,6 +84,26 @@ def notes(part: etree._Element) -> list[tuple[int, int, Fraction, int | str | No
     return out
 
 
+def bar_lengths(part: etree._Element) -> list[Fraction]:
+    """Filled length of every bar in quarters (longest voice, rests included; 0 = empty bar)."""
+    out = []
+    divisions = Fraction(1)
+    for measure in part.findall("measure"):
+        cur = end = Fraction(0)
+        for el in measure:
+            if el.tag == "attributes" and el.findtext("divisions"):
+                divisions = _num(el, "divisions", "0") or divisions
+            elif el.tag == "backup":
+                cur -= _num(el, "duration") / divisions
+            elif el.tag == "forward":
+                cur += _num(el, "duration") / divisions
+            elif el.tag == "note" and el.find("chord") is None and el.find("grace") is None:
+                cur += _num(el, "duration") / divisions
+            end = max(end, cur)
+        out.append(end)
+    return out
+
+
 def _key(n, variant: str):
     bar, staff, onset, midi, dur = n
     if variant == "rhythm" or midi is None:

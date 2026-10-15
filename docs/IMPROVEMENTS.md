@@ -22,7 +22,9 @@ dynamics, lyrics. A part with right notes but one missing bar is almost usable; 
 The bar-aligned F1 is a start; a per-part "fix effort" estimate (bars to correct) would be closer to the real use.
 6. **Track results over time.** (Done 2026-10-14: `results/<show>/bench/trend.csv`.) A small CSV / chart of total note F1 per show and commit (bench ids already exist), so
 regressions show up as a dip, not in a table diff.
-24. **Charge wrong-length bars in the edit penalty.** A wrong time signature costs about one action today and padded
+24. **Charge wrong-length bars in the edit penalty.** (Done 2026-10-15: category `barlen`, 1 per matched bar whose
+filled length differs from the truth bar. On the fix4 outputs +1349 actions: Anastasia 2 +767, Anastasia 4 +339,
+Ghost 20 +183.) A wrong time signature costs about one action today and padded
 rests are free, so Anastasia 2 written in 4/4 (truth 3/4, ~55 bars 4 quarters long) is barely penalised. In MuseScore
 every bar of the wrong length breaks (user, 2026-10-14), so each one needs an action. Fix this before re-running the grid
 for the time-signature work (#21), or the gain won't show.
