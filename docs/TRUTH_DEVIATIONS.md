@@ -14,6 +14,8 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 | 20 | Utility | 3 sections | patch label "STR. ENS. (loco & 8va)", no 8va line | 8va line over staff 1, notes an octave up until "(loco)" | convention (pipeline copies it) |
 | 20 | Utility | 8va sections | | the truth's 8va spans hold 271 staff-1 notes, but output and truth differ by only ~115 notes an octave; check where the spans start and end | open |
 | 20 | Guitar | | | 9 diamond noteheads (harmonics?) | open |
+| 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | convention (pipeline writes none on piano reductions) |
+| 20 | Drums | 6, 7, 14, 15, ... | one- and two-bar repeat signs (%), "sim." | the repeated bars written out | convention (pipeline copies them) |
 | 20 | Voice 1, Voice 2 | | | not finished (`unfinished` in the workbook) | open |
 
 ## Anastasia

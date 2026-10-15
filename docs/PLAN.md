@@ -69,6 +69,8 @@ omrbench sweep --id ID --resume                    # after a crash: skips finish
 omrbench sweep --id ID --rebench | --report-only   # re-score finished engines / rebuild the report
 python scripts/reassemble.py ghost --from WORKRUN --to NEWRUN [--engine pipeline-raw] [--songs 20]
                                                    # assembly only, on a run's work dirs (~90 s)
+python scripts/compare_bench.py BASE NEW           # all-song edit penalty delta + acceptance rule (bench ids)
+python scripts/derive_drumkit.py [show]            # drum legend from the truth drum parts -> drumkit.yaml
 omrbench run --engines pipeline,homr --samples demo-*      # multi-engine run on data/samples
 omrbench components layout|ocr <show> --run <run>  # P6 component benchmarks
 bash scripts/smoke_docker.sh                       # demo sample through the containers
@@ -191,6 +193,13 @@ parts in from scratch.
 | Ghost 1a | `results/ghost/runs/g1a-base` | `runs/g1a-fix4` | `edits-g1a-fix4` | **235** (32.5 %) | 0.622 | 0.941 |
 | Ghost 11a (smoke, no truth) | `results/ghost/runs/ghost11a-final` | `runs/g11a-fix` | – | – | – |
 | Anastasia 4 | `results/anastasia/runs/20261013-222736` | same | `a4-first` | **6121** (30.4 %) | 0.667 | |
+
+**Reference 2026-10-15 (improvements round 1, branch `improvements`)**: all 6 truth songs re-transcribed with the default
+`pipeline` into `results/<show>/runs/ref` (work dirs; reassemble from these). Edit penalty with metric #24 (wrong-length
+bars): base `s-base` **12617** -> `r1` **9586** (-24 %; Anastasia 1 773, 2 671, 4 5941, 4A 186, Ghost 1a 227, 20 1788).
+Per step (cumulative, `scripts/compare_bench.py`): drums -106, song time -1279, song key -134, chord symbols -109,
+slash reader -619, "(loco & 8va)" -251, vector barlines -487, measure repeats -46. Remaining top categories: notes 2390,
+articulations 1448, dynamics 683, slurs 596, words 594, ties 526, bars 476, lyrics 459.
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
