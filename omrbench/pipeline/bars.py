@@ -634,6 +634,18 @@ def dedupe_chord_marks(bar: Bar) -> int:
 GRACE_FLAGGED = ("eighth", "16th", "32nd")
 
 
+def single_tremolos(bars: list[Bar]) -> int:
+    """homr writes single-note tremolos (strokes through one stem) as two-note start / stop
+    pairs; the truths have practically no two-note tremolos (Anastasia: 1 of 190)."""
+    n = 0
+    for bar in bars:
+        for t in (t for note in bar.notes() for t in note.iter("tremolo")):
+            if t.get("type") in ("start", "stop"):
+                t.set("type", "single")
+                n += 1
+    return n
+
+
 def fix_graces(bars: list[Bar]) -> tuple[int, int]:
     """Grace notes are printed with flags (eighth / 16th); the engines often miss them
     and write quarter. Those get the piece's most common flagged grace type; "graces"

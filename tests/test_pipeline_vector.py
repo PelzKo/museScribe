@@ -80,3 +80,13 @@ def test_cue_text_of_instrument_parts():
     for t in ["arco", "pizz.", "solo 1", "cresc.", "STR. ENS. (loco & 8va)", "Moderato"]:
         assert not A._cue_text(t, pl), t
     assert A._cue_text("Util.", NS(line=NS(right=90), staff=NS(left=100)))     # left of the staff
+
+
+def test_single_tremolos():
+    from lxml import etree
+    bar = _bar(notes=("C4", "C4"))
+    for n, kind in zip(bar.notes(), ("start", "stop")):
+        orn = etree.SubElement(etree.SubElement(n, "notations"), "ornaments")
+        etree.SubElement(orn, "tremolo", type=kind).text = "3"
+    assert B.single_tremolos([bar]) == 2
+    assert [t.get("type") for t in bar.items[0].iter("tremolo")] == ["single"]
