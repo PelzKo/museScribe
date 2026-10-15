@@ -47,6 +47,7 @@ from ..project import bar_map
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
+from . import chords as CH
 from . import drumkit
 from . import layout
 from . import ocr
@@ -399,7 +400,11 @@ class Pipeline(Engine):
         # text_onset: bar = at the start of the bar it is printed in (the convention of the
         # ground truths here); estimated = beat estimated from its x position
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
-        credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
+        # chord symbols of born-digital pages from the PDF text layer (Audiveris misses them)
+        symbols = [] if is_scan(sample.pdf) else CH.read(sample.pdf, pages)
+        if sample.score_type != "piano_reduction":     # the truths have no chord symbols there
+            A.place_chords(plans, pages, symbols, D, stats)
+        credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate, symbols)
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):

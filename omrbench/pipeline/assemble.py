@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from lxml import etree
 
 from . import bars as B
+from . import chords as CH
 from . import text as T
 from .layout import Page, System, where
 
@@ -59,6 +60,7 @@ class Stats:
     keys_respelled: int = 0
     crops_failed: int = 0
     cue_notes_removed: int = 0
+    chord_symbols: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -555,6 +557,50 @@ def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> 
                         plan.cues.add((gi, i))
 
 
+def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbol], D: int,
+                 stats: Stats) -> None:
+    """Chord symbols onto the bar and beat under them: the staff right below (within 5 staff
+    spaces), the beat by x. Bars that get one lose any chords Audiveris read there."""
+    lyrics = {p.number: [t for t in p.texts if t.role == "Lyrics" or t.kind == "syllable"] for p in pages}
+    cleared: set = set()
+    for sym in symbols:
+        if any(CH.overlaps(sym, t.x, t.y, t.w, t.h) for t in lyrics.get(sym.page, ())):
+            continue
+        bottom = sym.y + sym.h
+        best = None
+        for plan in plans:
+            if plan.system.page != sym.page or not plan.n:
+                continue
+            for st in plan.system.staves:
+                gap = st.top - bottom
+                if -st.interline <= gap <= 5 * st.interline and st.left - st.interline <= sym.x <= st.right \
+                        and (best is None or gap < best[0]):
+                    best = (gap, plan, st)
+        if best is None:
+            continue
+        _, plan, st = best
+        gi, staff_no = _group_of(plan.system, st.id)
+        if gi not in plan.chosen:
+            continue
+        i = _bar_at(plan, sym.x + 1)
+        bar = plan.chosen[gi][i]
+        if id(bar) not in cleared:
+            bar.items = [e for e in bar.items if e.tag != "harmony"]
+            cleared.add(id(bar))
+        h = CH.harmony(sym)
+        # chord symbols sit over slashes / rests more than notes: beat by x on an eighth grid
+        length = B.bar_length(plan.times[i], D) or 4 * D
+        l, r = plan.xs[i]
+        step = max(D // 2, 1)
+        on = min(round(max(0.0, (sym.x - l) / (r - l)) * length / step) * step, length - step) if r > l else 0
+        if on:
+            etree.SubElement(h, "offset").text = str(on)
+        if bar.staves > 1:
+            etree.SubElement(h, "staff").text = str(staff_no)
+        bar.items.insert(0, h)
+        stats.chord_symbols += 1
+
+
 def _group_of(sy: System, staff_id: int) -> tuple[int, int]:
     for gi, g in enumerate(sy.groups()):
         for si, st in enumerate(g):
@@ -622,8 +668,8 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
 
 
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
-               meta: dict, split: bool, estimate_onset: bool = False
-               ) -> tuple[list[T.Line], list[dict]]:
+               meta: dict, split: bool, estimate_onset: bool = False,
+               symbols: list[CH.Symbol] = ()) -> tuple[list[T.Line], list[dict]]:
     by_sys = {id(p.system): p for p in plans}
     vocal = any(p.system.piano_group is not None for p in plans)
     running = T.running_headers(pages)
@@ -640,6 +686,14 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             plan = by_sys.get(id(pl.system))
             if not plan or not plan.n:
                 continue
+            if symbols:
+                # chord symbols placed from the text layer: Audiveris' OCR of them ("Bl? F") goes
+                atoms = [a for a in pl.line.atoms if not any(
+                    sy.page == a.page and CH.overlaps(sy, a.x, a.y, a.w, a.h) for sy in symbols)]
+                if not atoms:
+                    continue
+                if len(atoms) < len(pl.line.atoms):
+                    pl = T.Placed(T.Line(pl.line.page, atoms), pl.system, pl.staff, pl.above)
             gi, staff_no = _group_of(pl.system, pl.staff.id)
             if gi not in plan.chosen:
                 continue
