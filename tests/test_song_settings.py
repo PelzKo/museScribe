@@ -16,3 +16,14 @@ def test_written_key():
     assert A.written_key(0, 0) == 0 and A.written_key(-3, -2) == -1      # Eb concert: F for a Bb clarinet
     assert A.written_key(0, -9) == 3 and A.written_key(-5, -2) == -3     # A for an Eb alto sax; Db -> Eb
     assert A.written_key(0, -12) == 0 and A.written_key(6, -2) == -4     # octave only; F# + 2 -> Ab (not G#)
+
+
+def test_apply_song_time_fixes_rest_bars_of_a_misread_time():
+    from omrbench.pipeline import bars as B
+    plan = A.SysPlan(None, 0, n=2)
+    plan.times = [("2", "4"), ("4", "4")]
+    plan.chosen = {0: [B.rest_bar(1, 4, 2), B.rest_bar(1, 8, 2)]}       # 2/4 rest bar, D = 2
+    stats = A.Stats()
+    A.apply_song_time([plan], bar_map("1: 4/4"), 2, stats)
+    assert plan.times == [("4", "4"), ("4", "4")] and stats.times_set == 1
+    assert plan.chosen[0][0].notes()[0].findtext("duration") == "8"

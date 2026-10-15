@@ -255,14 +255,22 @@ def song_positions(spec: list[tuple[int, str, str]], letters: list, pickup: bool
     return out
 
 
-def apply_song_time(plans: list[SysPlan], spec: list[tuple[int, str, str]], stats: Stats) -> None:
-    """The time signatures of the song's `time` row onto the aligned bars."""
+def apply_song_time(plans: list[SysPlan], spec: list[tuple[int, str, str]], D: int, stats: Stats) -> None:
+    """The time signatures of the song's `time` row onto the aligned bars; rest bars planned
+    in a misread time get the right length."""
     flat = [(p, i) for p in plans for i in range(p.n)]
     for (p, i), v in zip(flat, song_positions(spec, stats.letters, stats.pickup, len(flat))):
         t = tuple(v.split("/")) if v else None
         if t and p.times[i] != t:
             p.times[i] = t
             stats.times_set += 1
+            length = B.bar_length(t, D)
+            for gi, bars in p.chosen.items():
+                old = bars[i]
+                if old.rest_only and B.voice_lengths(old) and max(B.voice_lengths(old).values()) != length:
+                    bars[i] = B.rest_bar(old.staves, length, D)
+                    bars[i].items += [e for e in old.items if e.tag not in ("note", "backup", "forward")]
+                    bars[i].clefs, bars[i].key, bars[i].source = old.clefs, old.key, old.source
 
 
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
@@ -285,6 +293,11 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
     cur_time = None
     allowed = {tuple(v.split("/")) for _, _, v in song_time or ()}
     main_time = _main_time(song_time) if song_time else None
+    # the longest run of each time in the song: a misread carried past it falls back to the main time
+    max_run: dict = {}
+    for (n0, _, v), (n1, _, _) in zip(song_time or [], (song_time or [])[1:]):
+        max_run[tuple(v.split("/"))] = max(max_run.get(tuple(v.split("/")), 0), n1 - n0)
+    run = 0
     # bar numbers printed below each system (one per bar in parts that number every bar)
     labels: dict[int, list[T.Placed]] = {}
     for p in pages:
@@ -378,6 +391,9 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                 t = cur_time or (a_src[i].time if a_src else None)
             if allowed and t not in allowed:
                 t = main_time       # the song never has this time: a misread
+            run = run + 1 if t == cur_time and not (h_src and h_src[i].time) else 1
+            if allowed and t != main_time and t in max_run and run > max_run[t]:
+                t = main_time
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
