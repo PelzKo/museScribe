@@ -48,6 +48,7 @@ from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
 from . import chords as CH
+from . import vector as SL
 from . import drumkit
 from . import layout
 from . import ocr
@@ -391,6 +392,8 @@ class Pipeline(Engine):
         plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
                                  weights=self.cfg.get("ensemble_weights"), song_time=song_time)
+        if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction"):
+            A.place_slashes(plans, SL.read(sample.pdf, pages), D, stats)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)

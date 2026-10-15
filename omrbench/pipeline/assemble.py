@@ -18,12 +18,14 @@ from __future__ import annotations
 import copy
 import re
 from collections import Counter
+from fractions import Fraction
 from dataclasses import dataclass, field
 
 from lxml import etree
 
 from . import bars as B
 from . import chords as CH
+from . import vector as SL
 from . import text as T
 from .layout import Page, System, where
 
@@ -61,6 +63,7 @@ class Stats:
     crops_failed: int = 0
     cue_notes_removed: int = 0
     chord_symbols: int = 0
+    slash_bars: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -555,6 +558,67 @@ def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> 
                     if removed:
                         stats.cue_notes_removed += removed
                         plan.cues.add((gi, i))
+
+
+TYPES = {Fraction(4): ("whole", 0), Fraction(3): ("half", 1), Fraction(2): ("half", 0),
+         Fraction(3, 2): ("quarter", 1), Fraction(1): ("quarter", 0), Fraction(3, 4): ("eighth", 1),
+         Fraction(1, 2): ("eighth", 0), Fraction(1, 4): ("16th", 0)}
+
+
+def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
+    """The bar of a slash reading: slashes on the middle line (B4), the old bar's directions kept."""
+    items = [e for e in old.items if e.tag in ("direction", "harmony")]
+    for ev in sb.events:
+        if ev.dur not in TYPES:
+            return None
+        typ, dots = TYPES[ev.dur]
+        n = etree.Element("note")
+        if ev.kind == "rest":
+            etree.SubElement(n, "rest")
+        else:
+            pitch = etree.SubElement(n, "pitch")
+            etree.SubElement(pitch, "step").text = "B"
+            etree.SubElement(pitch, "octave").text = "4"
+        etree.SubElement(n, "duration").text = str(int(ev.dur * D))
+        for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+            if on:
+                etree.SubElement(n, "tie", type=kind)
+        etree.SubElement(n, "voice").text = "1"
+        etree.SubElement(n, "type").text = typ
+        for _ in range(dots):
+            etree.SubElement(n, "dot")
+        if ev.kind != "rest":
+            etree.SubElement(n, "stem").text = "down"
+            etree.SubElement(n, "notehead").text = "slash"
+            if ev.tie_start or ev.tie_stop:
+                nt = etree.SubElement(n, "notations")
+                for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+                    if on:
+                        etree.SubElement(nt, "tied", type=kind)
+        items.append(n)
+    return B.Bar(items, "slash", old.staves, dict(old.clefs), old.key, old.time)
+
+
+def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, stats: Stats) -> None:
+    """Bars read from the slash glyphs replace the readers' bars on single-staff parts."""
+    for sb in slash_bars:
+        for plan in plans:
+            if plan.system.page != sb.page or not plan.n:
+                continue
+            st = next((st for st in plan.system.staves if abs(st.top - sb.top) < st.interline), None)
+            if st is None:
+                continue
+            gi, _ = _group_of(plan.system, st.id)
+            if gi not in plan.chosen or len(plan.system.groups()[gi]) != 1:
+                break
+            i = _bar_at(plan, (sb.x0 + sb.x1) / 2)
+            if sb.length * D != B.bar_length(plan.times[i], D):
+                break
+            bar = slash_bar(sb, plan.chosen[gi][i], D)
+            if bar is not None:
+                plan.chosen[gi][i] = bar
+                stats.slash_bars += 1
+            break
 
 
 def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbol], D: int,
