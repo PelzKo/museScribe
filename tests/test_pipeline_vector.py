@@ -21,6 +21,8 @@ def test_slash_bar_rhythm_ties_and_kept_directions():
     assert notes[1].findtext("notehead") == "slash" and notes[0].find("rest") is not None
     assert notes[2].find("tie").get("type") == "start" and notes[3].find("notations/tied").get("type") == "stop"
     assert A.slash_bar(SL.SlashBar(1, 0, 1, 0, 1, [SL.Event(0, "slash", F(5, 4))]), old, 2) is None
+    marked = A.slash_bar(SL.SlashBar(1, 0, 1, 0, 1, [SL.Event(0, "slash", F(4), marks=["accent", "accent"])]), old, 2)
+    assert [a.tag for a in marked.notes()[0].find("notations/articulations")] == ["accent"]
 
 
 def _bar(text=None, notes=("C4",)):

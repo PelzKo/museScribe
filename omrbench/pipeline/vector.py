@@ -19,7 +19,8 @@ GLYPHS = {   # font -> {char: (kind, quarters)}
                         "∑": ("rest", Fraction(4)), "‰": ("rest", Fraction(1, 2)),
                         "Œ": ("rest", Fraction(1)), "œ": ("head", None),
                         "Ï": ("head", None), "ú": ("head", None), "w": ("head", None),
-                        "J": ("flag", None), "j": ("flag", None), ".": ("dot", None)},
+                        "J": ("flag", None), "j": ("flag", None), ".": ("dot", None),
+                        ">": ("accent", None), "-": ("tenuto", None)},
 }
 
 
@@ -30,6 +31,7 @@ class Event:
     dur: Fraction                   # quarters
     tie_start: bool = False
     tie_stop: bool = False
+    marks: list = field(default_factory=list)   # accent | staccato | tenuto
 
 
 @dataclass
@@ -132,6 +134,11 @@ def read_page(pdf_page, page) -> list[SlashBar]:
             if kind == "rest" and abs(y - mid) < 1.5 * sp:
                 events_by_x[x] = Event(x, "rest", dur)
         evs = sorted(events_by_x.values(), key=lambda e: e.x)
+        for e in evs:   # articulations right above / below a slash (a dot there is a staccato)
+            if e.kind == "slash":
+                for g in mine:
+                    if g[3] in ("accent", "tenuto", "dot") and abs(g[0] - e.x) < sp and sp < abs(g[1] - mid) < 4 * sp:
+                        e.marks.append("staccato" if g[3] == "dot" else g[3])
         for e in evs:   # augmentation dot: right of the head / rest, in the space above the middle line
             if any(g[3] == "dot" and e.x + 3 <= g[0] <= e.x + 0.9 * 4 * sp and abs(g[1] - (mid - sp / 2)) < sp / 2
                    for g in mine):
@@ -150,7 +157,7 @@ def read_page(pdf_page, page) -> list[SlashBar]:
             if not any(e.kind == "slash" for e in bar_evs) or any(l <= g[0] < r for g in normal):
                 continue
             out.append(SlashBar(page.number, l * sx, r * sx, top * sx, bottom * sx,
-                                [Event(e.x * sx, e.kind, e.dur, e.tie_start, e.tie_stop) for e in bar_evs]))
+                                [Event(e.x * sx, e.kind, e.dur, e.tie_start, e.tie_stop, e.marks) for e in bar_evs]))
     return out
 
 

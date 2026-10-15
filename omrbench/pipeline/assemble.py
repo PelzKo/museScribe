@@ -47,6 +47,7 @@ class SysPlan:
     mr: dict[int, tuple[str, int, int]] = field(default_factory=dict) # bar -> multi-rest evidence
     evidence: list[tuple[float, str, int, int]] = field(default_factory=list)  # x, kind, a, b
     aud: list[B.Bar] | None = None       # Audiveris bars of the system, if their count is n
+    beats: dict[tuple[int, int], list[tuple[float, int]]] = field(default_factory=dict)  # (group, bar) -> [(x, onset)]
     # vocal score: (group, bar) -> [(onset, singer)] from "DMITRY:" labels; bar -> text
     # of the voices not on a vocal staff (dialogue, stage directions)
     singers: dict[tuple[int, int], list[tuple[int, str]]] = field(default_factory=dict)
@@ -608,11 +609,15 @@ def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
         if ev.kind != "rest":
             etree.SubElement(n, "stem").text = "down"
             etree.SubElement(n, "notehead").text = "slash"
-            if ev.tie_start or ev.tie_stop:
+            if ev.tie_start or ev.tie_stop or ev.marks:
                 nt = etree.SubElement(n, "notations")
                 for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
                     if on:
                         etree.SubElement(nt, "tied", type=kind)
+                if ev.marks:
+                    arts = etree.SubElement(nt, "articulations")
+                    for m in dict.fromkeys(ev.marks):
+                        etree.SubElement(arts, m)
         items.append(n)
     return B.Bar(items, "slash", old.staves, dict(old.clefs), old.key, old.time)
 
@@ -636,6 +641,10 @@ def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, s
             if bar is not None:
                 plan.chosen[gi][i] = bar
                 stats.slash_bars += 1
+                on = 0
+                for ev in sb.events:      # where each beat is printed: chord symbols line up with it
+                    plan.beats.setdefault((gi, i), []).append((ev.x, int(on * D)))
+                    on += ev.dur
             break
 
 
@@ -738,6 +747,8 @@ def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbo
         l, r = plan.xs[i]
         step = max(D // 2, 1)
         on = min(round(max(0.0, (sym.x - l) / (r - l)) * length / step) * step, length - step) if r > l else 0
+        if plan.beats.get((gi, i)):     # a slash bar: the slash / rest the symbol stands over
+            on = min(plan.beats[(gi, i)], key=lambda b: abs(b[0] - sym.x))[1]
         if on:
             etree.SubElement(h, "offset").text = str(on)
         if bar.staves > 1:
