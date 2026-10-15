@@ -65,6 +65,7 @@ class Stats:
     chord_symbols: int = 0
     slash_bars: int = 0
     octave_bars: int = 0
+    repeat_bars: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -670,6 +671,35 @@ def patch_octaves(plans: list[SysPlan], stats: Stats) -> None:
                     o = n.find("pitch/octave")
                     if o is not None and (n.findtext("staff") or "1") == "1":
                         o.text = str(int(o.text) + 1)
+
+
+def apply_repeats(plans: list[SysPlan], repeats: list[SL.Repeat], stats: Stats) -> None:
+    """Measure-repeat signs: the bar(s) get the notes of the bar(s) before them (the truths write
+    them out). Placed by printed bar number after align_bars (output bar j = printed position
+    j + 1); in bar order, so a repeat of a repeated bar copies the copy."""
+    track: dict[int, list[tuple[SysPlan, int]]] = {}
+    for plan in plans:
+        for gi in plan.chosen:
+            track.setdefault(gi, []).extend((plan, i) for i in range(plan.n))
+    pos_of = {}
+    for r in repeats:
+        if r.number:
+            for k in range(r.bars):
+                num = r.number + k
+                pos_of[num] = (num + sum(1 for m, _ in stats.letters if m < num) - (0 if stats.pickup else 1), r.bars)
+    for gi, bars in track.items():
+        for j, n in sorted(pos_of.values()):
+            if not (0 <= j - n and j < len(bars)):
+                continue
+            (dp, di), (sp, si) = bars[j], bars[j - n]
+            old, src = dp.chosen[gi][di], sp.chosen[gi][si]
+            if src.rest_only:
+                continue
+            bar = copy.deepcopy(src)
+            bar.items = [e for e in bar.items if e.tag not in ("direction", "harmony")] + \
+                [e for e in old.items if e.tag in ("direction", "harmony")]
+            dp.chosen[gi][di] = bar
+            stats.repeat_bars += 1
 
 
 def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbol], D: int,

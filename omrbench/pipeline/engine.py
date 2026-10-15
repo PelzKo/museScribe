@@ -416,6 +416,8 @@ class Pipeline(Engine):
             A.align_bars(plans, D, stats, LOG)
         if song_time:
             A.apply_song_time(plans, song_time, stats)
+        if repairs and not is_scan(sample.pdf):
+            A.apply_repeats(plans, SL.read_all_repeats(sample.pdf, pages), stats)
         beam = bool(self.cfg.get("auto_beam", True))
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))
         files: dict[str, object] = {}

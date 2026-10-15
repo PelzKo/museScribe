@@ -44,6 +44,15 @@ def test_patch_octaves_from_loco_8va_until_loco():
     assert plan.chosen[0][3].items[0].find("direction-type/octave-shift").get("type") == "stop"
 
 
+def test_repeat_copies_the_bar_before_by_printed_number():
+    plan = A.SysPlan(None, 0, n=4)
+    plan.chosen = {0: [_bar(notes=("C4",)), _bar(notes=("D4",)), _bar("sim.", notes=()), _bar(notes=())]}
+    A.apply_repeats([plan], [SL.Repeat(1, 0, 0, 1, number=3), SL.Repeat(1, 0, 0, 1, number=4)], A.Stats())
+    bars = plan.chosen[0]
+    assert [b.notes()[0].findtext("pitch/step") for b in bars] == ["C", "D", "D", "D"]
+    assert bars[2].items[-1].tag == "direction"          # the bar keeps its own text
+
+
 def test_barlines_dedupe_double_bars():
     v = [(50, 0, 40), (51.5, 0, 40), (100, 0, 40), (30, 5, 20)]        # double bar; a stem
     assert SL._barlines(v, 0, 40, 0, 200) == [50, 100]
