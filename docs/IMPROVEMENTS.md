@@ -65,13 +65,31 @@ picks a worse reading (Reed 1 Oboe 359 of 546 notes, 643 actions). `agree-keep` 
 costs on Anastasia 2 and Ghost 20. Fix: per system, the length most readers' voices fill decides when it disagrees
 with the printed time; per song, a vote across parts by bar (user, 2026-10-14: all books of a song print the exact
 same time signature at the same bar, but misread bar counts shift the bar numbers, so align before voting).
-22. **Route by element, not only by part.** The sweep's best-per-part routing saves only 465 actions (4.3 %); the
+22. **Route by element, not only by part.** (2026-10-15, default pipeline: ties copied from Audiveris onto crop notes with the
+same onset and pitch -69, kept. Slurs taken from Audiveris instead of homr: +106 on the Anastasia scans, rejected. Double /
+final barlines from Audiveris: +129, rejected, its double barlines land on the wrong bars.) The sweep's best-per-part routing saves only 465 actions (4.3 %); the
 category table shows bigger gaps per element: ties 625 -> 520 and slurs 617 -> 565 when Audiveris is preferred and no
 ensemble is used, dynamics 693 -> 651, keys 350 -> 308. Take ties, slurs, dynamics, hairpins from the source that
 reads them best and notes from the crop reader (`routing.yaml`, PLAN step 6).
-23. **Articulations and words need new code.** Second and sixth largest categories (1354 and 603 actions in the
+23. **Articulations and words need new code.** (Words 2026-10-15: cue lines, dialogue, part labels and stage-management notes
+left out of instrument parts, -264. Articulations: about 320 of the remaining 1280 are Anastasia 4 Trumpet / Trombone,
+whose truths look incomplete (TRUTH_DEVIATIONS). Slash articulations read from the glyphs -46.) Second and sixth largest categories (1354 and 603 actions in the
 sweep winner), and no grid variant moves them (best 1346 / 601). Find out per element which reader sees them at all
 (homr, Audiveris, the ensemble readers, OCR) and why the rest are lost, before any tuning.
+
+33. **Dynamics and hairpins on scans.** (2026-10-15) 699 + 387 actions, almost all missing (not misplaced): Audiveris doesn't
+see them on the scanned parts and homr writes none. Truth hairpins are 0-1 bars long, so `max_wedge_bars` is not the cause.
+Needs a detector (template matching of p / mf / f glyphs, hairpin lines) on the crops.
+34. **Ties on born-digital piano reductions.** (2026-10-15) Ghost 20 piano: truth 381 ties, Audiveris reads 346 over the whole
+book (233 on the piano). The tie curves are filled paths in the PDF (as used for slashes); pairing them with the noteheads
+would read them all.
+35. **Barlines of multi-staff vector systems.** (2026-10-15) `vector.read_systems` bars single-staff systems only; on piano /
+vocal systems the staves are barred apart and the Anastasia piano reduction got +3500 actions. Group the staves of a system
+(braces, shared barlines) first.
+36. **Single tremolos homr misses.** (2026-10-15) After turning homr's start / stop pairs into single tremolos (-140), about
+100 single tremolos are still not read at all (Anastasia strings).
+37. **Chord symbols on normal-note bars.** (2026-10-15) Over slash bars the beat comes from the slash under the symbol; over
+normal notes it is still the eighth-grid estimate from x. Use the Audiveris chord (notehead) x positions of the bar.
 
 ## Prior knowledge (cheap to enter in advance)
 

@@ -24,6 +24,7 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 |---|---|---|---|---|---|
 | 4 | all | | 213 bars expected (206 + lettered bars) | 217 bars | open |
 | 4 | Trumpet (Trompete in B), Trombone (Posaune) | | the reader finds ~285 / ~298 articulations (Horn: 319, its truth 333) | 72 / 122 articulations | open (truth incomplete? ~320 actions) |
+| 4 | strings / brass | | "st. mute", "to mute", "open" | "gedämpft", "offen" (German) | open: should the pipeline translate them? (~25 actions) |
 | 4 | Dmitry, Vlad | | | an octave below the output (tenor / baritone clef reading) | open |
 | 4 | Reed 2, Reed 3, Keyboard 2, percussion | | | empty (not scored) | open |
 | 4A | Drums | | drum-set x-notes | written in a "Xylophon" part as a placeholder | convention |

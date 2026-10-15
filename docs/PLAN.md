@@ -200,6 +200,11 @@ bars): base `s-base` **12617** -> `r1` **9586** (-24 %; Anastasia 1 773, 2 671, 
 Per step (cumulative, `scripts/compare_bench.py`): drums -106, song time -1279, song key -134, chord symbols -109,
 slash reader -619, "(loco & 8va)" -251, vector barlines -487, measure repeats -46. Remaining top categories: notes 2390,
 articulations 1448, dynamics 683, slurs 596, words 594, ties 526, bars 476, lyrics 459.
+Round 1 continued (same reference work dirs): slash articulations + chord beats from the slashes -131, ties from
+Audiveris -69, cue / dialogue / label words -231, misread time carried too long -515, single tremolos -140,
+stage-management words -33: **8467** (-33 % from 12617). Rejected (measured worse): slurs from Audiveris (+106),
+Audiveris double barlines (+129), vector barlines on multi-staff systems (+4584). Bench ids `s-*` (cumulative steps),
+`r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription).
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
