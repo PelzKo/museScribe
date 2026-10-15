@@ -46,6 +46,7 @@ from ..pdfkind import is_scan
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
+from . import drumkit
 from . import layout
 from . import ocr
 from . import recognizer as R
@@ -429,6 +430,8 @@ class Pipeline(Engine):
             if max_wedge:
                 A.limit_wedges(parts, max_wedge, stats)
             score = A.write_score(parts, times, credits, D, beam, stats)
+            if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
+                LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened
                 LOG.info(f"assemble: {note}")

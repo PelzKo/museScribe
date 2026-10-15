@@ -334,13 +334,13 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             hb = h_bars.get(gi) if h_bars.get(gi) and len(h_bars[gi]) == n else None
             ab = a_bars.get(gi) if a_bars.get(gi) and len(a_bars[gi]) == n else None
             order = prefer
-            if all(st.clef == "PERCUSSION_CLEF" for st in group):
-                # homr reads percussion staves as pitched (often with a C clef)
-                order = ["audiveris", "crop"]
-                if hb:
-                    hb = [B.to_unpitched(b) for b in hb]
-            options = {"crop": hb, "audiveris": ab}
             perc = all(st.clef == "PERCUSSION_CLEF" for st in group)
+            if perc:
+                # homr reads percussion staves as pitched (often with a C clef): its bars only
+                # where Audiveris lacks the system's bar count (Ghost 20 Drums: 1180 vs 695 notes)
+                order = ["audiveris", "crop"]
+                hb = None if ab else hb and [B.to_unpitched(b) for b in hb]
+            options = {"crop": hb, "audiveris": ab}
             alt_opts = {f"alt:{name}": [B.to_unpitched(b) for b in v] if perc else v
                         for name, d in (alts or {}).items() if (v := d.get((k, gi))) and len(v) == n}
             primary = next((options[s] for s in order if options.get(s)), None)
@@ -393,9 +393,12 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     pick = (ok[0] if ok else None) or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
                     # neither source has this system's bar count: best effort by position
-                    loose = [v for v in (h_bars.get(gi), a_bars.get(gi)) if v]
+                    loose = [v for v in ((a_bars.get(gi), h_bars.get(gi)) if perc else (h_bars.get(gi), a_bars.get(gi))) if v]
                     src = next((v for v in loose if i < len(v)), None)
-                    pick = ("fallback", src[i]) if src else ("rest", B.rest_bar(len(group), length, D))
+                    if src:
+                        pick = ("fallback", B.to_unpitched(src[i]) if perc and src is h_bars.get(gi) else src[i])
+                    else:
+                        pick = ("rest", B.rest_bar(len(group), length, D))
                 s, bar = pick
                 stats.bars[s] += 1
                 bar = copy.deepcopy(bar)

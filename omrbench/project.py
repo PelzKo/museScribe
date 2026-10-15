@@ -226,6 +226,8 @@ def load(folder: Path) -> Project:
                 continue
             try:
                 meta = {**folder_meta, **part_meta(row, show, ctx)}
+                if meta.get("type") == "drums":
+                    meta["show"] = folder.name     # the pipeline looks up the show's drum legend
             except Exception as e:  # noqa: BLE001 - one bad row never hides the others
                 song.errors.append(f"{row['file']}: {type(e).__name__}: {e}")
                 continue
