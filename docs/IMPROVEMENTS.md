@@ -90,6 +90,16 @@ vocal systems the staves are barred apart and the Anastasia piano reduction got 
 100 single tremolos are still not read at all (Anastasia strings).
 37. **Chord symbols on normal-note bars.** (2026-10-15) Over slash bars the beat comes from the slash under the symbol; over
 normal notes it is still the eighth-grid estimate from x. Use the Audiveris chord (notehead) x positions of the bar.
+38. **Repeat signs and voltas.** (2026-10-15, Ghost 13 corrections: "repeat signs missing throughout", rated medium.)
+Audiveris reads some repeat barlines; carry them (and voltas) onto the output bars, checked against the other parts.
+39. **Ties over system breaks.** (2026-10-15, Ghost 13: ties not exact, mostly at line breaks.) A tie at the end of a
+system has its end on the next system's first note; homr crops never see both. Join them in the assembly.
+40. **Real dynamics instead of text.** (2026-10-15, Ghost 13 Cello, rated medium.) Dynamics ("mp", "sub. mp") read
+as words; turn dynamic-only words into `<dynamics>` (with "sub." / "subito" as a word next to it).
+41. **Cue bars marked by a part label.** (2026-10-15, Ghost 13 Bass bar 1: a note for orientation under "Util.".)
+Notes under another part's label at the start are a cue; drop them like small-note cues.
+42. **Drop marks per part (`plain` parts).** (2026-10-15, user, design open: see chat.) Some parts get only notes, ties and
+dots: no articulations, dynamics, hairpins, slurs, playing words. Per song, per row.
 
 ## Prior knowledge (cheap to enter in advance)
 

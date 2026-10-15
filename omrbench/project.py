@@ -8,7 +8,9 @@
 Song sheet layout (sheets whose name starts with "_" are ignored):
 
   A1 "title"  B1 <song title>
-  A2 "truth"  B2 <truth file, relative to the show folder>   (optional; empty = no benchmark)
+  A2 "truth"  B2 <truth file, relative to the show folder>   (optional; empty = no benchmark).
+               Several files separated by ";" (single hand-corrected parts) are merged; a one-part
+               file's part is then named after the text behind the last " - " ("#13 - Bass" -> Bass)
   A3 "unfinished"  B3 <truth part names not hand-corrected yet, "Voice 1, Drum Kit"> (optional;
                bench leaves them out until they are removed here)
   header row: file | pages | skip | instruments | extra | truth | notes
@@ -64,6 +66,7 @@ class Song:
     parts: list[Part]
     errors: list[str] = field(default_factory=list)   # rows that could not be resolved
     unfinished: list[str] = field(default_factory=list)   # truth parts not hand-corrected yet
+    truth_files: list[Path] = field(default_factory=list)   # all of B2; `truth` is the first
 
 
 @dataclass
@@ -239,8 +242,10 @@ def load(folder: Path) -> Project:
         ctx = {"song": sid, "title": st.get("title", "")}
         folder_meta = {k: _fmt(v, ctx) for k, v in (show.get("meta") or {}).items()}
         folder_meta.update({f"song_{k}": st[k] for k in ("time", "key", "bars") if st.get(k)})
-        song = Song(sid, ctx["title"], folder / st["truth"] if st.get("truth") else None, [],
-                    unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()])
+        tfiles = [folder / x.strip() for x in st.get("truth", "").split(";") if x.strip()]
+        song = Song(sid, ctx["title"], tfiles[0] if tfiles else None, [],
+                    unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()],
+                    truth_files=tfiles)
         for row in sheet["rows"]:
             if not row["pages"]:
                 continue
@@ -309,14 +314,13 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
         truth = f"   truth: {song.truth.name}" if song.truth else ""
         print(f"{proj.name} {song.id}  ({song.title}){truth}")
         tparts: dict[str, int] | None = None   # truth part name -> note count
-        if song.truth and not song.truth.exists():
-            problem(f"ERROR    truth file {song.truth} missing")
+        if gone := [f for f in song.truth_files if not f.exists()]:
+            problem(f"ERROR    truth file {', '.join(map(str, gone))} missing")
         elif song.truth and truth_cache is not None:
-            from . import musicxml
             from . import truth as truth_mod
             from .metrics import notef1
             try:
-                troot = musicxml.load(truth_mod.convert(song.truth, truth_cache, musescore))
+                troot = truth_mod.load(song.truth_files, truth_cache, musescore)
                 tparts = {n: len(notef1.notes(p)) for n, p in truth_mod.parts(troot)}
             except Exception as e:  # noqa: BLE001
                 problem(f"ERROR    truth file {song.truth.name}: {e}")

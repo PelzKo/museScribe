@@ -17,15 +17,19 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | convention (pipeline writes none on piano reductions) |
 | 20 | Drums | 6, 7, 14, 15, ... | one- and two-bar repeat signs (%), "sim." | the repeated bars written out | convention (pipeline copies them) |
 | 20 | Voice 1, Voice 2 | | | not finished (`unfinished` in the workbook) | open |
+| 13 | Bass, Cello | | singer cue lines ("SAM: ...", "W'ALLACE:"), "Vamp until ...", "Then ON to m. 60" | kept as words (Anastasia truths drop dialogue / cue lines; the pipeline drops them) | open: keep them in Ghost? |
+| 13 | Bass, Cello | | | part named "Voice" in both files (bench names them Bass / Cello from the file name) | convention |
 
 ## Anastasia
 
 | Song | Part | Bars | Printed | Truth | Status |
 |---|---|---|---|---|---|
-| 4 | all | | 213 bars expected (206 + lettered bars) | 217 bars | open |
+| 4 | all | 132A–C | cut "-> 132C" | 132A and 132B don't exist: 211 bars (a cut to a lettered bar skips the earlier letters; a cut to a plain number keeps empty bars) | convention (pipeline follows it) |
 | 4 | Trumpet (Trompete in B), Trombone (Posaune) | | the reader finds ~285 / ~298 articulations (Horn: 319, its truth 333) | 72 / 122 articulations | open (truth incomplete? ~320 actions) |
-| 4 | strings / brass | | "st. mute", "to mute", "open" | "gedämpft", "offen" (German) | open: should the pipeline translate them? (~25 actions) |
-| 4 | Dmitry, Vlad | | | an octave below the output (tenor / baritone clef reading) | open |
+| 1, 2, 4 | brass | | "Mute", "St. Mute", "Cup Mute", "Open", "to Mute" | "gedämpft", "offen"; "to ..." and an "Open" at the start left out | convention (pipeline translates, 2026-10-15) |
+| 1 | Trombone | 11–20 | "to Cup", then a cup mute | "gedämpft" | convention (Cup -> gedämpft) |
+| 4 | Cello | 199 | "arco" | "arco" here, "Arco" everywhere else | open (harmless: the metric ignores case) |
+| 4 | Dmitry, Vlad | | octave as printed | an octave below the output | convention: the truth is right, the PDF is wrong (user, 2026-10-15); not visible from the PDF, error accepted |
 | 4 | Reed 2, Reed 3, Keyboard 2, percussion | | | empty (not scored) | open |
-| 4A | Drums | | drum-set x-notes | written in a "Xylophon" part as a placeholder | convention |
-| 2 | PianoReduction | | | Klavierauszug empty (not annotated) | open |
+| 4A | Drums | 1–3 | x-notes, "mallets" | a "Xylophon" part: mallets = xylophone | convention (Drums row -> Xylophon, 2026-10-15) |
+| 2 | PianoReduction | | | Klavierauszug not corrected yet | `unfinished` in the workbook |

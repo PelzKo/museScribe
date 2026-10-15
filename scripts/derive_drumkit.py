@@ -53,14 +53,13 @@ def _legend(kit: Counter) -> dict:
 
 def derive(show: str) -> dict:
     """{truth part name: {from: [song ids], positions: {pos: {notehead, instrument, midi, count}}}}."""
-    from lxml import etree
     proj = project.load(REPO / "data" / show)
     kits: dict[str, Counter] = {}
     songs: dict[str, list] = {}
     for song in proj.songs.values():
-        if not song.truth or not song.truth.exists():
+        if not song.truth_files or not all(f.exists() for f in song.truth_files):
             continue
-        root = etree.parse(str(truth.convert(song.truth, REPO / "results" / "cache", None))).getroot()
+        root = truth.load(song.truth_files, REPO / "results" / "cache", None)
         skip = {" ".join(u.lower().split()) for u in song.unfinished}
         for name, part in truth.parts(root):
             if " ".join(name.lower().split()) in skip:

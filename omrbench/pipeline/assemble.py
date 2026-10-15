@@ -874,6 +874,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
     instruments = instruments_from(meta, credits, words) if split or meta.get("doubling") else []
     # without "(Vln)"-style aliases, parenthesized text is never an instrument label
     paren_aliases = any(a.startswith("(") for i in instruments for a in i["aliases"])
+    muted = False
     for pt in classified:
         for pl in pt.words:
             plan = by_sys.get(id(pl.system))
@@ -892,12 +893,14 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 continue
             i = _bar_at(plan, pl.line.x + 1)
             bar = plan.chosen[gi][i]
-            mm = re.search(r"[=♩]\s*(\d{2,3})\s*$", pl.line.text)
+            mm = re.search(r"[=♩]\s*(\d{2,3})\s*\)?\s*$", pl.line.text)
             if mm and not any(e.find("direction-type/metronome") is not None
                               for g in plan.chosen.values() for e in g[i].items):
                 # "Maestoso ♩ = 92" where Audiveris found no metronome (unit assumed quarter)
                 B.add_direction(bar, B.metronome_direction(mm.group(1)), 0, staff_no)
-            text = T.clean_words(pl.line.text)
+            text, muted = T.playing_words(T.clean_words(pl.line.text), muted)
+            if re.fullmatch(r"[Il|]{2,4}", text):
+                continue            # a boxed bar number read as letters ("111" -> "III")
             if not T.is_words(text):
                 continue
             if (gi, i) in plan.cues and text.startswith("("):
@@ -1349,7 +1352,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         start[k] = pos
         pos += p.n
     # lettered bars ("131A": added after 131) shift every later number by one; a cut to
-    # "132C" means 132A and 132B exist (in other parts) and were cut here
+    # "132C" means 132A and 132B are skipped in this production and exist in no part
+    # (user, 2026-10-15; a cut to a plain number keeps the bars between, as empty bars)
     # a lettered number counts only when plain numbers near it agree ("7A" is a misread
     # "72A"; taken as bar 7A it would shift every bar from 8 on)
     plain = [(start[k] + i, v) for k, p in enumerate(plans) for i, v in p.printed.items()
@@ -1365,12 +1369,18 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
             if letter and not plausible(start[k] + i, n):
                 bogus.add((k, i))
-                continue
-            for c in range(ord("A"), ord(letter) + 1 if letter else ord("A")):
-                extra.add((n, chr(c)))
+    first = {}      # bar -> first lettered bar that exists after it ("[to] 132C" -> "C")
+    for k, p in enumerate(plans):
+        for i, (n, letter) in p.jumps.items():
+            if letter and (k, i) not in bogus:
+                first[n] = max(first.get(n, "A"), letter)
+    for k, p in enumerate(plans):
+        for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
+            if letter and (k, i) not in bogus:
+                extra.update((n, chr(c)) for c in range(ord(first.get(n, "A")), ord(letter) + 1))
 
     def position(n: int, letter: str = "") -> int:
-        return n + sum(1 for m, _ in extra if m < n) + (ord(letter) - ord("A") + 1 if letter else 0)
+        return n + sum(1 for m, c in extra if m < n or (m == n and c <= letter))
 
     obs: list[_Obs] = []
     for k, p in enumerate(plans):

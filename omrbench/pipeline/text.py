@@ -428,5 +428,26 @@ def classify(page: Page, vocal: bool = False, running: set[str] | None = None) -
 
 
 def clean_words(t: str) -> str:
-    """Drop a metronome remnant ("Maestoso = 92" -> "Maestoso"); tempo comes from Audiveris."""
-    return re.sub(r"\s*[=♩]\s*\d{2,3}\s*$", "", t).strip()
+    """Drop a metronome remnant ("Maestoso = 92", "Driving (J = 130)" -> "Maestoso", "Driving");
+    tempo comes from Audiveris."""
+    return re.sub(r"\s*\(\s*\S?\s*[=♩]\s*\d{2,3}\s*\)\s*$|\s*[=♩]\s*\d{2,3}\s*$", "", t).strip()
+
+
+MUTE_KIND = r"(?:st\.?|straight|cup|harmon|practice|wah)"
+MUTE_PREP = re.compile(rf"^(?:to|change to)\s+(?:{MUTE_KIND}\s*)?(?:mute|cup|open)\b", re.I)
+MUTE_ON = re.compile(rf"^(?:{MUTE_KIND}\s*)?mute[ds]?\.?$|^cup$|^con sord(?:\.|ino)?$", re.I)
+MUTE_OFF = re.compile(r"^(?:open|senza sord(?:\.|ino)?|mute off)\.?$", re.I)
+PIZZ = re.compile(r"^pizz\W*$", re.I)
+
+
+def playing_words(text: str, muted: bool) -> tuple[str, bool]:
+    """Playing instructions as the truths write them: "St. Mute" -> "gedämpft", "Open" ->
+    "offen" (only after a mute: the open start of a part is not written), "to Mute" (the
+    preparation) -> "" (left out), "PiZZ-" -> "pizz.". Returns (text, muted after it)."""
+    if MUTE_PREP.match(text):
+        return "", muted
+    if MUTE_ON.match(text):
+        return "gedämpft", True
+    if MUTE_OFF.match(text):
+        return ("offen" if muted else ""), False
+    return ("pizz." if PIZZ.match(text) else text), muted

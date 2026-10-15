@@ -215,12 +215,11 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
     for song in selected:
         with logmod.context(f"{proj.name}-{song.id}"):
             try:
-                tpath = truth_mod.convert(song.truth, cache, cfg.get("musescore_cli"))
+                troot = truth_mod.load(song.truth_files, cache, cfg.get("musescore_cli"))
             except Exception as e:  # noqa: BLE001 - one song never stops the others
                 problems.append(f"{song.id}: truth {song.truth.name}: {e}")
                 LOG.error(problems[-1])
                 continue
-            troot = musicxml.load(tpath)
             tparts = {_norm(n): (n, p) for n, p in truth_mod.parts(troot)}
             t_bars = musicxml.measure_count(troot)
             manifest = json.loads((src_root / song.id / MANIFEST).read_text(encoding="utf-8")) \
@@ -290,7 +289,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                     song_rows.append(row)
             not_compared = [n for k, (n, p) in tparts.items()
                             if k not in used and notef1.notes(p)]
-            summary = {"song": song.id, "title": song.title, "truth_file": song.truth.name,
+            summary = {"song": song.id, "title": song.title, "truth_file": "; ".join(f.name for f in song.truth_files),
                        "bars_truth": t_bars,
                        "metrics": {v: _sum(song_rows, v) for v in notef1.VARIANTS},
                        "system": edits.system_penalty(song_roots, troot),
