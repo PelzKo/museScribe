@@ -69,3 +69,14 @@ def test_copy_ties_from_audiveris_by_onset_and_pitch():
     n = crop.notes()[0]
     assert [c.tag for c in n][:3] == ["pitch", "duration", "tie"] and n.find("notations/tied").get("type") == "start"
     assert crop.notes()[1].find("tie") is None
+
+
+def test_cue_text_of_instrument_parts():
+    from types import SimpleNamespace as NS
+    pl = NS(line=NS(right=500), staff=NS(left=100))
+    for t in ["DMITRY:", "GLEB: (cont)", "+ Kbd", "w/ Hn, Tbn", "Cl 2/Bsn", "[to] 29",
+              "We hear you, comrades, the Revolution hears you."]:
+        assert A._cue_text(t, pl), t
+    for t in ["arco", "pizz.", "solo 1", "cresc.", "STR. ENS. (loco & 8va)", "Moderato"]:
+        assert not A._cue_text(t, pl), t
+    assert A._cue_text("Util.", NS(line=NS(right=90), staff=NS(left=100)))     # left of the staff

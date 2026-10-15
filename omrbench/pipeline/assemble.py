@@ -68,6 +68,7 @@ class Stats:
     octave_bars: int = 0
     repeat_bars: int = 0
     ties_copied: int = 0
+    words_dropped: int = 0
     times_set: int = 0
     pickup: bool = False
     letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
@@ -826,6 +827,21 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
             plan.voice_text.setdefault(i, []).append(B.words_direction(t, "above"))
 
 
+SINGER_LABEL = re.compile(r"^[A-Z][A-Z0-9 .#'&+-]*:")              # "DMITRY:", "BLACK MARKETEER #3:"
+ORCH_CUE = re.compile(r"^(\+\s*\w|w/)|\b[A-Z][a-z]{0,3}\.? ?\d? ?/ ?[A-Z][a-z]{1,3}\b")   # "+ Kbd", "w/ Hn", "Cl 2/Bsn"
+
+
+def _cue_text(text: str, pl: T.Placed) -> bool:
+    """Text of an instrument part that the truths leave out: the part name left of every system
+    ("Util."), the show's cue lines (singer labels, spoken dialogue, "+ Kbd" / "w/ Hn"
+    orchestration cues) and cut marks ("[to] 29")."""
+    if OTTAVA_ON.search(text) or OTTAVA_OFF.search(text):
+        return False        # keyboard patch labels drive patch_octaves
+    return (pl.line.right <= pl.staff.left or SINGER_LABEL.match(text) is not None
+            or len(text.split()) >= 6 or ORCH_CUE.search(text) is not None
+            or text.lower().startswith("[to]"))
+
+
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                meta: dict, split: bool, estimate_onset: bool = False,
                symbols: list[CH.Symbol] = ()) -> tuple[list[T.Line], list[dict]]:
@@ -868,14 +884,17 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 continue
             if (gi, i) in plan.cues and text.startswith("("):
                 continue            # "(Clar)": the label of cue notes that were removed
+            name = match_instrument(text, instruments) if instruments else None
+            if name and text.startswith("(") and not paren_aliases:
+                name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
+            if not name and not vocal and _cue_text(text, pl):
+                stats.words_dropped += 1
+                continue
             on = _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)) \
                 if estimate_onset else 0
             d = B.add_direction(bar, B.words_direction(text, "above" if pl.above else "below"),
                                 on, staff_no)
             stats.words += 1
-            name = match_instrument(text, instruments) if instruments else None
-            if name and text.startswith("(") and not paren_aliases:
-                name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
             if name and TO_LABEL.match(text):
                 plan.pending[(gi, i)] = name
             elif name:
