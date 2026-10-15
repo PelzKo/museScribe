@@ -8,6 +8,12 @@ One engine that combines the others (`omrbench/pipeline/`); its runtime is the s
    system is cut out and read by homr. That makes homr usable on vocal scores and condensed
    parts, which it cannot read as whole pages. homr sometimes fails on one crop and works on
    a slightly different one, so failed crops are retried with other margins (`crop_margins`).
+   The crop reader is pluggable (`recognizer:`, `pipeline/recognizer.py`): `homr` (default),
+   `zeus` (solo-staff and grand-staff models), `smt-sys` (SMT system-level grand staff),
+   `transcoda` and `smt-fp`. Groups a recognizer can't read (kern models: anything but a grand
+   staff; zeus: 3+ staves) go to `fallback:` (default homr). In the steps below, "homr" stands
+   for whichever recognizer read the crop (source label `crop`; `prefer` takes `crop` or the
+   recognizer's name). bench.yaml has `pipeline-zeus`, `pipeline-smt`, `pipeline-transcoda`.
 3. **Bar count per system** by vote between Audiveris and the homr crops.
 4. **Bar choice:** per staff group and bar, the preferred engine's bar if its voices fill the
    time signature, else the other one. `prefer: auto` puts homr first on scans and Audiveris

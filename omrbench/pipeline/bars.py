@@ -7,6 +7,8 @@ they really change.
 """
 from __future__ import annotations
 
+from collections import Counter
+
 import copy
 import math
 import re
@@ -27,7 +29,7 @@ Clef = tuple[str, str, str]      # sign, line, octave change
 @dataclass
 class Bar:
     items: list[etree._Element]            # note/backup/forward/direction/... in order
-    source: str                            # homr | audiveris | rest
+    source: str                            # crop | audiveris | rest
     staves: int = 1
     clefs: dict[int, Clef] = field(default_factory=dict)   # in force at start, per staff
     key: str | None = None                 # fifths
@@ -149,8 +151,9 @@ def _keep_direction(d: etree._Element) -> bool:
             if not re.fullmatch(r"\d{2,3}(\.\d+)?", (mm.findtext("per-minute") or "").strip()):
                 dt.remove(mm)
         for r in dt.findall("rehearsal"):
-            # Audiveris turns boxed labels ("Bell", "Glock mallets") into rehearsal marks
-            if not re.fullmatch(r"[A-Z0-9]{1,3}", (r.text or "").strip()):
+            # Audiveris turns boxed labels ("Bell", "Glock mallets") and boxed bar numbers
+            # into rehearsal marks; the truth scores keep letters only
+            if not re.fullmatch(r"[A-Z]{1,2}\d?", (r.text or "").strip()):
                 dt.remove(r)
         kids = [k for k in dt if k.tag in KEEP_DIRECTION_TYPES]
         if not kids:
@@ -209,6 +212,24 @@ def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
             off = el.findtext("offset")
             out.append((cur + (int(off) if off and off.strip().lstrip("-").isdigit() else 0), el))
     return out
+
+
+def signature(bar: Bar) -> Counter:
+    """The sounding notes of a bar as a multiset of (staff, onset, pitch, duration)."""
+    out: Counter = Counter()
+    for on, el in onsets(bar):
+        if el.tag != "note" or el.find("rest") is not None or el.find("grace") is not None:
+            continue
+        p = el.find("pitch")
+        pitch = (p.findtext("step"), p.findtext("alter", "0"), p.findtext("octave")) if p is not None else None
+        out[(el.findtext("staff", "1"), on, pitch, el.findtext("duration"))] += 1
+    return out
+
+
+def similarity(a: Counter, b: Counter) -> float:
+    """Dice overlap of two bar signatures; two empty bars agree."""
+    n = sum(a.values()) + sum(b.values())
+    return 2 * sum((a & b).values()) / n if n else 1.0
 
 
 def rest_bar(staves: int, length: int | None, D: int) -> Bar:
@@ -589,7 +610,7 @@ def fix_graces(bars: list[Bar]) -> tuple[int, int]:
     of half or whole length are misreads and are dropped. Returns (retyped, dropped)."""
     graces = [n for b in bars for n in b.notes() if n.find("grace") is not None]
     flagged = [n.findtext("type") for n in graces if n.findtext("type") in GRACE_FLAGGED]
-    typ = max(set(flagged), key=flagged.count) if flagged else "eighth"
+    typ = Counter(flagged).most_common(1)[0][0] if flagged else "eighth"
     retyped = dropped = 0
     for b in bars:
         keep = []

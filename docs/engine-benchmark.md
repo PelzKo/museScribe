@@ -11,8 +11,16 @@ the evaluation protocol (section 12) from the OMR research notes.
 | `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
 | `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
 | `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
+| `pipeline-zeus` / `-smt` / `-transcoda` | same, another crop recognizer (`recognizer:`), homr on the groups it can't read | Zeus `c8569eb` (OLiMPiC grand staff CC BY-SA, `ayce-2026-08-03` solo staff CC BY-NC-SA); `PRAIG/smt-grandstaff` |
+| `clarity` | Clarity-OMR (commit `c6bb8a4`): whole PDF, YOLO staves + DaViT tokens -> MusicXML | piano-tuned; ~20 s per staff on CPU |
+| `transcoda` | Transcoda 59M (HF revision `b529f8a`): full page -> `**kern` | pianoform; ~70 s/page on CPU |
+| `smt-fp` | Sheet Music Transformer, `PRAIG/smt-fp-grandstaff`: full page -> bekern | pianoform; slow on CPU (no KV cache); the Mozarteum and Polish variants are gated on HF |
+| `mozart` | Mozart (commit `a51c9d7`), classic CV | treble staves only, no rests or barlines; a floor, not a contender |
 
-Every engine is a subprocess from the same harness, measured the same way.
+Every engine is a subprocess from the same harness, measured the same way. All of them run in Docker
+(`omrbench images build`); the four above run only there. Their text outputs are converted in the
+harness (`omrbench/convert/`: `kern.py` repairs bare or inconsistent model output, `mozart.py`).
+Pianoform engines still run on every sample, so the matrix is complete.
 
 ## Samples
 
@@ -66,6 +74,6 @@ Outputs go to `results/samples/bench/<run>/`:
 ## Known engine behaviour
 
 - **Audiveris** OCRs the part label on every system. If the label changes (for example "Soprano" becomes "S.", or an OCR slip turns "Voice" into "Voico"), it opens a new part. The Structure table in the report shows this. The fix is post-processing with the known instrument list, not the benchmark.
-- **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs the pinned old `numpy`, `opencv` and `onnxruntime` that `setup.sh` installs. Because of the cost it is disabled in `bench.yaml`; run it with `--engines oemer` (or set `enabled: true`).
+- **oemer** handles only 1–2 staves per system (it asserts on choir and orchestral systems). It takes about 5 min of wall time and about 60 CPU-min per 300-dpi page on a laptop CPU. It needs pinned old `numpy`, `opencv` and `onnxruntime`; the `omrbench/oemer:0.1.8` image has them. Because of the cost it is disabled in `bench.yaml`; run it with `--engines oemer` (or set `enabled: true`).
 - **homr** reads notes only: no lyrics, dynamics or text. The `notes` OMR-NED variant is the fair comparison for it.
-- **GPU:** `--gpu` and `device: cuda` only help with an NVIDIA GPU that is visible inside WSL (`nvidia-smi` works). AMD iGPUs (Radeon 780M, for example) can't be used from WSL by these engines, so they run on CPU.
+- **GPU:** `device: auto` (default) picks `cuda` only when an NVIDIA GPU is visible inside WSL (`nvidia-smi` works), else `cpu`. AMD iGPUs (Radeon 780M, for example) can't be used from WSL by these engines, so they run on CPU; engines marked `requires_gpu: true` are skipped there.

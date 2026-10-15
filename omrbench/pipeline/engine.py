@@ -1,12 +1,12 @@
-"""`pipeline` engine: Audiveris layout + homr per staff group + repairs.
+"""`pipeline` engine: Audiveris layout + a crop recognizer (homr) per staff group + repairs.
 
 Steps (all timed into the engine's runtime):
 1. Audiveris (meta.yaml switches) -> MusicXML + .omr (layout, text, directions)
 2. rasterise the PDF; crop every staff group (a single staff, or a piano's grand staff)
    of every system using the Audiveris staff positions; Tesseract reads bar numbers,
    ranges and cut marks around the staves where Audiveris' OCR found none (ocr.py)
-3. homr on each crop (homr only reads 1-2 staff systems, crops make it usable on
-   vocal scores and condensed parts)
+3. the crop recognizer on each crop (recognizer.py; homr only reads 1-2 staff
+   systems, crops make it usable on vocal scores and condensed parts)
 4. assemble (see assemble.py): per-bar source choice, directions, printed text,
    multi-measure rests, bars lined up with the printed bar numbers, percussion split
    by instrument labels
@@ -14,8 +14,9 @@ Steps (all timed into the engine's runtime):
 Config (bench.yaml):
   pipeline:
     type: pipeline
-    prefer: auto                # bar source order when both are valid; auto = homr
-                                #   first on scans, audiveris first on vector PDFs
+    recognizer: homr            # crop recognizer (recognizer.py); its options under its name
+    prefer: auto                # bar source order when both are valid ("crop", "audiveris");
+                                #   auto = crop first on scans, audiveris first on vector PDFs
     split_percussion: auto      # auto = score type drums; true/false to force
     crop_margins: [5, 4, 3]     # interlines above/below a staff group; retried in order
     text_onset: bar             # bar = words at the bar start (as in the GTs); estimated
@@ -40,30 +41,19 @@ from .. import musicxml
 from ..dataset import Sample
 from ..engines.audiveris import Audiveris
 from ..engines.base import Engine, EngineResult
-from ..engines.pagewise import Homr
-from ..monitor import RunStats, run_monitored
+from ..monitor import RunStats
 from ..pdfkind import is_scan
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
 from . import layout
 from . import ocr
+from . import recognizer as R
 from . import vocal as V
 from .layout import where
 
 
 LOG = logmod.get("pipeline")
-
-
-def _last_error(log: Path) -> str:
-    try:
-        lines = [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip()]
-    except OSError:
-        return "no output"
-    for ln in reversed(lines[-60:]):
-        if "Error" in ln or "Exception" in ln:
-            return ln.strip()[-200:]
-    return "no output"
 
 
 def book_roots(mxls: list[Path]) -> list:
@@ -109,12 +99,12 @@ class Pipeline(Engine):
         self.audiveris = Audiveris(f"{name}/audiveris",
                                    {**(cfg.get("audiveris") or {}), "type": "audiveris",
                                     "use_metadata": True}, bench)
-        self.homr = Homr(f"{name}/homr", {**(cfg.get("homr") or {}), "type": "homr"}, bench)
+        self.recognizer = R.build(name, cfg, bench)
 
     def check(self) -> tuple[bool, str]:
         ok_a, va = self.audiveris.check()
-        ok_h, vh = self.homr.check()
-        return ok_a and ok_h, f"audiveris {va}; homr {vh}"
+        ok_h, vh = self.recognizer.check()
+        return ok_a and ok_h, f"audiveris {va}; {self.recognizer.name} {vh}"
 
     # -- steps ----------------------------------------------------------------
     def _crop_jobs(self, pages: list[layout.Page], images: list[Path], crop_dir: Path,
@@ -152,48 +142,6 @@ class Pipeline(Engine):
                         jobs.append((k, gi, len(g), out))
                     k += 1
         return jobs
-
-    def _homr_batch(self, jobs: list, crop_dir: Path, log: Path, total: RunStats):
-        """(job, error or None) per crop job, in order. The persistent worker pool by
-        default; one `homr` process per crop with `pool: false` or extra_args."""
-        if not jobs:
-            return []
-        if not self.homr.use_pool():
-            out = []
-            for job in jobs:
-                img = job[3]
-                st = run_monitored(self.homr.page_cmd(img, crop_dir), log_path=log, cwd=crop_dir,
-                                   env=self.homr.env(), timeout_s=self.timeout_s)
-                total.add(st)
-                err = None
-                if st.timed_out:
-                    err = f"timeout after {self.timeout_s:.0f}s"
-                elif self.homr.find_output(img, crop_dir) is None:
-                    err = f"exit {st.exit_code}: {_last_error(log)}"
-                out.append((job, err))
-            return out
-        pool = self.homr.pool()
-        t0 = time.perf_counter()
-        futs = [pool.submit(job[3], self.timeout_s) for job in jobs]
-        results = [f.result() for f in futs]
-        wall = time.perf_counter() - t0
-        out = []
-        with log.open("a", encoding="utf-8") as f:
-            for job, r in zip(jobs, results):
-                f.write(f"$ homr {r.image}\n{r.log}\n[ok={r.ok} wall={r.wall_s:.1f}s "
-                        f"cpu={r.cpu_s:.1f}s{' timed_out' if r.timed_out else ''}]\n")
-                LOG.debug(f"homr {r.image.name}: {'ok' if r.ok else r.error} ({r.wall_s:.1f}s)")
-                out.append((job, None if r.ok else (r.error or "failed")))
-        # workers run side by side: count the batch's elapsed time, the summed CPU time,
-        # memory of the workers that were busy
-        busy = min(len(jobs), len(pool.workers))
-        rss = max((r.rss_mb for r in results), default=0.0)
-        st = RunStats(wall_s=wall, wall_clock_s=wall, cpu_user_s=sum(r.cpu_s for r in results),
-                      peak_rss_mb=rss * busy, peak_single_rss_mb=rss,
-                      exit_code=0, timed_out=any(r.timed_out for r in results),
-                      commands=[f"homr pool ({len(pool.workers)} workers): {len(jobs)} crops"])
-        total.add(st)
-        return out
 
     def _run(self, sample: Sample, workdir: Path, res: EngineResult) -> None:
         # bad meta fails now, not after the engines ran
@@ -235,17 +183,18 @@ class Pipeline(Engine):
         ocr_dir = workdir / "ocr"
         if ocr_dir.exists():
             shutil.rmtree(ocr_dir)
-        self.add_ocr_text(pages, images, ocr_dir)
+        self.add_ocr_text(pages, images, ocr_dir, sample.pdf)
         res.prep_s = time.perf_counter() - t0
 
-        # 3. homr per crop; homr is sensitive to the crop (e.g. "No noteheads found" at one
+        # 3. recognizer per crop; homr is sensitive to the crop (e.g. "No noteheads found" at one
         #    margin, fine at another), so failed crops are retried with other margins
         roots: dict[tuple[int, int], object] = {}
         stats = A.Stats()
         systems = [sy for p in pages for sy in p.systems]
         reasons: dict[tuple[int, int], list[str]] = {}
         todo = jobs
-        LOG.info(f"homr on {len(jobs)} crops of {sum(not sy.skip for sy in systems)} systems")
+        rec = self.recognizer
+        LOG.info(f"{rec.name} on {len(jobs)} crops of {sum(not sy.skip for sy in systems)} systems")
         t_h = time.perf_counter()
         for attempt, margin in enumerate(margins):
             if attempt:
@@ -253,10 +202,10 @@ class Pipeline(Engine):
                 todo = [j for j in self._crop_jobs(pages, images, crop_dir, margin, f"-m{margin:g}")
                         if (j[0], j[1]) in wanted]
             failed = []
-            for job, err in self._homr_batch(todo, crop_dir, log, total):
+            for job, err in rec.recognize(todo, crop_dir, log, total, self.timeout_s):
                 k, gi, n_staves, img = job
                 if err is None:
-                    out = self.homr.find_output(img, crop_dir)
+                    out = rec.output(img, crop_dir)
                     try:
                         if out is None:
                             raise ValueError("no MusicXML written")
@@ -267,17 +216,18 @@ class Pipeline(Engine):
                     reasons.setdefault((k, gi), []).append(f"margin {margin:g}: {err}")
                     failed.append(job)
             if failed and attempt + 1 < len(margins):
-                LOG.debug(f"homr: {len(failed)} crops failed at margin {margin:g}, retrying")
+                LOG.debug(f"{rec.name}: {len(failed)} crops failed at margin {margin:g}, retrying")
             todo = failed
             if not todo:
                 break
-        stats.homr_crops_failed = len(todo)
+        stats.crops_failed = len(todo)
         stats.failed_crops = [(k, gi, n, img, reasons.get((k, gi), [])) for k, gi, n, img in todo]
-        LOG.info(f"homr done in {time.perf_counter() - t_h:.0f}s: {len(roots)}/{len(jobs)} crops read")
+        LOG.info(f"{rec.name} done in {time.perf_counter() - t_h:.0f}s: {len(roots)}/{len(jobs)} crops read")
+        self._ensemble_crops(jobs, workdir, log, total)
 
         # 4. assemble
         t1 = time.perf_counter()
-        score, summary, files = self.assemble(sample, pages, books, roots, stats)
+        score, summary, files = self.assemble(sample, pages, books, roots, stats, workdir)
         summary["crops"] = len(jobs)
         res.output = workdir / "output.musicxml"
         musicxml.write(score, res.output)
@@ -297,11 +247,11 @@ class Pipeline(Engine):
         summary["assemble_s"] = round(assemble_s, 2)
         (workdir / "pipeline.json").write_text(json.dumps(summary, indent=2))
         res.extras["summary"] = workdir / "pipeline.json"
-        if stats.homr_crops_failed:
-            exp = stats.homr_crops_expected
-            res.extras["warning"] = (f"homr failed on {stats.homr_crops_failed}/{len(jobs)} crops"
+        if stats.crops_failed:
+            exp = stats.crops_expected
+            res.extras["warning"] = (f"{rec.name} failed on {stats.crops_failed}/{len(jobs)} crops"
                                      + (f", {exp} of them rest-only systems" if exp else ""))
-            log_fn = LOG.info if exp == stats.homr_crops_failed else LOG.warning
+            log_fn = LOG.info if exp == stats.crops_failed else LOG.warning
             log_fn(res.extras["warning"] + " (each listed above; details in engine.log)")
 
     def split(self, sample: Sample) -> bool:
@@ -325,23 +275,90 @@ class Pipeline(Engine):
         written as two files (transcribe.SPLIT_TYPES)."""
         return sample.score_type == "piano_reduction"
 
+    def measure_votes(self, sample: Sample, pages: list[layout.Page], workdir: Path) -> dict | None:
+        """`measure_vote: ola`: OLA's measure count per system as one more bar-count vote."""
+        if self.cfg.get("measure_vote") != "ola":
+            return None
+        from .. import components
+        dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
+        run_root = workdir.parent.parent
+        images = sorted((run_root / "_pages" / sample.id / f"{dpi}dpi").glob("page*.png"))
+        boxes, _ = components.ola_boxes(run_root, workdir, images, self.bench.get("device", "cpu"))
+        return components.ola_measures(pages, images, boxes)
+
+    def _ensemble_crops(self, jobs: list, workdir: Path, log: Path, total: RunStats) -> None:
+        """`ensemble` readers read the same crops (first margin) into <workdir>/crops-<reader>/."""
+        for name in self.cfg.get("ensemble") or []:
+            edir = workdir / f"crops-{name}"
+            if edir.exists():
+                shutil.rmtree(edir)
+            edir.mkdir(parents=True)
+            rec = R._one(name, self.name, self.cfg, self.bench)
+            mine = []
+            for k, gi, n, img in jobs:
+                if rec.staves is None or n in rec.staves:
+                    shutil.copyfile(img, edir / img.name)
+                    mine.append((k, gi, n, edir / img.name))
+            t0 = time.perf_counter()
+            bad = sum(err is not None for _, err in rec.recognize(mine, edir, log, total, self.timeout_s))
+            LOG.info(f"ensemble {name}: {len(mine) - bad}/{len(mine)} crops read in {time.perf_counter() - t0:.0f}s")
+
+    def ensemble_roots(self, workdir: Path, systems: list) -> dict:
+        """`ensemble: [zeus, clarity, ...]`: {reader: {(k, gi): <score>}} of more crop readers, read
+        from <workdir>/crops-<reader>/s<k>-g<g>.musicxml (same crops as the main reader)."""
+        out = {}
+        for name in self.cfg.get("ensemble") or []:
+            roots = {}
+            for f in sorted((workdir / f"crops-{name}").glob("s*-g*.musicxml")):
+                m = re.fullmatch(r"s(\d+)-g(\d+)", f.stem)
+                if not m:
+                    continue
+                k, gi = int(m.group(1)) - 1, int(m.group(2)) - 1
+                if k >= len(systems) or gi >= len(systems[k].groups()):
+                    continue
+                try:
+                    roots[(k, gi)] = musicxml.load(f)
+                except Exception as e:  # noqa: BLE001 - one unreadable crop is no reading
+                    LOG.debug(f"{name} {f.name}: {e}")
+            out[name] = roots
+        return out
+
+    @staticmethod
+    def ensemble_bars(ens: dict, systems: list, D: int) -> dict | None:
+        """Bars of the ensemble readers' crops (`ensemble_roots`) that have the crop's staves."""
+        out = {}
+        for name, roots in ens.items():
+            bars = {}
+            for (k, gi), r in roots.items():
+                part = r.find("part")
+                n_staves = len(systems[k].groups()[gi])
+                bs = B.part_bars(part, D, "crop", staves=n_staves) if part is not None else []
+                if bs and max(b.staves for b in bs) == n_staves:
+                    bars[(k, gi)] = bs
+            out[name] = bars
+        return out or None
+
     def assemble(self, sample: Sample, pages: list[layout.Page], books: list[Path],
-                 roots: dict, stats: A.Stats):
+                 roots: dict, stats: A.Stats, workdir: Path | None = None):
         """Steps after the engines ran; also usable on a finished work dir (see reassemble)."""
         a_roots = book_roots(books)
-        D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values()))
         systems = [sy for p in pages for sy in p.systems]
-        homr_bars = {}
+        ens = self.ensemble_roots(workdir, systems) if workdir else {}
+        # the ensemble readers' divisions too (Clarity / SMT 10080, Zeus 3 or 56): no rounding
+        D = B.common_divisions([r for r in a_roots if r is not None] + list(roots.values())
+                               + [r for e in ens.values() for r in e.values()])
+        rec = self.recognizer.name
+        crop_bars = {}
         for (k, gi), r in roots.items():
             part = r.find("part")
             n_staves = len(systems[k].groups()[gi])
-            bars = B.part_bars(part, D, "homr", staves=n_staves) if part is not None else []
+            bars = B.part_bars(part, D, "crop", staves=n_staves) if part is not None else []
             if bars and max(b.staves for b in bars) == n_staves:
-                homr_bars[(k, gi)] = bars
+                crop_bars[(k, gi)] = bars
             else:
-                stats.homr_crops_failed += 1
+                stats.crops_failed += 1
                 got = max((b.staves for b in bars), default=0)
-                LOG.warning(f"homr output of {where(systems, k)} staff group {gi + 1} unusable: "
+                LOG.warning(f"{rec} output of {where(systems, k)} staff group {gi + 1} unusable: "
                             + (f"read {got} staves, expected {n_staves}" if bars else "no bars")
                             + " -> Audiveris bars used")
         vocal = self.vocal(sample)
@@ -350,19 +367,26 @@ class Pipeline(Engine):
             ab = aud_bars.get((k, gi))
             # "No noteheads found" on a staff of rests is homr working as designed
             expected = bool(ab) and all(b.rest_only for b in ab) and all("noteheads" in w for w in why)
-            stats.homr_crops_expected += expected
+            stats.crops_expected += expected
             (LOG.info if expected else LOG.warning)(
-                f"homr failed on {where(systems, k)} staff group {gi + 1} ({n_staves} staves)"
+                f"{rec} failed on {where(systems, k)} staff group {gi + 1} ({n_staves} staves)"
                 f"{' (Audiveris reads only rests there: expected)' if expected else ''} -> Audiveris "
                 f"bars used; {'; '.join(why)}; crop {img}")
         prefer = self.cfg.get("prefer") or "auto"
         if prefer == "auto":
             # homr reads scans better; on born-digital PDFs Audiveris is near perfect
             # and also has ties, which homr never outputs
-            prefer = ["homr", "audiveris"] if is_scan(sample.pdf) else ["audiveris", "homr"]
-        prefer = list(prefer)
+            prefer = ["crop", "audiveris"] if is_scan(sample.pdf) else ["audiveris", "crop"]
+        # the recognizer's name (e.g. "homr") stands for its crops
+        prefer = ["crop" if s in rec.split("+") else s for s in prefer]
         self.last_prefer = prefer
-        plans = A.plan_systems(pages, aud_bars, homr_bars, D, prefer, stats)
+        # repairs: false = level 2 of the recognizer comparison (PLAN.md section 7): crop bars as read
+        repairs = bool(self.cfg.get("repairs", True))
+        votes = self.measure_votes(sample, pages, workdir) if workdir else None
+        alts = self.ensemble_bars(ens, systems, D)
+        plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
+                                 alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
+                                 weights=self.cfg.get("ensemble_weights"))
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
@@ -373,8 +397,9 @@ class Pipeline(Engine):
         # ground truths here); estimated = beat estimated from its x position
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
-        A.expand_multirests(plans, homr_bars, D, stats)
-        if self.cfg.get("align_bar_numbers", True):
+        if repairs:
+            A.expand_multirests(plans, crop_bars, D, stats)
+        if repairs and self.cfg.get("align_bar_numbers", True):
             A.align_bars(plans, D, stats, LOG)
         beam = bool(self.cfg.get("auto_beam", True))
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))
@@ -417,16 +442,21 @@ class Pipeline(Engine):
                    "parts": [p.name for p in parts]}
         return score, summary, files
 
-    def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path) -> None:
-        """Tesseract bar numbers where Audiveris' OCR has no text (cached in ocr_dir)."""
+    def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path, pdf: Path) -> None:
+        """Bar numbers where Audiveris' OCR has no text: the PDF text layer on vector pages,
+        Tesseract elsewhere (cached in ocr_dir)."""
         if not self.cfg.get("ocr_bar_numbers", True):
             return
         tess = ocr.find_tesseract(self.home)
         if tess is None:
-            LOG.warning("tesseract not found (PATH or Audiveris jars): no second OCR pass for bar numbers")
-            return
+            LOG.warning("tesseract not found (PATH or Audiveris jars): bar numbers from the text layer only")
         t0 = time.perf_counter()
-        words = ocr.read_pages(pages, images, tess, ocr_dir)
+        engine = self.cfg.get("ocr_engine", "tesseract")
+        if engine != "tesseract":
+            # own cache per engine (component benchmark); the default keeps `ocr/`
+            ocr_dir = ocr_dir.with_name(f"ocr-{engine}")
+        words = ocr.read_pages(pages, images, tess, ocr_dir, pdf=pdf, engine=engine,
+                               device=self.bench.get("device", "cpu"))
         added = sum(ocr.supplement(p, w) for p, w in zip(pages, words))
         LOG.info(f"bar-number OCR: {added} text items added on {len(words)} pages "
                  f"in {time.perf_counter() - t0:.0f}s")
@@ -440,11 +470,11 @@ class Pipeline(Engine):
         if self.cfg.get("ocr_bar_numbers", True):
             dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
             images = rasterize(sample.pdf, workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi", dpi=dpi)
-            self.add_ocr_text(pages, images, workdir / "ocr")
+            self.add_ocr_text(pages, images, workdir / "ocr", sample.pdf)
         roots = {}
         for f in sorted((workdir / "crops").glob("s*-g*.musicxml")):
             k, g = f.stem[1:].split("-g")
             key = (int(k) - 1, int(g.split("-")[0]) - 1)
             roots.setdefault(key, musicxml.load(f))
         stats = A.Stats()
-        return self.assemble(sample, pages, sorted(omr_src.rglob("*.mxl")), roots, stats)
+        return self.assemble(sample, pages, sorted(omr_src.rglob("*.mxl")), roots, stats, workdir)

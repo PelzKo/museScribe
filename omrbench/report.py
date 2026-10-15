@@ -66,6 +66,7 @@ class Data:
         self.sample_ids = [s["id"] for s in self.manifest["samples"]]
         self.meta = {s["id"]: (self.samples[s["id"]].meta if s["id"] in self.samples else s["meta"])
                      for s in self.manifest["samples"]}
+        self.pdfkind = {s["id"]: s.get("pdfkind") for s in self.manifest["samples"]}   # older runs: none
         eng_order = list(self.manifest["engines"])
         self.engines = [e for e in eng_order if any(k[0] == e for k in self.results)]
         self.variants = list((cfg.get("scoring") or {}).get("omr_ned_variants") or {"all": 1})
@@ -218,10 +219,10 @@ def write_report(run_dir: Path) -> Path:
                          for e in d.engines if d.sc(e, sid).get("elements")), None)
         lyr_gt = next(((d.sc(e, sid).get("elements") or {}).get("lyrics", {}).get("gt")
                        for e in d.engines if d.sc(e, sid).get("elements")), None)
-        rows.append([sid, meta.get("type", "other"), d.pages(sid) or "?", c.get("gt_parts", "?"),
+        rows.append([sid, meta.get("type", "other"), d.pdfkind.get(sid) or "?", d.pages(sid) or "?", c.get("gt_parts", "?"),
                      c.get("gt_staves", "?"), c.get("gt_measures", "?"), notes_gt or "?", lyr_gt or 0,
                      meta.get("source") or meta.get("notes") or ""])
-    A(_table(["Sample", "Type", "Pages", "Parts", "Staves", "Measures", "Notes", "Syllables", "Source"],
+    A(_table(["Sample", "Type", "PDF", "Pages", "Parts", "Staves", "Measures", "Notes", "Syllables", "Source"],
              rows))
     A("")
 

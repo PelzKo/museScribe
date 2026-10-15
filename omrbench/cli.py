@@ -9,6 +9,8 @@
                                        note F1 of the latest outputs vs data/SHOW/truth
   omrbench check SHOW [--songs 1,2] [-v] [--export DIR]
                                        validate songs.xlsx, show what every part resolves to
+  omrbench images list|build [base-cpu base-cuda base-cuda11 base-cuda13 audiveris homr oemer clarity transcoda smt-fp smt-sys zeus mozart]
+                                       list or build the Docker images (docker/)
   omrbench new-sample NAME             create data/samples/NAME with a meta.yaml template
   omrbench demo                        create 2 synthetic samples to smoke-test the setup
   omrbench run [--engines a,b] [--samples x,y] [--exclude x,y] [--prefix_matching]
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,6 +36,42 @@ def _csv(s: str | None) -> list[str] | None:
     return [x.strip() for x in s.split(",") if x.strip()] if s else None
 
 
+def _doctor_docker(device: str) -> None:
+    from . import containers as C
+
+    ok, ver = C.docker_ok()
+    print(f"docker : {'OK ' if ok else 'MISSING'} {ver}")
+    if not ok:
+        return
+    if device == "cuda":
+        ok, info = C.gpu_ok()
+        print(f"docker gpu: {'OK ' if ok else 'FAILED'} {info}")
+    else:
+        print("docker gpu: skipped (device cpu, requires_gpu engines are skipped)")
+    for name, (tag, _, _) in C.IMAGES.items():
+        print(f"image  : {name:<10} {'OK ' if C.image_present(tag) else 'MISSING'} {tag}")
+
+
+def cmd_images(_cfg: dict, args) -> int:
+    from . import containers as C
+
+    names = args.names or list(C.IMAGES)
+    unknown = [n for n in names if n not in C.IMAGES]
+    if unknown:
+        raise SystemExit(f"unknown image(s) {unknown} (known: {list(C.IMAGES)})")
+    if args.action == "list":
+        for n in names:
+            tag = C.IMAGES[n][0]
+            print(f"{n:<10} {'built' if C.image_present(tag) else 'not built':<10} {tag}")
+        return 0
+    for n in names:  # base images first, in the order they are listed
+        print(f"==> building {n}")
+        if subprocess.run(C.build_cmd(n)).returncode != 0:
+            print(f"build of {n} failed")
+            return 1
+    return 0
+
+
 def cmd_doctor(cfg: dict, _args) -> int:
     from .runner import host_info
 
@@ -43,6 +82,7 @@ def cmd_doctor(cfg: dict, _args) -> int:
         print("         WARNING device=cuda but no GPU visible; install the NVIDIA Windows driver "
               "with WSL support and check `nvidia-smi` inside WSL")
     print(f"home   : {cfg['home']}")
+    _doctor_docker(cfg["device"])
     from . import project
 
     for folder in project.projects(Path(cfg["data_dir"])):
@@ -138,6 +178,32 @@ def cmd_bench(cfg: dict, args) -> int:
     return 1 if problems else 0
 
 
+def cmd_components(cfg: dict, args) -> int:
+    from datetime import datetime
+
+    from . import components as C
+
+    results = Path(cfg["results_dir"])
+    if args.show:
+        run_root = results / args.show / "runs" / args.run
+        truth = C.truth_bars(args.show, results)
+        out = results / args.show / "components"
+    else:
+        run_root = results / "samples" / "bench" / args.run
+        truth = C.sample_truth_bars(Path(cfg["data_dir"]))
+        out = results / "samples" / "components"
+    if not (run_root / "pipeline").is_dir():
+        raise SystemExit(f"no pipeline work dirs in {run_root}")
+    out = out / (args.id or datetime.now().strftime("%Y%m%d-%H%M%S"))
+    if args.what == "ocr":
+        C.ocr_bench(run_root, truth, ["tesseract", "easyocr", "doctr", "paddle"], out)
+        print(f"report: {out / 'ocr.md'}")
+    else:
+        C.layout_bench(cfg, run_root, truth, out, int(cfg.get("dpi", 300)))
+        print(f"report: {out / 'layout.md'}")
+    return 0
+
+
 def cmd_check(cfg: dict, args) -> int:
     from . import project
 
@@ -166,6 +232,40 @@ def cmd_score(cfg: dict, args) -> int:
     return 0
 
 
+def cmd_sweep(cfg: dict, args) -> int:
+    from . import sweep
+
+    if args.resume or args.rebench or args.report_only:
+        plan = sweep.load_plan(cfg, args.id)
+        if args.report_only:
+            sweep.report(cfg, plan["shows"], plan["engines"], args.id)
+            return 0
+    else:
+        if sweep.plan_file(cfg, args.id).exists():
+            raise SystemExit(f"sweep '{args.id}' exists: continue it with --resume (or pick a new --id)")
+        if not args.shows:
+            raise SystemExit("name the shows, e.g. `omrbench sweep anastasia,ghost --id ID`")
+        engines = _csv(args.engines) or ([] if args.grid else
+                                         [n for n, s in (cfg.get("engines") or {}).items()
+                                          if (s or {}).get("enabled", True) is not False])
+        grids, reuse = [], {}
+        if args.grid:
+            variants = sweep.grid_engines(cfg, args.grid_base, args.grid)
+            grids.append({"base": args.grid_base, "grid": args.grid})
+            if args.grid_reuse:
+                if args.grid_reuse not in engines:
+                    engines.insert(0, args.grid_reuse)
+                reuse = {v: args.grid_reuse for v in variants if v != args.grid_reuse}
+            engines += [v for v in variants if v not in engines]
+        plan = {"shows": _csv(args.shows), "engines": engines, "grids": grids, "reuse": reuse,
+                "songs": _csv(args.songs), "full": args.full, "jobs": args.jobs}
+        sweep.save_plan(cfg, args.id, plan)
+    sweep.sweep(cfg, plan["shows"], plan["engines"], sweep_id=args.id, songs=plan["songs"],
+                full=args.full or plan["full"], jobs=args.jobs or plan["jobs"], force=args.force,
+                resume=args.resume, rebench=args.rebench, reuse=plan.get("reuse"))
+    return 0
+
+
 def cmd_report(_cfg: dict, args) -> int:
     from .report import write_report
 
@@ -180,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data", help="override data_dir")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("doctor")
+    p = sub.add_parser("images", help="list or build the Docker images")
+    p.add_argument("action", choices=["list", "build"])
+    p.add_argument("names", nargs="*", help="base-cpu base-cuda base-cuda11 base-cuda13 audiveris homr oemer clarity transcoda smt-fp smt-sys zeus mozart (default: all)")
     p = sub.add_parser("new-sample")
     p.add_argument("name")
     sub.add_parser("demo")
@@ -218,6 +321,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-awake", "--keep_awake", action="store_true", help="with --transcribe")
     p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn per part (slow)")
     p.add_argument("--bench-id", help="name of the folder in results/<show>/bench/ (default: timestamp)")
+    p = sub.add_parser("sweep", help="every engine / variant on every truth song, then a ranking report")
+    p.add_argument("shows", nargs="?", help="comma-separated shows (e.g. anastasia,ghost); not with --resume")
+    p.add_argument("--id", required=True, help="sweep name: runs <id>-<engine>, report in results/sweeps/<id>/")
+    p.add_argument("--engines", help="comma-separated bench.yaml engines (default: all enabled; none with --grid)")
+    p.add_argument("--grid", help='variants of --grid-base, e.g. "recognizer=homr,clarity;repairs=true,false"')
+    p.add_argument("--grid-base", default="pipeline", help="engine the --grid variants start from")
+    p.add_argument("--grid-reuse", metavar="ENGINE",
+                   help="reassemble the --grid variants from ENGINE's work dirs (run first) instead of transcribing")
+    p.add_argument("--songs", help="comma-separated song ids (default: every song with truth)")
+    p.add_argument("--full", action="store_true", help="also OMR-NED and TEDn (slow)")
+    p.add_argument("--jobs", type=int, help="PDFs at the same time")
+    p.add_argument("--force", action="store_true", help="redo PDFs the run folders already have")
+    p.add_argument("--report-only", action="store_true", help="only rebuild the report from existing benches")
+    p.add_argument("--resume", action="store_true",
+                   help="continue the saved sweep --id after a crash: skips finished engines and PDFs")
+    p.add_argument("--rebench", action="store_true", help="re-score the finished engines (no transcribing)")
+    p = sub.add_parser("components", help="component benchmarks on a finished pipeline run (layout, ocr)")
+    p.add_argument("what", choices=["layout", "ocr"],
+                   help="layout: OLA vs Audiveris; ocr: bar-number tokens per OCR engine (from the caches "
+                        "of pipeline runs with ocr_engine: X on the same run)")
+    p.add_argument("show", nargs="?", help="show in data/ (runs in results/<show>/runs/); omit for samples "
+                                          "(runs in results/samples/bench/)")
+    p.add_argument("--run", required=True, help="run folder with pipeline/<id> work dirs and _pages/")
+    p.add_argument("--id", help="name of the report folder (default: timestamp)")
     p = sub.add_parser("check", help="validate data/<show>/songs.xlsx and show the resolved parts")
     p.add_argument("show", help="show in data/ (e.g. anastasia) or its folder")
     p.add_argument("--songs", help="comma-separated sheet names (default: all)")
@@ -236,8 +363,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.data:
         cfg["data_dir"] = str(Path(args.data).resolve())
         cfg["samples_dir"] = str(Path(args.data).resolve() / "samples")
-    return {"doctor": cmd_doctor, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
-            "transcribe": cmd_transcribe, "check": cmd_check, "bench": cmd_bench, "score": cmd_score, "report": cmd_report}[args.cmd](cfg, args)
+    return {"doctor": cmd_doctor, "images": cmd_images, "new-sample": cmd_new_sample, "demo": cmd_demo, "run": cmd_run,
+            "transcribe": cmd_transcribe, "check": cmd_check, "components": cmd_components, "bench": cmd_bench, "score": cmd_score, "report": cmd_report,
+            "sweep": cmd_sweep}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

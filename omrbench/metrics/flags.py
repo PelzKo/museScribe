@@ -32,9 +32,9 @@ def validator_flags(root) -> dict[tuple[int, int], str]:
         measures = part.findall("measure")
         for mi, m in enumerate(measures):
             for a in m.findall("attributes"):
-                d = a.findtext("divisions")
-                if d:
-                    divisions = Fraction(d.strip())
+                d = (a.findtext("divisions") or "").strip()
+                if d.isdigit() and int(d) > 0:      # Audiveris writes <divisions>0
+                    divisions = Fraction(d)
                 t = a.find("time")
                 if t is not None and t.findtext("beats") and t.findtext("beat-type"):
                     try:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .. import log as logmod
 from ..dataset import Sample
-from ..monitor import RunStats
+from ..monitor import RunStats, run_monitored
 
 LOG = logmod.get("engine")
 
@@ -46,6 +46,8 @@ class EngineResult:
 class Engine:
     kind = "base"
     runs_locally = True
+    container_image = ""   # key of containers.IMAGES this engine runs in by default; "" = native only
+    container_exe = ""     # the command name inside that image
 
     def __init__(self, name: str, cfg: dict, bench: dict):
         self.name = name
@@ -63,12 +65,40 @@ class Engine:
         raise NotImplementedError
 
     # -- common ------------------------------------------------------------
+    @property
+    def device(self) -> str:
+        """bench.yaml `device`, or the engine's own `device: cpu` (e.g. homr's fp32 CPU models)."""
+        return str(self.cfg.get("device") or self.bench.get("device", "cpu"))
+
     def env(self) -> dict:
         env = {}
-        if self.bench.get("device", "cpu") == "cpu":
+        if self.device == "cpu":
             env["CUDA_VISIBLE_DEVICES"] = ""
         env.update({str(k): str(v) for k, v in (self.cfg.get("env") or {}).items()})
         return env
+
+    @property
+    def container(self) -> str:
+        """Image key this engine runs in, or "" for native. Config: `container: native` turns it off."""
+        c = self.cfg.get("container", self.container_image)
+        return "" if c in (None, "", "native") else str(c)
+
+    def container_env(self, env: dict) -> dict:
+        """Host env minus host-side tool paths (TESSDATA_PREFIX etc.): the image sets its own."""
+        return {k: v for k, v in env.items() if str(self.home) not in str(v)}
+
+    def exec_cmd(self, cmd: list, workdir: Path, log_path: Path, *, env: dict | None = None,
+                 cwd: Path | None = None, timeout_s: float | None = None) -> RunStats:
+        """Run one tool command natively or in its container (identical paths, workdir mounted)."""
+        timeout_s = timeout_s or self.timeout_s
+        if not self.container:
+            return run_monitored(cmd, log_path=log_path, cwd=cwd, env=env, timeout_s=timeout_s)
+        from .. import containers
+        gpu = self.device == "cuda"
+        return containers.run_in_container(
+            containers.IMAGES[self.container][0], [self.container_exe, *cmd[1:]], workdir=workdir,
+            log_path=log_path, gpu=gpu, env=self.container_env(env or {}), cwd=cwd,
+            timeout_s=timeout_s)
 
     def run(self, sample: Sample, workdir: Path) -> EngineResult:
         workdir.mkdir(parents=True, exist_ok=True)

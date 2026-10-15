@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -273,10 +274,13 @@ def sample_jobs(cfg: dict, only=None, exclude=None, prefix=False) -> tuple[Path,
 
 def transcribe(cfg: dict, *, project: str | None = None, songs=None, parts=None,
                engine: str = "pipeline", samples_only=None, samples_exclude=None,
-               prefix_matching=False, force=False, run_id=None, jobs=None, awake=False) -> int:
+               prefix_matching=False, force=False, run_id=None, jobs=None, awake=False,
+               latest=True) -> int:
     """Return the number of failed PDFs. awake: keep Windows from sleeping meanwhile.
 
-    With `project`, the songs of that show; else every PDF of the selected sample folders."""
+    With `project`, the songs of that show; else every PDF of the selected sample folders.
+    latest=False (sweeps): write only into the run folder, leave results/<show>/<song>/ alone, and
+    skip PDFs the run folder already has (resume)."""
     if project:
         root, groups, todo, problems = project_jobs(cfg, project, songs, parts)
     else:
@@ -289,12 +293,12 @@ def transcribe(cfg: dict, *, project: str | None = None, songs=None, parts=None,
     for p in problems:
         LOG.error(p)
     with keep_awake(awake):
-        failed = _transcribe(cfg, root, run_dir, groups, todo, engine, force, jobs)
+        failed = _transcribe(cfg, root, run_dir, groups, todo, engine, force, jobs, latest)
     return failed + len(problems)
 
 
 def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in: list[Job],
-                engine: str, force: bool, jobs) -> int:
+                engine: str, force: bool, jobs, latest: bool = True) -> int:
     engines = config_mod.engines(cfg, [engine])
     if not engines:
         raise SystemExit(f"unknown engine '{engine}' (configured: {', '.join(cfg.get('engines') or {})})")
@@ -322,7 +326,11 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
             failed += 1
             continue
         prev = manifests[job.group].get(job.name) or {}
-        if not force and prev.get("key") == key and all((root / job.group / o).exists() for o in outs):
+        if not latest and not force and all((run_dir / job.group / o).exists() for o in outs):
+            LOG.info(f"{label}: already in {run_dir.name}, skipped (--force to redo)")
+            skipped += 1
+            continue
+        if latest and not force and prev.get("key") == key and all((root / job.group / o).exists() for o in outs):
             LOG.info(f"{label}: unchanged since run {prev.get('run')}, skipped (--force to redo)")
             skipped += 1
             continue
@@ -389,10 +397,14 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
                 continue
             done += 1
             # the run keeps its own copy; the group folder holds the latest output
-            for dest in (run_dir / job.group, root / job.group):
+            for dest in (run_dir / job.group, root / job.group)[:2 if latest else 1]:
                 dest.mkdir(parents=True, exist_ok=True)
                 for out, src in zip(outs, srcs):
-                    shutil.copyfile(src, dest / out)
+                    # atomic: a crash never leaves a half-written output that a resume takes as done
+                    shutil.copyfile(src, dest / (out + ".part"))
+                    os.replace(dest / (out + ".part"), dest / out)
+            if not latest:
+                continue
             manifests[job.group][job.name] = {
                 "key": key, "outputs": outs, "run": run_dir.name, "engine": engine,
                 "code": code, "pdf": str(job.pdf), "pages": job.meta.get("pages"),
@@ -402,7 +414,7 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
             changed.add(job.group)
     LOG.info(f"done in {time.perf_counter() - t0:.0f}s: {done} written, {skipped} unchanged, "
              f"{failed} failed")
-    for g in groups:
+    for g in groups if latest else ():
         files = [(Path(o).stem, root / g / o) for job in order[g]
                  for o in output_names(job.name, job.meta) if (root / g / o).exists()]
         if files and (g in changed or not (root / g / "combined.musicxml").exists()):
@@ -434,3 +446,44 @@ def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -
                             "between parts and filled them; saved with -f)")
         except Exception as e:  # noqa: BLE001
             LOG.error(f"{mscz.name} FAILED {type(e).__name__}: {e}")
+
+
+def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine: str, dst_run: str,
+                   engine: str, force: bool = False) -> int:
+    """Re-run only the pipeline assembly (with `engine`'s bench.yaml options) on the work dirs of
+    results/<show>/runs/<src_run>/<work_engine>/ and write the outputs into runs/<dst_run>/.
+    Outputs already there are skipped unless `force` (resume). Returns the number of failed PDFs."""
+    root, _, jobs, problems = project_jobs(cfg, project, songs)
+    for p in problems:
+        LOG.error(p)
+    eng = config_mod.engines(cfg, [engine])[0]
+    failed = 0
+    for job in jobs:
+        outs = output_names(job.name, job.meta)
+        dest = root / "runs" / dst_run / job.group
+        if not force and all((dest / o).exists() for o in outs):
+            continue
+        wd = root / "runs" / src_run / work_engine / job.sid
+        if not (wd / "audiveris").is_dir():
+            LOG.error(f"{job.sid}: no work dir {wd}")
+            failed += 1
+            continue
+        src = wd / "subset.pdf" if (wd / "subset.pdf").exists() else job.pdf
+        t0 = time.perf_counter()
+        try:
+            score, _, files = eng.reassemble(dataset.Sample(job.sid, job.pdf.parent, src, None, job.meta), wd)
+        except Exception as e:  # noqa: BLE001 - one PDF never stops the others
+            LOG.error(f"{job.sid}: reassemble FAILED {type(e).__name__}: {e}", exc_info=True)
+            failed += 1
+            continue
+        roots = list(files.values()) if len(outs) > 1 else [score]
+        if len(roots) != len(outs):
+            LOG.error(f"{job.sid}: {engine} gave {len(roots)} files for {len(outs)} outputs")
+            failed += 1
+            continue
+        dest.mkdir(parents=True, exist_ok=True)
+        for name, r in zip(outs, roots):
+            musicxml.write(r, dest / (name + ".part"))
+            os.replace(dest / (name + ".part"), dest / name)
+        LOG.info(f"{job.sid}: reassembled with {engine} in {time.perf_counter() - t0:.0f}s -> {', '.join(outs)}")
+    return failed + len(problems)

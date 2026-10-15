@@ -71,7 +71,9 @@ def _timewise_to_partwise(tw: etree._Element) -> etree._Element:
         parts[sp.get("id")] = etree.SubElement(pw, "part", id=sp.get("id"))
     for m in tw.iterfind("measure"):
         for p in m.iterfind("part"):
-            dst = parts.setdefault(p.get("id"), etree.SubElement(pw, "part", id=p.get("id")))
+            if p.get("id") not in parts:
+                parts[p.get("id")] = etree.SubElement(pw, "part", id=p.get("id"))
+            dst = parts[p.get("id")]
             nm = etree.SubElement(dst, "measure", dict(m.attrib))
             for c in p:
                 nm.append(copy.deepcopy(c))
@@ -248,7 +250,19 @@ CATEGORIES = [
     "lyrics",
     "words",          # tempo / expression text (<words>)
     "tempo",          # <metronome>
+    "fermatas",       # on notes, rests and barlines
+    "tuplets",        # tuplet start: actual:normal
+    "tremolos",       # single-note and two-note tremolos with stroke count
+    "instruments",    # instrument change (<instrument-change> or a mid-part <transpose>), position only
+    "structure",      # repeats, voltas, segno / coda / D.S. / D.C. / fine / to coda
+    "barlines",       # double / final / dashed ... barlines (not repeats)
+    "rehearsal",      # rehearsal marks
+    "chords",         # chord symbols (<harmony>)
+    "multirest",      # multi-rest counts
+    "systemtext",     # <words> marked system="only-top"/"also-top" (MuseScore system text: rit., a tempo)
 ]
+
+_NAV = ("segno", "coda", "dacapo", "dalsegno", "fine", "tocoda")
 
 
 @dataclass
@@ -337,114 +351,194 @@ def extract_staves(root: etree._Element) -> list[Staff]:
     names = {sp.get("id"): _txt(sp, "part-name", "") for sp in root.iterfind("part-list/score-part")}
     staves: list[Staff] = []
     for pi, part in enumerate(root.findall("part")):
-        pstaves: dict[int, Staff] = {}
-
-        def st(n: int) -> Staff:
-            if n not in pstaves:
-                pstaves[n] = Staff(pi, names.get(part.get("id"), ""), n)
-            return pstaves[n]
-
-        st(1)
-        divisions = Fraction(1)
-        measures = part.findall("measure")
-        for mi, measure in enumerate(measures):
-            cur = Fraction(0)
-            last_onset = Fraction(0)
-            for el in measure:
-                tag = el.tag
-                if tag == "attributes":
-                    d = _txt(el, "divisions")
-                    if d:
-                        divisions = Fraction(d)
-                    ns = _txt(el, "staves")
-                    if ns and ns.isdigit():
-                        for k in range(1, int(ns) + 1):
-                            st(k)
-                    for key in el.findall("key"):
-                        tok = f"key:{_txt(key, 'fifths', '?')}"
-                        targets = [int(key.get("number"))] if key.get("number") else list(pstaves)
-                        for k in targets:
-                            st(k).events["keys"].append((mi, cur, tok))
-                    for time_ in el.findall("time"):
-                        if time_.find("senza-misura") is not None:
-                            tok = "time:senza"
-                        else:
-                            tok = f"time:{_txt(time_, 'beats', '?')}/{_txt(time_, 'beat-type', '?')}"
-                        targets = [int(time_.get("number"))] if time_.get("number") else list(pstaves)
-                        for k in targets:
-                            st(k).events["times"].append((mi, cur, tok))
-                    for clef in el.findall("clef"):
-                        oc = _txt(clef, "clef-octave-change", "")
-                        tok = f"clef:{_txt(clef, 'sign', '?')}{_txt(clef, 'line', '')}{oc and '^' + oc}"
-                        st(int(clef.get("number", "1"))).events["clefs"].append((mi, cur, tok))
-                elif tag == "backup":
-                    cur -= Fraction(_txt(el, "duration", "0")) / divisions
-                elif tag == "forward":
-                    cur += Fraction(_txt(el, "duration", "0")) / divisions
-                elif tag == "note":
-                    is_chord = el.find("chord") is not None
-                    is_grace = el.find("grace") is not None
-                    onset = last_onset if is_chord else cur
-                    s = st(int(_txt(el, "staff", "1") or 1))
-                    dur_tok = _duration_token(el, measure)
-                    if is_grace:
-                        dur_tok = "grace:" + dur_tok
-                    ev = s.events
-                    if el.find("rest") is not None:
-                        ev["rests"].append((mi, onset, "R:" + dur_tok))
-                        ev["rhythm"].append((mi, onset, "R:" + dur_tok))
-                        s.measures.setdefault(mi, []).append((onset, "R:" + dur_tok))
-                    else:
-                        pt = _pitch_token(el) or "~"
-                        ev["notes"].append((mi, onset, f"{pt}:{dur_tok}"))
-                        ev["pitch"].append((mi, onset, pt))
-                        if not is_chord:
-                            ev["rhythm"].append((mi, onset, "N:" + dur_tok))
-                        s.measures.setdefault(mi, []).append((onset, f"{pt}:{dur_tok}"))
-                    for notations in el.findall("notations"):
-                        for art in notations.findall("articulations/*"):
-                            ev["articulations"].append((mi, onset, art.tag))
-                        for f in notations.findall("fermata"):
-                            ev["articulations"].append((mi, onset, "fermata"))
-                        for sl in notations.findall("slur"):
-                            if sl.get("type") == "start":
-                                ev["slurs"].append((mi, onset, "slur"))
-                        for ti in notations.findall("tied"):
-                            if ti.get("type") == "start":
-                                ev["ties"].append((mi, onset, "tie"))
-                        for dyn in notations.findall("dynamics/*"):
-                            ev["dynamics"].append((mi, onset, _dyn_token(dyn)))
-                    for ly in el.findall("lyric"):
-                        text = "".join(t.text or "" for t in ly.findall("text"))
-                        if text.strip():
-                            verse = ly.get("number", "1")
-                            ev["lyrics"].append((mi, onset, f"v{verse}:{_norm_text(text)}"))
-                    if not is_chord and not is_grace:
-                        last_onset = cur
-                        cur += Fraction(_txt(el, "duration", "0")) / divisions
-                    elif not is_chord:
-                        last_onset = cur
-                elif tag == "direction":
-                    s = st(int(_txt(el, "staff", "1") or 1))
-                    off = el.find("offset")
-                    onset = cur + (Fraction(off.text.strip()) / divisions
-                                   if off is not None and off.text else 0)
-                    for dt in el.findall("direction-type"):
-                        for dyn in dt.findall("dynamics/*"):
-                            s.events["dynamics"].append((mi, onset, _dyn_token(dyn)))
-                        for w in dt.findall("wedge"):
-                            if w.get("type") in ("crescendo", "diminuendo"):
-                                s.events["hairpins"].append((mi, onset, w.get("type")))
-                        for w in dt.findall("words"):
-                            if w.text and w.text.strip():
-                                s.events["words"].append((mi, onset, _norm_text(w.text)))
-                        for mm in dt.findall("metronome"):
-                            unit = _txt(mm, "beat-unit", "?") + "." * len(mm.findall("beat-unit-dot"))
-                            s.events["tempo"].append((mi, onset, f"{unit}={_txt(mm, 'per-minute', '?')}"))
-        for s in pstaves.values():
-            s.n_measures = len(measures)
-        staves.extend(pstaves[k] for k in sorted(pstaves))
+        staves.extend(part_staves(part, pi, names.get(part.get("id"), "")))
     return staves
+
+
+def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff]:
+    """The staves of one <part> with their categorised events (see `extract_staves`)."""
+    pstaves: dict[int, Staff] = {}
+
+    def st(n: int) -> Staff:
+        if n not in pstaves:
+            pstaves[n] = Staff(pi, name, n)
+        return pstaves[n]
+
+    st(1)
+    divisions = Fraction(1)
+    transpose = None
+    measures = part.findall("measure")
+    for mi, measure in enumerate(measures):
+        cur = mend = Fraction(0)
+        last_onset = Fraction(0)
+        changed = False     # instrument change in this measure
+        if measure.find(".//instrument-change") is not None and measure.find("attributes/transpose") is None:
+            transpose = ("0", "0")    # MuseScore writes <transpose> only for a non-zero interval
+        for el in measure:
+            tag = el.tag
+            mend = max(mend, cur)
+            if tag == "attributes":
+                d = _txt(el, "divisions")
+                if d and Fraction(d) > 0:      # Audiveris sometimes writes <divisions>0
+                    divisions = Fraction(d)
+                tr = el.find("transpose")
+                if tr is not None:
+                    t = (_txt(tr, "chromatic", "0"), _txt(tr, "octave-change", "0"))
+                    changed |= transpose is not None and t != transpose
+                    transpose = t
+                mr = el.find("measure-style/multiple-rest")
+                if mr is not None and mr.text:
+                    st(1).events["multirest"].append((mi, cur, f"mr:{mr.text.strip()}"))
+                ns = _txt(el, "staves")
+                if ns and ns.isdigit():
+                    for k in range(1, int(ns) + 1):
+                        st(k)
+                for key in el.findall("key"):
+                    tok = f"key:{_txt(key, 'fifths', '?')}"
+                    targets = [int(key.get("number"))] if key.get("number") else list(pstaves)
+                    for k in targets:
+                        st(k).events["keys"].append((mi, cur, tok))
+                for time_ in el.findall("time"):
+                    if time_.find("senza-misura") is not None:
+                        tok = "time:senza"
+                    else:
+                        tok = f"time:{_txt(time_, 'beats', '?')}/{_txt(time_, 'beat-type', '?')}"
+                    targets = [int(time_.get("number"))] if time_.get("number") else list(pstaves)
+                    for k in targets:
+                        st(k).events["times"].append((mi, cur, tok))
+                for clef in el.findall("clef"):
+                    oc = _txt(clef, "clef-octave-change", "")
+                    tok = f"clef:{_txt(clef, 'sign', '?')}{_txt(clef, 'line', '')}{oc and '^' + oc}"
+                    st(int(clef.get("number", "1"))).events["clefs"].append((mi, cur, tok))
+            elif tag == "backup":
+                cur -= Fraction(_txt(el, "duration", "0")) / divisions
+            elif tag == "forward":
+                cur += Fraction(_txt(el, "duration", "0")) / divisions
+            elif tag == "note":
+                is_chord = el.find("chord") is not None
+                is_grace = el.find("grace") is not None
+                onset = last_onset if is_chord else cur
+                s = st(int(_txt(el, "staff", "1") or 1))
+                dur_tok = _duration_token(el, measure)
+                if is_grace:
+                    dur_tok = "grace:" + dur_tok
+                ev = s.events
+                if el.find("rest") is not None:
+                    ev["rests"].append((mi, onset, "R:" + dur_tok))
+                    ev["rhythm"].append((mi, onset, "R:" + dur_tok))
+                    s.measures.setdefault(mi, []).append((onset, "R:" + dur_tok))
+                else:
+                    pt = _pitch_token(el) or "~"
+                    ev["notes"].append((mi, onset, f"{pt}:{dur_tok}"))
+                    ev["pitch"].append((mi, onset, pt))
+                    if not is_chord:
+                        ev["rhythm"].append((mi, onset, "N:" + dur_tok))
+                    s.measures.setdefault(mi, []).append((onset, f"{pt}:{dur_tok}"))
+                for notations in el.findall("notations"):
+                    for art in notations.findall("articulations/*"):
+                        ev["articulations"].append((mi, onset, art.tag))
+                    for f in notations.findall("fermata"):
+                        ev["fermatas"].append((mi, onset, "fermata"))
+                    for sl in notations.findall("slur"):
+                        if sl.get("type") == "start":
+                            ev["slurs"].append((mi, onset, "slur"))
+                    for ti in notations.findall("tied"):
+                        if ti.get("type") == "start":
+                            ev["ties"].append((mi, onset, "tie"))
+                    for dyn in notations.findall("dynamics/*"):
+                        ev["dynamics"].append((mi, onset, _dyn_token(dyn)))
+                    for tu in notations.findall("tuplet"):
+                        if tu.get("type") == "start":
+                            tm = el.find("time-modification")
+                            ratio = (f"{_txt(tm, 'actual-notes', '?')}:{_txt(tm, 'normal-notes', '?')}"
+                                     if tm is not None else "?")
+                            ev["tuplets"].append((mi, onset, f"tuplet:{ratio}"))
+                    for tr in notations.findall("ornaments/tremolo"):
+                        if tr.get("type", "single") in ("single", "start"):
+                            ev["tremolos"].append((mi, onset, f"trem:{tr.get('type', 'single')}:"
+                                                              f"{(tr.text or '').strip()}"))
+                for ly in el.findall("lyric"):
+                    text = "".join(t.text or "" for t in ly.findall("text"))
+                    if text.strip():
+                        verse = ly.get("number", "1")
+                        ev["lyrics"].append((mi, onset, f"v{verse}:{_norm_text(text)}"))
+                if not is_chord and not is_grace:
+                    last_onset = cur
+                    cur += Fraction(_txt(el, "duration", "0")) / divisions
+                elif not is_chord:
+                    last_onset = cur
+            elif tag == "direction":
+                s = st(int(_txt(el, "staff", "1") or 1))
+                off = el.find("offset")
+                onset = cur + (Fraction(off.text.strip()) / divisions
+                               if off is not None and off.text else 0)
+                for dt in el.findall("direction-type"):
+                    for dyn in dt.findall("dynamics/*"):
+                        s.events["dynamics"].append((mi, onset, _dyn_token(dyn)))
+                    for w in dt.findall("wedge"):
+                        if w.get("type") in ("crescendo", "diminuendo"):
+                            s.events["hairpins"].append((mi, onset, w.get("type")))
+                    cat = "systemtext" if el.get("system") in ("only-top", "also-top") else "words"
+                    # one text split over several <words> runs (line break, tempo glyph) is one token
+                    text = re.sub(r"[\ue000-\uf8ff]", "", "".join(w.text or "" for w in dt.findall("words")))
+                    if text.strip():
+                        s.events[cat].append((mi, onset, _norm_text(text)))
+                    for mm in dt.findall("metronome"):
+                        unit = _txt(mm, "beat-unit", "?") + "." * len(mm.findall("beat-unit-dot"))
+                        s.events["tempo"].append((mi, onset, f"{unit}={_txt(mm, 'per-minute', '?')}"))
+                    for r in dt.findall("rehearsal"):
+                        if r.text and r.text.strip():
+                            s.events["rehearsal"].append((mi, onset, "reh:" + _norm_text(r.text)))
+                    for nav in ("segno", "coda"):
+                        if dt.find(nav) is not None:
+                            s.events["structure"].append((mi, onset, nav))
+                snd = el.find("sound")
+                if snd is not None:
+                    _sound(snd, st(1), mi, onset, skip=("segno", "coda"))
+                    changed |= snd.find("instrument-change") is not None
+            elif tag == "sound":
+                _sound(el, st(1), mi, cur)
+                changed |= el.find("instrument-change") is not None
+            elif tag == "harmony":
+                s = st(int(_txt(el, "staff", "1") or 1))
+                off = el.find("offset")
+                onset = cur + (Fraction(off.text.strip()) / divisions
+                               if off is not None and off.text else 0)
+                acc = {"-1": "b", "1": "#", "-2": "bb", "2": "##"}
+                bass = _txt(el, "bass/bass-step")
+                tok = (f"{_txt(el, 'root/root-step', '?')}{acc.get(_txt(el, 'root/root-alter', '0'), '')}:"
+                       f"{_txt(el, 'kind', '')}"
+                       + (f"/{bass}{acc.get(_txt(el, 'bass/bass-alter', '0'), '')}" if bass else ""))
+                s.events["chords"].append((mi, onset, tok))
+            elif tag == "barline":
+                s = st(1)
+                at = max(mend, cur) if el.get("location", "right") != "left" else Fraction(0)
+                if el.find("fermata") is not None:
+                    s.events["fermatas"].append((mi, at, "fermata"))
+                rep = el.find("repeat")
+                if rep is not None:
+                    s.events["structure"].append((mi, at, f"repeat:{rep.get('direction')}"))
+                end = el.find("ending")
+                if end is not None and end.get("type") == "start":
+                    s.events["structure"].append((mi, at, f"ending:{end.get('number', '?')}"))
+                for nav in ("segno", "coda"):
+                    if el.find(nav) is not None:
+                        s.events["structure"].append((mi, at, nav))
+                style = _txt(el, "bar-style")
+                if rep is None and style and style not in ("regular", "none"):
+                    s.events["barlines"].append((mi, at, f"bar:{style}"))
+        if changed:
+            st(1).events["instruments"].append((mi, Fraction(0), "ic"))
+    for s in pstaves.values():
+        s.n_measures = len(measures)
+    return [pstaves[k] for k in sorted(pstaves)]
+
+
+def _sound(snd, s: Staff, mi: int, onset, skip=()) -> None:
+    """Navigation (D.S., D.C., fine, to coda, ...) carried by a <sound> element."""
+    for nav in _NAV:
+        if nav not in skip and snd.get(nav):
+            s.events["structure"].append((mi, onset, nav))
 
 
 def _dyn_token(el) -> str:

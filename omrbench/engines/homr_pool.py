@@ -44,8 +44,8 @@ class CropResult:
 
 
 class _Worker:
-    def __init__(self, python: Path, threads: int, env: dict, idx: int, nice: int = 0):
-        self.python, self.threads, self.env, self.idx = python, threads, env, idx
+    def __init__(self, launch: list[str], threads: int, env: dict, idx: int, nice: int = 0):
+        self.launch, self.threads, self.env, self.idx = launch, threads, env, idx
         self.nice = nice
         self.proc: subprocess.Popen | None = None
         self.errf = None
@@ -56,7 +56,7 @@ class _Worker:
         # nobody reads would fill up and block the worker
         self.kill()                      # a dead predecessor: reap it, close its files
         self.errf = tempfile.TemporaryFile()
-        self.proc = subprocess.Popen([str(self.python), str(WORKER), str(self.threads), str(self.nice)],
+        self.proc = subprocess.Popen([*self.launch, str(self.threads), str(self.nice)],
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=self.errf, text=True, bufsize=1,
                                      env={**os.environ, **self.env})
@@ -133,8 +133,8 @@ class _Worker:
 
 
 class HomrPool:
-    def __init__(self, python: Path, workers: int, threads: int, env: dict, nice: int = 0):
-        self.workers = [_Worker(python, threads, env, i + 1, nice) for i in range(workers)]
+    def __init__(self, launch: list[str], workers: int, threads: int, env: dict, nice: int = 0):
+        self.workers = [_Worker(launch, threads, env, i + 1, nice) for i in range(workers)]
         self.q: queue.Queue = queue.Queue()
         self.threads = []
         self.closed = False
@@ -204,12 +204,12 @@ def default_workers(threads: int) -> int:
     return max(1, (os.cpu_count() or 2) // max(1, threads))
 
 
-def get_pool(python: Path, workers, threads: int, env: dict, nice: int = 0) -> HomrPool:
-    """The process-wide pool (created on first use, closed at exit)."""
+def get_pool(launch: list[str], workers, threads: int, env: dict, nice: int = 0) -> HomrPool:
+    """The process-wide pool (created on first use, closed at exit). launch: argv prefix of one worker."""
     global _POOL
     with _LOCK:
         if _POOL is None or _POOL.closed:
             n = default_workers(threads) if workers in (None, "auto") else int(workers)
-            _POOL = HomrPool(python, n, threads, env, nice)
+            _POOL = HomrPool(launch, n, threads, env, nice)
             atexit.register(_POOL.close)
         return _POOL

@@ -11,10 +11,13 @@ import subprocess
 import time
 from pathlib import Path
 
+from .. import containers
 from .. import log as logmod
 from .. import musicxml
+from ..convert.kern import kern_to_musicxml
+from ..convert.mozart import mozart_to_musicxml
 from ..dataset import Sample
-from ..monitor import RunStats, run_monitored
+from ..monitor import RunStats
 from ..rasterize import rasterize
 from .base import Engine, EngineResult
 
@@ -36,6 +39,8 @@ class PagewiseEngine(Engine):
         return self.venv / "bin" / self.cli_name
 
     def check(self) -> tuple[bool, str]:
+        if self.container:
+            return containers.check_image(self.container)
         if not self.exe.exists():
             return False, f"not found: {self.exe} (run setup.sh)"
         probe = (f"import importlib.metadata as m, onnxruntime as o, {self.package}; "
@@ -46,6 +51,10 @@ class PagewiseEngine(Engine):
 
     def page_cmd(self, image: Path, out_dir: Path) -> list:
         raise NotImplementedError
+
+    def batch_cmd(self, images: list[Path], out_dir: Path) -> list | None:
+        """One command for all pages (model loaded once), or None for one page_cmd per page."""
+        return None
 
     def use_pool(self) -> bool:
         return False
@@ -89,11 +98,15 @@ class PagewiseEngine(Engine):
                                peak_single_rss_mb=rss, exit_code=0,
                                timed_out=any(r.timed_out for r in results)))
             timed_out = {r.image.name for r in results if r.timed_out}
+        elif (cmd := self.batch_cmd(locals_, pdir)) is not None:
+            st = self.exec_cmd(cmd, workdir, log, env=self.env(), cwd=pdir,
+                               timeout_s=self.timeout_s * len(locals_))   # timeout_s is per page
+            total.add(st)
+            timed_out = {p.name for p in locals_} if st.timed_out else set()
         else:
             timed_out = set()
             for local in locals_:
-                st = run_monitored(self.page_cmd(local, pdir), log_path=log,
-                                   cwd=pdir, env=self.env(), timeout_s=self.timeout_s)
+                st = self.exec_cmd(self.page_cmd(local, pdir), workdir, log, env=self.env(), cwd=pdir)
                 total.add(st)
                 if st.timed_out:
                     timed_out.add(local.name)
@@ -122,18 +135,36 @@ class Homr(PagewiseEngine):
     venv_name = "homr"
     cli_name = "homr"
     package = "homr"
+    container_image = "homr"
+    container_exe = "homr"
+
+    @property
+    def device(self) -> str:
+        """CPU unless `device: cuda` in its config: on the PC the fp16 CUDA models scored lower
+        (Anastasia 1/2/4A note F1 0.928 vs 0.955) and 8 GPU workers stalled into timeouts."""
+        return str(self.cfg.get("device", "cpu"))
 
     def page_cmd(self, image, out_dir):
-        return [self.exe, *(self.cfg.get("extra_args") or []), image]
+        gpu = [] if self.device == "cuda" else ["--gpu", "no"]   # see _homr_worker.py
+        return [self.exe, *gpu, *(self.cfg.get("extra_args") or []), image]
 
     def use_pool(self) -> bool:
         """Persistent workers (homr_pool.py); CLI options need the one-process-per-image path."""
         return bool(self.cfg.get("pool", True)) and not self.cfg.get("extra_args")
 
     def pool(self):
-        from .homr_pool import get_pool
-        return get_pool(self.venv / "bin" / "python", self.cfg.get("workers", "auto"),
-                        int(self.cfg.get("threads", 2)), self.env(), int(self.cfg.get("nice", 0)))
+        from .homr_pool import WORKER, get_pool
+        env = self.env()
+        if self.container:
+            # the crops live under results/, so the image sees results/ at the same path
+            results = Path(self.bench["results_dir"])
+            launch = containers.pool_cmd(containers.IMAGES[self.container][0], mounts={results: str(results)},
+                                         gpu=self.device == "cuda",
+                                         env=self.container_env(env))
+        else:
+            launch = [str(self.venv / "bin" / "python"), str(WORKER)]
+        return get_pool(launch, self.cfg.get("workers", "auto"), int(self.cfg.get("threads", 2)),
+                        env, int(self.cfg.get("nice", 0)))
 
     def find_output(self, image, out_dir):
         p = image.with_suffix(".musicxml")
@@ -145,6 +176,8 @@ class Oemer(PagewiseEngine):
     venv_name = "oemer"
     cli_name = "oemer"
     package = "oemer"
+    container_image = "oemer"
+    container_exe = "oemer"
 
     def page_cmd(self, image, out_dir):
         cmd = [self.exe, "-o", out_dir]
@@ -155,3 +188,86 @@ class Oemer(PagewiseEngine):
     def find_output(self, image, out_dir):
         p = out_dir / f"{image.stem}.musicxml"
         return p if p.exists() else None
+
+
+class KernPages(PagewiseEngine):
+    """Full-page image -> text adapter in a container (default **kern); all pages in one call, converted here."""
+    suffix, convert = ".krn", staticmethod(kern_to_musicxml)
+
+    def batch_cmd(self, images, out_dir):
+        return [self.container_exe, "--out", out_dir, "--device", self.device,
+                *self.adapter_args(), *images]
+
+    def adapter_args(self) -> list[str]:
+        return []
+
+    def find_output(self, image, out_dir):
+        krn = out_dir / f"{image.stem}{self.suffix}"
+        if not krn.exists():
+            return None
+        try:
+            return self.convert(krn, krn.with_suffix(".musicxml"))
+        except Exception as e:  # unparsable kern = a failed page, not a crashed run
+            LOG.warning(f"{self.kind}: {krn.name} does not convert to MusicXML: {type(e).__name__}: {e}")
+            return None
+
+
+class Transcoda(KernPages):
+    kind = "transcoda"
+    container_image = "transcoda"
+    container_exe = "transcoda"
+
+    def adapter_args(self):
+        return ["--beams", str(int(self.cfg.get("beams", 3)))]
+
+
+class SmtFp(KernPages):
+    """Sheet Music Transformer, full-page pianoform model (bekern)."""
+    kind = "smt-fp"
+    container_image = "smt-fp"
+    container_exe = "smt"
+
+
+class SmtSys(KernPages):
+    """Sheet Music Transformer, system-level grand-staff model (bekern); a pipeline crop
+    recognizer (pipeline/recognizer.py), not a page engine."""
+    kind = "smt-sys"
+    container_image = "smt-sys"
+    container_exe = "smt"
+
+    def adapter_args(self):
+        return ["--system"]
+
+
+class Zeus(PagewiseEngine):
+    """Zeus (OmniOMR/zeus): one staff or grand staff per image -> `<image>.musicxml`; a pipeline
+    crop recognizer (pipeline/recognizer.py), not a page engine."""
+    kind = "zeus"
+    container_image = "zeus"
+    container_exe = "zeus"
+    models = {1: "/opt/zeus/models/solo.model", 2: "/opt/zeus/models/grand.model"}   # by staves
+
+    def staves_cmd(self, staves: int, images: list[Path]) -> list:
+        return [self.container_exe, "predict", "--model-snapshot", self.models[staves], "--quiet-tf", *images]
+
+
+
+class ClarityStaff(PagewiseEngine):
+    """Clarity-OMR's staff reader (stage B) on pipeline crops -> `<image>.musicxml`
+    (docker/clarity/crops.py); a pipeline crop recognizer, not a page engine."""
+    kind = "clarity"
+    container_image = "clarity"
+    container_exe = "clarity-crops"
+
+    def staves_cmd(self, staves: int, images: list[Path]) -> list:
+        cmd = [self.container_exe, "--staves", str(staves), "--device", self.device]
+        if self.cfg.get("beam_width"):
+            cmd += ["--beam-width", str(self.cfg["beam_width"])]
+        return [*cmd, *images]
+
+class Mozart(KernPages):
+    """Classic-CV floor: one treble staff at a time, its own text format."""
+    kind = "mozart"
+    container_image = "mozart"
+    container_exe = "mozart"
+    suffix, convert = ".txt", staticmethod(mozart_to_musicxml)

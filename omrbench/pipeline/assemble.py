@@ -1,13 +1,14 @@
-"""Combine Audiveris layout/directions, homr staff-group transcriptions and printed text.
+"""Combine Audiveris layout/directions, crop-recognizer (homr by default) staff-group
+transcriptions and printed text.
 
 Per system:
-1. bar count = vote between Audiveris and the homr crops of each staff group
-2. per staff group and bar: homr if its bar count matches and the bar's voices fill
+1. bar count = vote between Audiveris and the crop readings of each staff group
+2. per staff group and bar: the crop reading if its bar count matches and the bar's voices fill
    the time signature, else Audiveris (and vice versa, order is configurable)
-3. clef/key from the group's primary source, time signature from homr where printed
+3. clef/key from the group's primary source, time signature from the crops where printed
 4. Audiveris dynamics/wedges/tempo and layout text are attached by bar and onset
 5. multi-measure rests are expanded from printed bar ranges ("15-17"), counts printed
-   above the rest, or homr <multiple-rest>
+   above the rest, or the crops' <multiple-rest>
 6. bars are lined up with the printed bar numbers and cut marks ("[to] 97"): missing
    bars (cuts, unread multi-rest counts) become rest bars, so bar n is printed bar n
 Then staff tracks become parts; percussion tracks are split by instrument labels.
@@ -56,12 +57,12 @@ class Stats:
     multirest_bars_added: int = 0
     alignment_bars_added: int = 0
     keys_respelled: int = 0
-    homr_crops_failed: int = 0
+    crops_failed: int = 0
     cue_notes_removed: int = 0
     words: int = 0
     notes: list[str] = field(default_factory=list)
     failed_crops: list = field(default_factory=list)   # (system, group, staves, image, reasons)
-    homr_crops_expected: int = 0                         # of the failed: rests only, nothing to read
+    crops_expected: int = 0                    # of the failed: rests only, nothing to read
     lyrics: int = 0                # syllables attached to notes (vocal score)
     lyrics_unplaced: int = 0       # syllables with no note under them
     singer_labels: int = 0
@@ -79,9 +80,9 @@ class Stats:
         return {"bars": dict(self.bars), "systems": dict(self.systems),
                 "multirest_bars_added": self.multirest_bars_added,
                 "alignment_bars_added": self.alignment_bars_added,
-                "homr_crops_failed": self.homr_crops_failed, "words": self.words,
+                "crops_failed": self.crops_failed, "words": self.words,
                 "cue_notes_removed": self.cue_notes_removed,
-                "homr_crops_failed_rest_only": self.homr_crops_expected,
+                "crops_failed_rest_only": self.crops_expected,
                 "lyrics": self.lyrics, "lyrics_unplaced": self.lyrics_unplaced,
                 "singer_labels": self.singer_labels,
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
@@ -123,8 +124,23 @@ def audiveris_bars(books: list[etree._Element], systems: list[System], D: int
             bs = B.part_bars(part, D, "audiveris")
             pos = 0
             for k, c in zip(idx, counts):
-                out[(k, pi + 1)] = bs[pos:pos + c]
+                seg = bs[pos:pos + c]
+                col = _fold_multirests(seg)
+                # Audiveris writes a multi-rest as the count bar + count-1 empty bars; one bar
+                # per stack lets its count meet homr's (the printed count expands it later)
+                out[(k, pi + 1)] = col if len(col) == len(systems[k].stacks) != len(seg) else seg
                 pos += c
+    return out
+
+
+def _fold_multirests(bars: list[B.Bar]) -> list[B.Bar]:
+    out, skip = [], 0
+    for b in bars:
+        if skip and b.rest_only:
+            skip -= 1
+            continue
+        skip = max(b.multirest - 1, 0)
+        out.append(b)
     return out
 
 
@@ -160,14 +176,14 @@ def _clef_changed(bars: list[B.Bar], i: int) -> bool:
     return any(first.get(s, c)[:2] != c[:2] for s, c in cur.items())
 
 
-def _vote(a: int | None, homr_counts: list[int]) -> tuple[int, str]:
-    votes = Counter(homr_counts)
+def _vote(a: int | None, crop_counts: list[int]) -> tuple[int, str]:
+    votes = Counter(crop_counts)
     if a:
         votes[a] += 1
     if not votes:
         return 0, "none"
-    best = max(votes.items(), key=lambda kv: (kv[1], kv[0] in homr_counts, kv[0]))[0]
-    how = "agree" if len(votes) == 1 else ("homr" if best in homr_counts and best != a else "audiveris")
+    best = max(votes.items(), key=lambda kv: (kv[1], kv[0] in crop_counts, kv[0]))[0]
+    how = "agree" if len(votes) == 1 else ("crop" if best in crop_counts and best != a else "audiveris")
     return best, how
 
 
@@ -202,8 +218,19 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
     return min(ons, key=lambda o: abs(o - raw))
 
 
-def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[str],
-                 stats: Stats) -> list[SysPlan]:
+def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
+                 stats: Stats, raw: bool = False, extra_votes: dict | None = None,
+                 alts: dict | None = None, pick_mode: str = "agree",
+                 weights: dict | None = None) -> list[SysPlan]:
+    """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
+    bars only for groups whose crop failed. For comparing readers without homr tuning.
+    extra_votes: {system index: bar count} of another layout provider (OLA), one more vote.
+    alts: {reader name: crop bars like `crop`} of more crop readers (ensemble). Their bars join the
+    candidates of systems where they read the planned bar count; among the candidates that fill
+    their bar, the one that agrees most with all others wins (ties: crop, audiveris, alts).
+    pick_mode "agree": score = own weight + sum of other readings' weight x agreement (weights per
+    source: crop, audiveris, alt:<name>; default 1); "fallback": alts only where neither crop nor
+    Audiveris fills the bar; "agree-keep": like agree, the crop reading always takes part."""
     systems = [sy for p in pages for sy in p.systems]
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
@@ -223,23 +250,33 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
         groups = sy.groups()
         a_bars = {gi: aud.get((k, gi)) for gi in range(len(groups))}
         a_n = max((len(v) for v in a_bars.values() if v), default=0) or None
-        h_bars = {gi: homr.get((k, gi)) for gi in range(len(groups))}
+        h_bars = {gi: crop.get((k, gi)) for gi in range(len(groups))}
         il = sy.staves[0].interline
-        if sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
+        if not raw and sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
             # homr reads the courtesy key/time signature after the last barline as a rest
             # bar of its own; Audiveris leaves that space out of its stacks
             for gi, v in h_bars.items():
                 if v and len(v) == len(sy.stacks) + 1 and v[-1].rest_only:
                     h_bars[gi] = v[:-1]
         h_ns = [len(v) for v in h_bars.values() if v]
-        n, how = _vote(a_n, h_ns)
+        if raw:
+            n, how = (Counter(h_ns).most_common(1)[0][0], "crop") if h_ns else (a_n or 0, "audiveris")
+        else:
+            n, how = _vote(a_n, h_ns + ([extra_votes[k]] if extra_votes and extra_votes.get(k) else []))
         sy_labels = labels.get(id(sy), [])
-        if a_n and how == "homr" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
+        if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
                 and a_n == len(sy.stacks) >= 2 and len(sy_labels) <= a_n \
                 and _numbered_stacks(sy, sy_labels) >= max(a_n - 1, 2):
             # one homr reading against Audiveris is a tie: parts that number every bar
             # decide it (homr splits bars at dashed barlines / long notes); more numbers
             # than stacks means Audiveris missed a barline
+            n, how = a_n, "audiveris"
+        if not raw and a_n and how == "crop" and Counter(h_ns)[n] == 1 and a_n not in h_ns \
+                and a_n == len(sy.stacks) and any(st.special == "MULTI_REST" for st in sy.stacks) \
+                and max(st.right for st in sy.staves) - sy.stacks[-1].right < 8 * il:
+            # homr splits systems with multi-measure rests (at the key changes between them,
+            # or the count read as a note): Audiveris' stacks are the better count there,
+            # unless they stop short of the staff end (a missed barline)
             n, how = a_n, "audiveris"
         if n == 0 and sy.staves:
             # neither engine found a bar: a staff of multi-measure rests ("5" over "5-9").
@@ -254,8 +291,16 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             plans.append(plan)
             continue
         # x-range per bar: Audiveris stacks if they match, else an even split
+        staff_right = max(s.right for s in sy.staves) if sy.staves else 0
         if len(sy.stacks) == n:
             plan.xs = [(s.left, s.right) for s in sy.stacks]
+        elif sy.stacks and len(sy.stacks) < n and staff_right - sy.stacks[-1].right >= 8 * il:
+            # Audiveris missed the last barline(s): its stacks for the bars they cover, the
+            # rest of the staff split among the bars it missed
+            left, extra = sy.stacks[-1].right, n - len(sy.stacks)
+            w = (staff_right - left) / extra
+            plan.xs = [(s.left, s.right) for s in sy.stacks] + \
+                [(left + i * w, left + (i + 1) * w) for i in range(extra)]
         else:
             left = sy.stacks[0].left if sy.stacks else min(s.left for s in sy.staves)
             right = sy.stacks[-1].right if sy.stacks else max(s.right for s in sy.staves)
@@ -272,15 +317,32 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
+            if raw:
+                src, s = (h_bars.get(gi), "crop") if h_bars.get(gi) else (a_bars.get(gi), "audiveris")
+                chosen = []
+                for i in range(n):
+                    if src and i < len(src):
+                        bar = copy.deepcopy(src[i])
+                    else:
+                        s = "rest"
+                        bar = B.rest_bar(len(group), B.bar_length(plan.times[i], D), D)
+                    stats.bars[s] += 1
+                    bar.staves = max(bar.staves, len(group))
+                    chosen.append(bar)
+                plan.chosen[gi] = chosen
+                continue
             hb = h_bars.get(gi) if h_bars.get(gi) and len(h_bars[gi]) == n else None
             ab = a_bars.get(gi) if a_bars.get(gi) and len(a_bars[gi]) == n else None
             order = prefer
             if all(st.clef == "PERCUSSION_CLEF" for st in group):
                 # homr reads percussion staves as pitched (often with a C clef)
-                order = ["audiveris", "homr"]
+                order = ["audiveris", "crop"]
                 if hb:
                     hb = [B.to_unpitched(b) for b in hb]
-            options = {"homr": hb, "audiveris": ab}
+            options = {"crop": hb, "audiveris": ab}
+            perc = all(st.clef == "PERCUSSION_CLEF" for st in group)
+            alt_opts = {f"alt:{name}": [B.to_unpitched(b) for b in v] if perc else v
+                        for name, d in (alts or {}).items() if (v := d.get((k, gi))) and len(v) == n}
             primary = next((options[s] for s in order if options.get(s)), None)
             chosen = []
             for i in range(n):
@@ -292,17 +354,43 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                     # one's pitches are read in the old clef there
                     bar_order = seen + [s for s in order if s != seen[0]]
                     clef_src = options[seen[0]]
-                cands = [(s, B.close_voice_gaps(options[s][i], length) if s == "homr" else options[s][i])
+                cands = [(s, B.close_voice_gaps(options[s][i], length) if s == "crop" else options[s][i])
                          for s in bar_order if options.get(s)]
+                cands += [(s, B.close_voice_gaps(v[i], length)) for s, v in alt_opts.items()]
                 l, r = plan.xs[i]
                 ids = {st.id for st in group}
-                if any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ())):
+                printed = any(c.staff in ids and l <= c.x + c.w / 2 < r for c in chords.get(sy.page, ()))
+                if printed:
                     # noteheads are printed: a rest-only reading lost a voice whose rhythm
                     # didn't add up (Audiveris), the other engine's notes are better
                     with_notes = [(s, b) for s, b in cands if not b.rest_only]
                     cands = with_notes + [c for c in cands if c not in with_notes]
-                pick = next(((s, b) for s, b in cands if B.bar_ok(b, length)), None) \
-                    or next(((s, b) for s, b in cands if not b.empty), None)
+                ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
+                st_i = sy.stacks[i] if i < len(sy.stacks) else None
+                multirest = st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right)
+                if multirest:
+                    # Audiveris' multi-rest (its stack kept for this bar): homr reads the printed
+                    # count above it as notes. Its rest bar, else a rest bar of the right length
+                    ab_i = options["audiveris"][i] if options.get("audiveris") else None
+                    ok = [("audiveris", ab_i)] if ab_i is not None and ab_i.rest_only else \
+                        [("rest", B.rest_bar(len(group), length, D))]
+                if pick_mode == "fallback" and any(not s.startswith("alt:") for s, _ in ok):
+                    ok = [c for c in ok if not c[0].startswith("alt:")]
+                if pick_mode == "agree-keep" and not multirest:
+                    # homr's reading stays a candidate even when its voices don't fill the bar
+                    ok += [c for c in cands if c[0] == "crop" and not c[1].empty and c not in ok]
+                if alt_opts and pick_mode.startswith("agree") and len(ok) >= 2:
+                    # ensemble: the full bar that agrees most with every other reading
+                    if printed:
+                        ok = [c for c in ok if not c[1].rest_only] or ok
+                    sigs = [B.signature(b) for _, b in cands]
+                    w = [(weights or {}).get(s, 1.0) for s, _ in cands]
+                    score = {id(b): w[j] + sum(w[m] * B.similarity(sigs[j], sigs[m])
+                                               for m in range(len(cands)) if m != j)
+                             for j, (_, b) in enumerate(cands)}
+                    pick = max(ok, key=lambda c: (round(score[id(c[1])], 6), -ok.index(c)))
+                else:
+                    pick = (ok[0] if ok else None) or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
                     # neither source has this system's bar count: best effort by position
                     loose = [v for v in (h_bars.get(gi), a_bars.get(gi)) if v]
@@ -317,7 +405,7 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                     bar.key = clef_src[i].key if clef_src[i].key is not None else bar.key
                 a_key = ab[i].key if ab else None
                 h_key = hb[i].key if hb else None
-                if s == "homr" and str(a_key) == "0" and h_key not in (None, "0"):
+                if s == "crop" and str(a_key) == "0" and h_key not in (None, "0"):
                     # homr reads a key of naturals only (a change to C) as sharps, where
                     # Audiveris reads no key: homr's notes are re-read in C (elsewhere
                     # homr's key is the better one: Audiveris drops faint flats)
@@ -325,7 +413,7 @@ def plan_systems(pages: list[Page], aud: dict, homr: dict, D: int, prefer: list[
                     bar.key = a_key
                     stats.keys_respelled += 1
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
-                if s != "audiveris" and a_n:
+                if s != "audiveris" and bar.source != "audiveris" and a_n:   # a fallback bar may be Audiveris'
                     src = a_bars.get(gi)
                     if src:
                         j = i if len(src) == n else min(len(src) - 1, round(i * len(src) / n))
@@ -543,8 +631,9 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if not plan or not plan.n or 0 not in plan.chosen:
                 continue
             i = _bar_at(plan, pl.line.x + 1)
-            if vocal and value.isdigit():
-                # vocal scores box the bar number at the system start
+            if value.isdigit():
+                # a bar number printed (or boxed) at the system start: evidence for the bar
+                # count; the truth scores keep letter rehearsal marks only
                 plan.printed.setdefault(i, int(value))
                 continue
             d = etree.Element("direction", placement="above")
@@ -607,7 +696,7 @@ def _multirest_evidence(pt: T.PageText, by_sys: dict) -> None:
                 plan.mr.setdefault(i, ("count", n, n))
 
 
-def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tuple[int, int], int]:
+def _multirest_counts(plans: list[SysPlan], crop: dict, stats: Stats) -> dict[tuple[int, int], int]:
     """(system, bar) -> number of bars a multi-measure rest stands for.
 
     Evidence, strongest first: the count printed above the rest; a printed range
@@ -625,7 +714,7 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
                 printed.setdefault((k, i), a)     # "15-17": that bar is bar 15
     known: dict[tuple[int, int], int] = {}
     unknown: set[tuple[int, int]] = set()
-    homr_count: dict[tuple[int, int], int] = {}
+    crop_count: dict[tuple[int, int], int] = {}
     for k, p in enumerate(plans):
         for i, (kind, a, b) in p.mr.items():
             if not rest_only.get((k, i)):
@@ -651,12 +740,12 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
             if not rest_only.get((k, i)) or (k, i) in known:
                 continue
             counts = {hb[i].multirest for gi in range(len(p.system.groups()))
-                      if (hb := homr.get((k, gi))) and len(hb) == p.n and hb[i].multirest > 1}
+                      if (hb := crop.get((k, gi))) and len(hb) == p.n and hb[i].multirest > 1}
             flagged = stacks_ok and p.system.stacks[i].special == "MULTI_REST"
             if counts or flagged:
                 unknown.add((k, i))
                 if len(counts) == 1:
-                    homr_count[(k, i)] = counts.pop()
+                    crop_count[(k, i)] = counts.pop()
     size = lambda j: known.get(glob[j], 1)
 
     def agrees(j: int) -> bool:
@@ -703,8 +792,8 @@ def _multirest_counts(plans: list[SysPlan], homr: dict, stats: Stats) -> dict[tu
                 stats.notes.append(f"system {key[0] + 1}: bar {key[1] + 1} not a multi-rest "
                                    f"(printed {nxt[1]} follows too soon)")
                 continue
-        if key in homr_count:
-            known[key] = homr_count[key]
+        if key in crop_count:
+            known[key] = crop_count[key]
     return known
 
 
@@ -824,10 +913,10 @@ def _shift_set(s: set, at: int, by: int) -> set:
     return {(g, j + (by if j >= at else 0)) for g, j in s}
 
 
-def expand_multirests(plans: list[SysPlan], homr: dict, D: int, stats: Stats) -> None:
+def expand_multirests(plans: list[SysPlan], crop: dict, D: int, stats: Stats) -> None:
     drop_courtesy_bars(plans, stats)
     resegment_rest_systems(plans, D, stats)
-    counts = _multirest_counts(plans, homr, stats)
+    counts = _multirest_counts(plans, crop, stats)
     for k, plan in enumerate(plans):
         # "15-17" over a rest: its first bar is printed bar 15
         for i, (kind, a, b) in plan.mr.items():
@@ -1248,7 +1337,7 @@ def _clef_class(bar: B.Bar) -> str:
 
 
 TRANSPOSE_KEYS = {"C": (0, 0), "B": (-1, -1), "Bb": (-1, -2), "A": (-2, -3), "Ab": (-2, -4),
-                  "G": (-3, -5), "F#": (-3, -6), "F": (-4, -7), "E": (-5, -8), "Eb": (-5, -9),
+                  "G": (-3, -5), "F#": (-4, -6), "F": (-4, -7), "E": (-5, -8), "Eb": (-5, -9),
                   "D": (-6, -10), "Db": (-6, -11)}
 
 
@@ -1703,4 +1792,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     for c in el.findall("clef"):
                         state_clefs[int(c.get("number", "1"))] = B._clef(c)
                 m.append(el)
+            if g == len(p.bars) - 1:
+                # final barline, as in the truth scores (MuseScore adds none on import)
+                bl = etree.SubElement(m, "barline", location="right")
+                etree.SubElement(bl, "bar-style").text = "light-heavy"
     return root

@@ -4,7 +4,8 @@ data_dir: data            # shows: data/<show>/show.yaml (+ songs.xlsx, pdfs/, t
 samples_dir: data/samples # single-PDF benchmark samples (omrbench run)
 results_dir: results
 dpi: 300                  # rasterisation for page-image engines (homr, oemer)
-device: cpu               # cpu | cuda  (cuda needs `setup.sh --gpu` and a CUDA-visible GPU)
+device: auto              # auto (cuda if nvidia-smi works, else cpu) | cpu | cuda
+                          # engines with `requires_gpu: true` are skipped when device is cpu
 timeout_s: 1800           # per engine call (per page for homr/oemer)
 transcribe_jobs: 2        # PDFs transcribed at once (omrbench transcribe --jobs overrides)
 musescore_cli: null       # only needed if you drop gt.mscz instead of gt.musicxml
@@ -24,10 +25,72 @@ engines:
     # nice: 0             # >0 lowers the workers' CPU priority (was slower in tests)
   pipeline:               # audiveris-meta layout + homr per staff group + repairs
     type: pipeline
-    prefer: auto          # scans: homr bars first; vector PDFs: audiveris bars first
+    prefer: auto          # scans: crop (recognizer) bars first; vector PDFs: audiveris bars first
+    # recognizer: homr    # crop recognizer (pipeline/recognizer.py)
     # auto_beam: true     # beam unbeamed eighths and shorter by beat (else MuseScore shows flags)
     # max_wedge_bars: 2   # hairpins longer than this are misread pairings and dropped
-    # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run)
+    # homr: {workers: auto, threads: 2}   # the crop pool (shared by all PDFs of a run); device: cuda to use the GPU (fp16, scored lower)
+  pipeline-zeus:          # pipeline with Zeus on single staves and grand staves, homr on larger groups
+    type: pipeline
+    recognizer: zeus
+  pipeline-smt:           # pipeline with SMT system-level grand-staff model on 2-staff groups, homr on the rest
+    type: pipeline
+    recognizer: smt-sys
+  pipeline-transcoda:     # pipeline with Transcoda on 2-staff groups, homr on the rest
+    type: pipeline
+    recognizer: transcoda
+  pipeline-clarity:       # pipeline with Clarity's staff reader on single staves and grand staves, homr on larger groups
+    type: pipeline
+    recognizer: clarity
+  pipeline-ola:           # pipeline + OLA's measure count per system as one more bar-count vote (P6 layout)
+    type: pipeline
+    measure_vote: ola
+  pipeline-ensemble:      # P7: homr + more crop readers per bar (agreement among full bars); reads crops-<reader>/
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+  pipeline-ensemble-fb: {type: pipeline, ensemble: [zeus, clarity, smt-sys], ensemble_pick: fallback}
+  pipeline-ensemble-w:    # votes weighted by reader quality (level-2 bar-aligned note F1, Anastasia)
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+    ensemble_weights: {crop: 0.91, audiveris: 0.47, "alt:clarity": 0.81, "alt:zeus": 0.68, "alt:smt-sys": 0.59}
+  pipeline-ensemble-wk:   # weighted, homr's reading always a candidate
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys]
+    ensemble_pick: agree-keep
+    ensemble_weights: {crop: 0.91, audiveris: 0.47, "alt:clarity": 0.81, "alt:zeus": 0.68, "alt:smt-sys": 0.59}
+  pipeline-allreaders:    # base run of the full sweep grid: every crop reader's crops for the reassembled variants
+    type: pipeline
+    ensemble: [zeus, clarity, smt-sys, transcoda]
+  # full sweep 2026-10-14 (results/sweeps/full): top 5 by total penalty + the best outside Anastasia 4.
+  # Opt-in: omrbench sweep anastasia,ghost --id ID --engines pipeline,pipeline-full1,...,pipeline-full6
+  # 1-5 gain mostly on Anastasia 4 by agree-keep hiding misread time signatures (IMPROVEMENTS #21)
+  pipeline-full1: {type: pipeline, enabled: false, measure_vote: ola, ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10846
+  pipeline-full2: {type: pipeline, enabled: false, measure_vote: ola, ensemble: [zeus, clarity, smt-sys, transcoda], ensemble_pick: agree-keep}  # 10850
+  pipeline-full3: {type: pipeline, enabled: false, ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10860
+  pipeline-full4: {type: pipeline, enabled: false, ensemble: [zeus, clarity, smt-sys, transcoda], ensemble_pick: agree-keep}  # 10878
+  pipeline-full5: {type: pipeline, enabled: false, measure_vote: ola, prefer: [audiveris, crop], ensemble: [zeus, clarity, smt-sys], ensemble_pick: agree-keep}  # 10950
+  pipeline-full6: {type: pipeline, enabled: false, prefer: [audiveris, crop]}  # 12018 total, 4922 without Anastasia 4 (best)
+  # bar-number OCR engine (P6 OCR component); default ocr_engine: tesseract
+  pipeline-easyocr: {type: pipeline, ocr_engine: easyocr}
+  pipeline-doctr: {type: pipeline, ocr_engine: doctr}
+  pipeline-paddle: {type: pipeline, ocr_engine: paddle}
+  # level 2 of the recognizer comparison (PLAN.md section 7): same crops, bars as read, no repairs
+  pipeline-raw: {type: pipeline, repairs: false}
+  pipeline-zeus-raw: {type: pipeline, recognizer: zeus, repairs: false}
+  pipeline-smt-raw: {type: pipeline, recognizer: smt-sys, repairs: false}
+  pipeline-transcoda-raw: {type: pipeline, recognizer: transcoda, repairs: false}
+  pipeline-clarity-raw: {type: pipeline, recognizer: clarity, repairs: false}
+  clarity:                # Clarity-OMR, whole PDF -> MusicXML; piano-tuned (container only)
+    type: clarity
+    # beam_width: 5         # default 5; 2 is ~2x faster on CPU
+  transcoda:              # Transcoda 59M: full-page pianoform image -> **kern (container only)
+    type: transcoda
+    # beams: 3              # beam width (paper setting); 1 = greedy, faster
+  smt-fp:                 # Sheet Music Transformer, full-page pianoform (PRAIG/smt-fp-grandstaff), bekern
+    type: smt-fp
+  mozart:                 # classic-CV floor (treble staves only, no rests/barlines)
+    type: mozart
+    dpi: 150                # its classifier was trained on ~150 dpi excerpts; 300 dpi pages read as empty
   oemer:                  # opt-in (--engines oemer): ~5 min/page, 6 GB RAM on CPU
     type: oemer
     enabled: false

@@ -15,8 +15,8 @@ from pathlib import Path
 
 from .. import log as logmod
 from .. import musicxml
+from .. import containers
 from ..dataset import Sample
-from ..monitor import run_monitored
 from ..rasterize import pdf_pages
 from .base import Engine, EngineResult
 
@@ -76,6 +76,8 @@ def report_log(log: Path) -> None:
 
 class Audiveris(Engine):
     kind = "audiveris"
+    container_image = "audiveris"
+    container_exe = "Audiveris"
 
     @property
     def exe(self) -> Path:
@@ -96,6 +98,8 @@ class Audiveris(Engine):
         return env
 
     def check(self) -> tuple[bool, str]:
+        if self.container:
+            return containers.check_image(self.container)
         if not self.exe.exists():
             return False, f"not found: {self.exe} (run setup.sh)"
         try:
@@ -161,8 +165,7 @@ class Audiveris(Engine):
         log.unlink(missing_ok=True)
         LOG.debug(f"Audiveris on {res.pages} pages: {sample.pdf}")
         parallel = PARALLEL in self.constants(sample)
-        res.stats = run_monitored(self._cmd(sample, src, out_dir), log_path=log, env=self.env(),
-                                  timeout_s=self.timeout_s)
+        res.stats = self.exec_cmd(self._cmd(sample, src, out_dir), workdir, log, env=self.env())
         LOG.debug(f"Audiveris finished in {res.stats.wall_s:.0f}s (exit {res.stats.exit_code}, "
                   f"peak {res.stats.peak_rss_mb:.0f} MB)")
         if res.stats.timed_out:
@@ -175,8 +178,7 @@ class Audiveris(Engine):
             out_dir.mkdir(parents=True)
             with log.open("a") as f:
                 f.write("\n### parallel book run failed; serial retry\n")
-            st = run_monitored(self._cmd(sample, src, out_dir, parallel=False), log_path=log,
-                               env=self.env(), timeout_s=self.timeout_s)
+            st = self.exec_cmd(self._cmd(sample, src, out_dir, parallel=False), workdir, log, env=self.env())
             res.stats.add(st)
             res.stats.exit_code = st.exit_code
             mxls = self._exports(out_dir)
@@ -216,8 +218,7 @@ class Audiveris(Engine):
             sheet_dir.mkdir(parents=True)
             with log.open("a") as f:
                 f.write(f"\n### book run failed (exit {book_exit}); retrying sheet {n} alone\n")
-            st = run_monitored(self._cmd(sample, src, sheet_dir, sheet=n), log_path=log,
-                               env=self.env(), timeout_s=self.timeout_s)
+            st = self.exec_cmd(self._cmd(sample, src, sheet_dir, sheet=n), out_dir.parent, log, env=self.env())
             total.add(st)
             sheet_exits.append(st.exit_code)
             mxls = self._exports(sheet_dir)
