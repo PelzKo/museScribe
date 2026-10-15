@@ -204,7 +204,7 @@ Round 1 continued (same reference work dirs): slash articulations + chord beats 
 Audiveris -69, cue / dialogue / label words -231, misread time carried too long -515, single tremolos -140,
 stage-management words -33: **8467** (-33 % from 12617). Rejected (measured worse): slurs from Audiveris (+106),
 Audiveris double barlines (+129), vector barlines on multi-staff systems (+4584). Bench ids `s-*` (cumulative steps),
-`r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription).
+`r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription of all 6 songs, `results/<show>/runs/final1`): **8464**.
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
