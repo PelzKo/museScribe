@@ -221,6 +221,8 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                 LOG.error(problems[-1])
                 continue
             tparts = {_norm(n): (n, p) for n, p in truth_mod.parts(troot)}
+            for n in {_norm(n) for p in song.parts for n in p.plain} & tparts.keys():
+                musicxml.strip_marks(tparts[n][1])     # `plain` rows: scored without marks
             t_bars = musicxml.measure_count(troot)
             manifest = json.loads((src_root / song.id / MANIFEST).read_text(encoding="utf-8")) \
                 if (src_root / song.id / MANIFEST).exists() else {}

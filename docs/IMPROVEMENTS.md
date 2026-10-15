@@ -98,8 +98,9 @@ system has its end on the next system's first note; homr crops never see both. J
 as words; turn dynamic-only words into `<dynamics>` (with "sub." / "subito" as a word next to it).
 41. **Cue bars marked by a part label.** (2026-10-15, Ghost 13 Bass bar 1: a note for orientation under "Util.".)
 Notes under another part's label at the start are a cue; drop them like small-note cues.
-42. **Drop marks per part (`plain` parts).** (2026-10-15, user, design open: see chat.) Some parts get only notes, ties and
-dots: no articulations, dynamics, hairpins, slurs, playing words. Per song, per row.
+42. **Drop marks per part (`plain` parts).** (Done 2026-10-15: workbook column `plain`, `musicxml.strip_marks`, applied to
+the output and to the truth part it is scored against; reference 8369 -> 7005.) Some parts get only notes, ties, dots,
+tuplets, tremolos and playing words; articulations, dynamics, hairpins, slurs, fermatas, ornaments and tempo / expression text go.
 
 ## Prior knowledge (cheap to enter in advance)
 

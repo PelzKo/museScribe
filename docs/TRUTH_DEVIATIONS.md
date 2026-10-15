@@ -17,7 +17,7 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | convention (pipeline writes none on piano reductions) |
 | 20 | Drums | 6, 7, 14, 15, ... | one- and two-bar repeat signs (%), "sim." | the repeated bars written out | convention (pipeline copies them) |
 | 20 | Voice 1, Voice 2 | | | not finished (`unfinished` in the workbook) | open |
-| 13 | Bass, Cello | | singer cue lines ("SAM: ...", "W'ALLACE:"), "Vamp until ...", "Then ON to m. 60" | kept as words (Anastasia truths drop dialogue / cue lines; the pipeline drops them) | open: keep them in Ghost? |
+| 13 | Bass, Cello | | singer cue lines ("SAM: ...", "W'ALLACE:"), "Vamp until ...", "Then ON to m. 60" | kept as words (Anastasia truths drop dialogue / cue lines; the pipeline drops them) | mistake in the truth: drop everywhere (user, 2026-10-15); truth to be cleaned |
 | 13 | Bass, Cello | | | part named "Voice" in both files (bench names them Bass / Cello from the file name) | convention |
 
 ## Anastasia

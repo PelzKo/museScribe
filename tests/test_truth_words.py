@@ -31,3 +31,40 @@ def test_tempo_in_brackets_left_to_the_metronome():
     assert clean_words("Driving (J = 130)") == "Driving"
     assert clean_words("subito (J = 122 )") == "subito"
     assert clean_words("Maestoso = 92") == "Maestoso"
+
+
+PLAIN = """<part id="P1"><measure number="1">
+<direction><direction-type><dynamics><p/></dynamics></direction-type></direction>
+<direction><direction-type><words>pizz.</words></direction-type></direction>
+<direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>92</per-minute></metronome></direction-type></direction>
+<direction><direction-type><rehearsal>A</rehearsal></direction-type></direction>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>3</duration><type>quarter</type><dot/>
+<notations><tied type="start"/><slur type="start"/><articulations><staccato/></articulations><fermata/>
+<ornaments><tremolo type="single">3</tremolo><trill-mark/></ornaments></notations></note>
+<note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><notations><articulations><accent/></articulations></notations></note>
+</measure></part>"""
+
+
+def test_strip_marks_keeps_notes_ties_dots_tremolos():
+    from lxml import etree
+    from omrbench.musicxml import strip_marks
+    part = etree.fromstring(PLAIN)
+    strip_marks(part)
+    assert [w.text for w in part.iter("words")] == ["pizz."]
+    assert part.find(".//rehearsal") is not None
+    assert not part.findall(".//dynamics") and not part.findall(".//metronome")
+    n1, n2 = part.findall(".//note")
+    assert [e.tag for e in n1.find("notations")] == ["tied", "ornaments"]
+    assert [e.tag for e in n1.find("notations/ornaments")] == ["tremolo"]
+    assert n1.find("dot") is not None and n2.find("notations") is None
+
+
+def test_plain_cell_of_a_piano_reduction_picks_the_labels():
+    from omrbench.project import Part, plain_row
+    part = Part("4", "PianoReduction", Path("x.pdf"), {},
+                ["Piano=Klavierauszug", "Men=Männer", "First=Männer", "All=Frauen", "All=Männer"])
+    plain_row(part, "Männer, Men")
+    assert part.meta["plain"] == ["Men", "First", "Männer"] and part.plain == ["Männer", "Men"]
+    part = Part("4", "Violin 2", Path("x.pdf"), {}, ["Violine 2"])
+    plain_row(part, "x")
+    assert part.meta["plain"] is True and part.plain == ["Violine 2"]

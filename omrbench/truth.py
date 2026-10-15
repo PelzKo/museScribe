@@ -40,31 +40,19 @@ def load(srcs: list[Path], cache_dir: Path, musescore: str | None) -> etree._Ele
     """The song's truth as one score. Several files (one hand-corrected part each, "#13 - Bass.mscz",
     "#13 - Cello.mscz") are merged in order; there a one-part file's part is named after the text
     behind the last " - " of its file name ("Bass"), whatever the part is called inside."""
-    from .musicxml import load as load_xml
+    from .musicxml import load as load_xml, merge_parts
 
     roots = [load_xml(convert(s, cache_dir, musescore)) for s in srcs]
     if len(roots) == 1:
         return roots[0]
-    out = copy.deepcopy(roots[0])
-    plist = out.find("part-list")
-    for el in out.findall("part") + list(plist):
-        el.getparent().remove(el)
-    for k, (src, root) in enumerate(zip(srcs, roots)):
-        sps = root.findall("part-list/score-part")
-        for sp in sps:
-            old = sp.get("id")
-            sp, part = copy.deepcopy(sp), copy.deepcopy(root.find(f"part[@id='{old}']"))
-            sp.set("id", f"F{k}{old}")
-            part.set("id", f"F{k}{old}")
-            if len(sps) == 1:
-                name = sp.find("part-name")
-                if name is None:
-                    name = etree.Element("part-name")
-                    sp.insert(0, name)
-                name.text = Path(src).stem.rsplit(" - ", 1)[-1]
-            plist.append(sp)
-            out.append(part)
-    return out
+    for src, root in zip(srcs, roots):
+        if len(sps := root.findall("part-list/score-part")) == 1:
+            name = sps[0].find("part-name")
+            if name is None:
+                name = etree.Element("part-name")
+                sps[0].insert(0, name)
+            name.text = Path(src).stem.rsplit(" - ", 1)[-1]
+    return merge_parts(roots)
 
 
 def parts(root: etree._Element) -> list[tuple[str, etree._Element]]:

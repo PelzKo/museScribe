@@ -151,6 +151,36 @@ def merge_parts(roots: list[etree._Element]) -> etree._Element:
     return out
 
 
+PLAY_WORDS = re.compile(r"pizz|arco|gedämpft|offen|\bdiv|unis|\bsul\b|solo|tutti|sord|col legno|harm|^zu ", re.I)
+KEEP_DIRECTIONS = {"rehearsal", "segno", "coda", "octave-shift"}
+
+
+def strip_marks(part: etree._Element) -> None:
+    """A "plain" part (workbook column `plain`): notes with their dots, ties, tuplets and tremolos
+    only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,
+    tempo marks and expression text go; playing words (pizz., Arco, gedämpft), rehearsal marks,
+    navigation and 8va lines stay."""
+    for nt in list(part.iter("notations")):
+        for el in list(nt):
+            if el.tag == "ornaments":
+                for o in [o for o in el if o.tag != "tremolo"]:
+                    el.remove(o)
+            if el.tag not in ("tied", "tuplet") and not (el.tag == "ornaments" and len(el)):
+                nt.remove(el)
+        if not len(nt):
+            nt.getparent().remove(nt)
+    for d in list(part.iter("direction")):
+        for dt in d.findall("direction-type"):
+            for el in list(dt):
+                if el.tag not in KEEP_DIRECTIONS and not (el.tag == "words" and PLAY_WORDS.search(
+                        "".join(w.text or "" for w in dt.findall("words")))):
+                    dt.remove(el)
+            if not len(dt):
+                d.remove(dt)
+        if d.find("direction-type") is None:
+            d.getparent().remove(d)
+
+
 def drop_measures(root: etree._Element, numbers: list) -> list[str]:
     """Remove measures by their `number` attribute from every part. Returns warnings."""
     wanted = {str(n) for n in numbers}

@@ -23,6 +23,11 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   extra        raw YAML keys, "chord_names: false, lyrics: true"; "lyrics: null" leaves out a
                part default (the engine's own default applies)
   truth        part name(s) in the truth score this row is compared with (optional column)
+  plain        "x": the row's parts get notes, ties, dots, tuplets and tremolos only (no articulations,
+               dynamics, hairpins, slurs, fermatas, tempo / expression text; musicxml.strip_marks),
+               in the output and in the truth it is scored against. A piano reduction lists truth
+               part names and / or voice labels instead ("Männer, Men"): listed labels and labels
+               mapped only to listed truth parts get it. (optional column)
   notes        ignored
 
   A4.. "time" <printed bar: time, ...> "1: 4/4, 68: 2/4, 69: 4/4" (optional; lettered bars "72A: 3/4",
@@ -42,7 +47,7 @@ from pathlib import Path
 
 import yaml
 
-HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "notes"]
+HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plain", "notes"]
 KEY_ORDER = ["pages", "type", "source", "transpose", "keep_staves", "skip_systems",
              "split_instruments", "doubling"]
 SHOW_FILE = "show.yaml"
@@ -56,6 +61,7 @@ class Part:
     meta: dict                 # show meta + part meta (part keys win)
     truth: list[str] = field(default_factory=list)   # truth part name(s)
     instruments: list[str] = field(default_factory=list)
+    plain: list[str] = field(default_factory=list)   # truth parts scored without marks (`plain`)
 
 
 @dataclass
@@ -256,9 +262,12 @@ def load(folder: Path) -> Project:
             except Exception as e:  # noqa: BLE001 - one bad row never hides the others
                 song.errors.append(f"{row['file']}: {type(e).__name__}: {e}")
                 continue
-            song.parts.append(Part(sid, row["file"], pdfs / f"{row['file']}.pdf", meta,
-                                   [x.strip() for x in row["truth"].split(",") if x.strip()],
-                                   [n for n, _ in split_instruments_cell(row["instruments"])]))
+            part = Part(sid, row["file"], pdfs / f"{row['file']}.pdf", meta,
+                        [x.strip() for x in row["truth"].split(",") if x.strip()],
+                        [n for n, _ in split_instruments_cell(row["instruments"])])
+            if row["plain"]:
+                plain_row(part, row["plain"])
+            song.parts.append(part)
         songs[sid] = song
     return Project(folder.name, folder, show, workbook, pdfs, songs)
 
@@ -267,6 +276,21 @@ def truth_names(part: Part) -> list[str]:
     """The truth part names a row's `truth` cell refers to ("Out=Truth" -> Truth; "-" = none)."""
     names = [e.partition("=")[2].strip() if "=" in e else e.strip() for e in part.truth]
     return [n for n in names if n and n != "-"]
+
+
+def plain_row(part: Part, cell: str) -> None:
+    """`plain` cell -> meta plain (True, or the output part names it applies to) + part.plain."""
+    if cell.lower() in ("x", "yes", "true", "1"):
+        part.meta["plain"], part.plain = True, truth_names(part)
+        return
+    part.plain = [x.strip() for x in cell.split(",") if x.strip()]
+    targets: dict[str, set[str]] = {}
+    for e in part.truth:
+        out, _, t = e.partition("=")
+        targets.setdefault(out.strip(), set()).add(t.strip())
+    # a voice label mapped only to listed truth parts, or listed itself (songs without a truth)
+    part.meta["plain"] = [o for o, ts in targets.items() if o in part.plain or ts <= set(part.plain)] \
+        + [n for n in part.plain if n not in targets]
 
 
 def _suggest_truth(proj: Project, part: Part, tparts: dict[str, int]) -> str | None:

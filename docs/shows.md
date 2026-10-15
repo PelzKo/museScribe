@@ -24,7 +24,7 @@ omrbench transcribe anastasia --songs 5
 Each song sheet has `title` (A1/B1), optionally `truth` (A2/B2, path relative to the show
 folder; several single-part files separated by ";" are merged, each part named after the text behind the last
 " - " of its file name: "truth/#13 - Bass.mscz; truth/#13 - Cello.mscz" -> parts Bass, Cello) and optionally `unfinished` (next key row: truth part names not hand-corrected yet,
-"Voice 1, Drum Kit"; `bench` leaves them out until you remove them) above a header row `file | pages | skip | instruments | extra | truth | notes`, one row
+"Voice 1, Drum Kit"; `bench` leaves them out until you remove them) above a header row `file | pages | skip | instruments | extra | truth | plain | notes` (`plain`: "x" = notes, ties and dots only, see `project.py`), one row
 per PDF. Nothing is generated on disk: `transcribe` builds every part's meta from the workbook
 when it runs, so the workbook is the only place to edit (`check --export DIR` writes the
 resolved yamls for inspection).

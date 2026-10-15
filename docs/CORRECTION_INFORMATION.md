@@ -67,10 +67,17 @@ Bars:
   211 bars (206 + 131A, 132C, 148A–C).
 - Measure repeats (%) are written out (Ghost 20 Drums truth).
 
+Marks:
+- `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Männer; Ghost: none)
+  keep notes, ties, note dots, tuplets, tremolos and playing words only. Dropped: articulations (staccato dots,
+  accents, ...), dynamics, cresc. / dim. / rit., hairpins, slurs, fermatas, ornaments, tempo marks. Violin 1, Horn,
+  Reed 1, solo singers, Frauen, the piano reduction, keyboards and percussion keep everything.
+
 Text:
 - Playing instructions in German, as the truth writes them: Mute / St. Mute / Cup Mute -> "gedämpft", Open ->
   "offen" (not at the start of a part), "to Mute" / "to Open" (preparations) left out; "pizz." and "Arco" stay.
-- Spoken dialogue dropped in the vocal parts (Anastasia); lyrics verse 1; singer part names as printed; duet labels
+- Spoken dialogue dropped in the vocal parts; singer cue lines, "Vamp until ...", "Then ON to m. 60" dropped in
+  instrument parts (both shows; the Ghost 13 truth still has them); lyrics verse 1; singer part names as printed; duet labels
   A+B go to both parts.
 - Numeric rehearsal marks (boxed bar numbers) dropped; letter marks kept.
 - Piano reductions: no chord symbols; dynamics on staff 1; hairpins at most 2 bars; uncertain articulations /

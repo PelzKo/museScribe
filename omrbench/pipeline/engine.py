@@ -449,6 +449,13 @@ class Pipeline(Engine):
             score = A.write_score(parts, times, credits, D, beam, stats, self.song_key(sample, stats, len(times)))
             if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
                 LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
+        if plain := sample.meta.get("plain"):
+            # workbook `plain`: these parts get notes, ties and dots only (True = every part)
+            for root in [score, *(files or {}).values()]:
+                names = {sp.get("id"): sp.findtext("part-name") for sp in root.iterfind("part-list/score-part")}
+                for p in root.findall("part"):
+                    if plain is True or names.get(p.get("id")) in plain:
+                        musicxml.strip_marks(p)
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened
                 LOG.info(f"assemble: {note}")

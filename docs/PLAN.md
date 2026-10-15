@@ -206,8 +206,11 @@ Audiveris double barlines (+129), vector barlines on multi-staff systems (+4584)
 `r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription of all 6 songs, `results/<show>/runs/final1`): **8464**.
 
 **New reference 2026-10-15 (truths of Anastasia 2 and 4 updated, 4A Drums -> Xylophon)**: `final1` outputs rebenched =
-`final1-t2` **9943**. Reassembled from `final1` (`runs/m2`): German mute words + lettered cuts + tempo in brackets
-= `m3` **9920** (-23). Ghost 13 (not in the total yet): run `g13`, `g13-m3` 333.
+`final1-t2` **8392** (6 songs; these bench ids also list Ghost 13 as from scratch, leave it out). Reassembled from `final1`:
+German mute words + lettered cuts + tempo in brackets = `m3` **8369** (-23). Then `plain` parts (workbook column, user
+2026-10-15: Anastasia Violin 2, Cello, Bass, Reed 2 / 3, Trumpet, Trombone, Männer get notes, ties and dots only, in the
+output and in the scored truth) = `p1` **7005** (a metric change, not a gain; **the reference from now on**, outputs in
+`results/<show>/runs/p1`). Ghost 13 (run `g13`, in `p1` too): 331.
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
