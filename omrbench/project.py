@@ -32,10 +32,12 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
 
   A4.. "time" <printed bar: time, ...> "1: 4/4, 68: 2/4, 69: 4/4" (optional; lettered bars "72A: 3/4",
                pickup "0: 1/4"); "key" the same with concert fifths "1: 0, 54: -5"; "bars" the
-               expected bar count. Passed to every part as meta song_time / song_key / song_bars.
+               expected bar count; "letters" the lettered bars of the song "131A, 132C, 148A-C" (bars added
+               in a revision; a cut to "132C" skips 132A / B). Passed to every part as meta song_time /
+               song_key / song_bars / song_letters.
 
 Every key/value row above the header (column A = key) is a song setting; `title`, `truth`,
-`unfinished`, `time`, `key` and `bars` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
+`unfinished`, `time`, `key`, `bars` and `letters` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
 `check` validates the workbook and shows what each part resolves to.
 """
 from __future__ import annotations
@@ -222,6 +224,17 @@ def bar_map(spec: str) -> list[tuple[int, str, str]]:
     return sorted(out)
 
 
+def letter_list(spec: str) -> list[tuple[int, str]]:
+    """"131A, 132C, 148A-C" -> [(131, "A"), (132, "C"), (148, "A"), (148, "B"), (148, "C")]."""
+    out = []
+    for item in filter(None, (x.strip().upper() for x in str(spec).split(","))):
+        m = re.fullmatch(r"(\d+)([A-Z])(?:-([A-Z]))?", item)
+        if not m:
+            raise ValueError(f"bad lettered bar {item!r} (want e.g. '131A' or '148A-C')")
+        out += [(int(m.group(1)), chr(c)) for c in range(ord(m.group(2)), ord(m.group(3) or m.group(2)) + 1)]
+    return sorted(out)
+
+
 def find(data_dir: Path, name: str) -> Path | None:
     """The show folder for a name ("anastasia") or a path (folder or its show.yaml)."""
     for p in (Path(name), Path(data_dir) / name):
@@ -247,7 +260,7 @@ def load(folder: Path) -> Project:
         st = sheet["settings"]
         ctx = {"song": sid, "title": st.get("title", "")}
         folder_meta = {k: _fmt(v, ctx) for k, v in (show.get("meta") or {}).items()}
-        folder_meta.update({f"song_{k}": st[k] for k in ("time", "key", "bars") if st.get(k)})
+        folder_meta.update({f"song_{k}": st[k] for k in ("time", "key", "bars", "letters") if st.get(k)})
         tfiles = [folder / x.strip() for x in st.get("truth", "").split(";") if x.strip()]
         song = Song(sid, ctx["title"], tfiles[0] if tfiles else None, [],
                     unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()],

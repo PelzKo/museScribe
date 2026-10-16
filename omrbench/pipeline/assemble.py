@@ -1351,7 +1351,7 @@ def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
         _clamp_vocal(plan)
 
 
-def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
+def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None) -> None:
     """Insert rest bars so that bar n of the output is printed bar n.
 
     Evidence: printed bar numbers, the first number of printed ranges ("15-17"), and
@@ -1360,7 +1360,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
     position of its own, so all parts showing them line up. OCR
     misreads some numbers, so the offset (printed - position) is chosen as the
     non-decreasing step function that agrees with the most evidence; every step costs
-    ALIGN_PENALTY, so one stray number never shifts the rest of the part. Bars are
+    ALIGN_PENALTY, so one stray number never shifts the rest of the part. `letters`: the song's
+    lettered bars [(131, "A"), ...] when known (workbook row), else only those read. Bars are
     only added, never removed: evidence that the output is ahead is reported.
     """
     flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
@@ -1384,7 +1385,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         near = sorted(v for jj, v in plain if abs(jj - j) <= LETTER_NEAR)
         return not near or abs(near[len(near) // 2] - n) <= LETTER_NEAR
 
-    extra: set[tuple[int, str]] = set()
+    extra: set[tuple[int, str]] = set(letters or ())    # the song's `letters` row: known in advance
     bogus: set[tuple[int, int]] = set()
     for k, p in enumerate(plans):
         for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
@@ -1461,7 +1462,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
                 log.warning(msg)
             for k, i in reversed(lead):
                 _drop_bar(plans, k, i)
-            return align_bars(plans, D, stats, log)
+            return align_bars(plans, D, stats, log, letters)
     # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
     base = -1 if chain and obs[chain[0]].offset == -1 else 0
     stats.pickup, stats.letters = base == -1, sorted(extra)

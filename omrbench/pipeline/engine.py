@@ -43,7 +43,7 @@ from ..engines.audiveris import Audiveris
 from ..engines.base import Engine, EngineResult
 from ..monitor import RunStats
 from ..pdfkind import is_scan
-from ..project import bar_map
+from ..project import bar_map, letter_list
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
@@ -413,7 +413,8 @@ class Pipeline(Engine):
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):
-            A.align_bars(plans, D, stats, LOG)
+            A.align_bars(plans, D, stats, LOG, letter_list(sample.meta["song_letters"])
+                         if sample.meta.get("song_letters") else None)
         if song_time:
             A.apply_song_time(plans, song_time, D, stats)
         if repairs and not is_scan(sample.pdf):

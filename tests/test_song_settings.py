@@ -54,3 +54,8 @@ def test_sim_copies_the_pattern_articulations():
     bars = [bar(True), bar(False, "sim."), bar(False), bar(True)]
     assert B.apply_sim(bars) == 2
     assert all(len(B._marked(b)) == 2 for b in bars)
+
+
+def test_letter_list():
+    from omrbench.project import letter_list
+    assert letter_list("131A, 132C, 148A-C") == [(131, "A"), (132, "C"), (148, "A"), (148, "B"), (148, "C")]
