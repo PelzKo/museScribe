@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
-from ..musicxml import slurs_to_ties
+from ..musicxml import PLAY_WORDS, slurs_to_ties
 from . import bars as B
 from . import chords as CH
 from . import vector as SL
@@ -914,6 +914,10 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if not name and not vocal and _cue_text(text, pl):
                 stats.words_dropped += 1
                 continue
+            top = split or (pl.above and pl.staff is min(pl.system.staves, key=lambda s: s.top))
+            if top and not name and not vocal and _loose_text(text):
+                stats.words_dropped += 1
+                continue            # "Regal, ghostly", "kbd (cel)": not in the truths
             on = _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)) \
                 if estimate_onset else 0
             d = B.add_direction(bar, B.words_direction(text, "above" if pl.above else "below"),
@@ -923,8 +927,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 plan.pending[(gi, i)] = name
             elif name:
                 plan.labels[(gi, i)] = name
-            elif split or (pl.above and pl.staff is min(pl.system.staves, key=lambda s: s.top)
-                           and is_system_text(text)):
+            elif top and is_system_text(text):
                 d.set("system-text", "yes")   # moved to the top part when writing
         for pl, value in pt.rehearsals:
             plan = by_sys.get(id(pl.system))
@@ -1582,10 +1585,17 @@ def is_system_text(text: str) -> bool:
     t = text.strip()
     if ":" in t or t.startswith(("(", "[")) or STAFF_TERMS.search(t):
         return False
-    if TEMPO_TERMS.search(t):
-        return True
+    return bool(TEMPO_TERMS.search(t))
+
+
+def _loose_text(text: str) -> bool:
+    """Short text above the top staff that is neither a tempo mark nor a playing instruction
+    (style words, labels of the piano reduction's cue lines)."""
+    t = text.strip()
     words = t.split()
-    return len(words) <= 3 and not (len(words) > 1 and t[-1] in ".?!;,")
+    return not is_system_text(t) and not STAFF_TERMS.search(t) and not PLAY_WORDS.search(t) \
+        and not re.search(r"\b(mute|open|fill|sim)\b", t, re.I) and len(words) <= 3 \
+        and not (len(words) > 1 and t[-1] in ".?!;,")
 
 
 def _norm(s: str) -> list[str]:
