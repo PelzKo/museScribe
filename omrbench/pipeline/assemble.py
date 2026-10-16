@@ -499,7 +499,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     # Audiveris reads no key: homr's notes are re-read in C (elsewhere
                     # homr's key is the better one: Audiveris drops faint flats)
                     B.respell(bar, int(a_key))
-                    bar.key = a_key
+                    bar.key = bar.read_key = a_key
                     stats.keys_respelled += 1
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
                 if s != "audiveris" and bar.source != "audiveris" and a_n:   # a fallback bar may be Audiveris'
@@ -2109,6 +2109,12 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 m.append(a)
             if length:
                 B.fit_measure_rests(bar, length)
+            if bar.source == "crop" and bar.read_key is not None and key is not None and not perc \
+                    and bar.read_key != key and abs(int(bar.read_key) - int(key)) < 7:
+                # (7 or more apart = an enharmonic spelling of the key, e.g. Db vs C#: not a misread)
+                n = B.respell_key(bar, int(bar.read_key), int(key))
+                if stats is not None:
+                    stats.keys_respelled += bool(n)
             for el in bar.items:
                 if p.staves == 1:
                     for st in el.findall("staff"):

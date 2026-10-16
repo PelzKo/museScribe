@@ -35,6 +35,7 @@ class Bar:
     key: str | None = None                 # fifths
     time: tuple[str, str] | None = None    # beats, beat-type
     multirest: int = 0                     # printed <multiple-rest> count (homr)
+    read_key: str | None = None            # key the reader spelled the notes in (fifths)
 
     def notes(self) -> list[etree._Element]:
         return [e for e in self.items if e.tag == "note"]
@@ -139,7 +140,7 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
             items.append(c)
         if start is None:
             start = (dict(clefs), key, time)
-        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest))
+        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest, start[1]))
     return bars
 
 
@@ -484,6 +485,36 @@ def respell(bar: Bar, fifths: int) -> int:
             held[(step, octave)] = cur
             continue
         want = held.get((step, octave), key_alter(fifths, step))
+        if want != cur:
+            changed += 1
+            if alter_el is None:
+                alter_el = etree.Element("alter")
+                p.insert(1, alter_el)
+            alter_el.text = str(want)
+            if want == 0:
+                p.remove(alter_el)
+    return changed
+
+
+def respell_key(bar: Bar, old: int, new: int) -> int:
+    """The reader spelled the notes in key `old`, the bar is in key `new` (a misread key signature):
+    a note that differs from what `old` and the accidentals before it in the bar give had a printed
+    accidental and keeps its pitch (held for its step, octave and staff to the end of the bar); the
+    others are re-read in `new`. Returns the notes changed."""
+    held: dict[tuple, int] = {}
+    changed = 0
+    for n in bar.notes():
+        p = n.find("pitch")
+        if p is None:
+            continue
+        step = p.findtext("step")
+        k = (step, p.findtext("octave"), n.findtext("staff", "1"))
+        alter_el = p.find("alter")
+        cur = int(float(alter_el.text)) if alter_el is not None and alter_el.text else 0
+        if n.find("accidental") is not None or cur != held.get(k, key_alter(old, step)):
+            held[k] = cur
+            continue
+        want = held.get(k, key_alter(new, step))
         if want != cur:
             changed += 1
             if alter_el is None:
