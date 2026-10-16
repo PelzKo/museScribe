@@ -37,6 +37,7 @@ STRIP = 4.5             # interlines above / below a staff that are read
 MIN_CONF = 30.0         # Tesseract word confidence (bar numbers score 90+, noise mostly < 30)
 # what bar evidence looks like: 97, 15-17, 131A, [to], [to]97
 KEEP = re.compile(r"^(\d{1,4}[A-E]?([-–—]\d{1,4}[A-E]?)?|\[?to\]?(\d{1,4}[A-E]?\]?)?)$", re.I)
+DYNAMIC = re.compile(r"(p{1,3}|mp|mf|f{1,3}|sfz|sf|fp|sfp)")   # dynamics Audiveris misses on scans
 _EDGE = re.compile(r"^[^\w\[]+|[^\w\]]+$")      # accents / slurs stuck to a number: "203>"
 
 
@@ -347,7 +348,8 @@ def supplement(page: Page, words: list[dict]) -> int:
     old = list(page.texts)
     for wd in words:
         t = _EDGE.sub("", wd["text"].strip())
-        if not t or not KEEP.match(t) or not re.search(r"\d|to", t, re.I):
+        dyn = DYNAMIC.fullmatch(t) and wd["conf"] >= 70
+        if not dyn and (not t or not KEEP.match(t) or not re.search(r"\d|to", t, re.I)):
             continue
         x, y, w, h = wd["x"], wd["y"], wd["w"], wd["h"]
         st = min((s for sy in page.systems for s in sy.all_staves),
@@ -355,9 +357,9 @@ def supplement(page: Page, words: list[dict]) -> int:
         il = st.interline if st else 20.0
         if not 0.6 * il <= h <= 3.5 * il:
             continue        # specks, or a note stem read as "1"
-        if len(t) == 1 and wd["conf"] < 80:
+        if len(t) == 1 and wd["conf"] < 80 and not dyn:
             continue        # lone digits are mostly note heads, fingerings, tuplet marks
-        if h > 1.8 * il and not wd.get("multirest"):
+        if h > 1.8 * il and not wd.get("multirest") and not dyn:
             continue        # count-sized but no multi-rest under it: notes read as digits
         # Audiveris read it already. A multi-rest count: an overlapping text with the same number,
         # or one that mostly covers it; a tempo text ("c. 130)") just above it touches its box (Ghost)

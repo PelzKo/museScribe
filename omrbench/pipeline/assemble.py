@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from lxml import etree
 
 from ..musicxml import PLAY_WORDS, slurs_to_ties
+from .ocr import DYNAMIC
 from . import bars as B
 from . import chords as CH
 from . import vector as SL
@@ -86,6 +87,7 @@ class Stats:
     wedges: int = 0
     marks_unplaced: int = 0
     chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
+    dynamics_text: int = 0         # dynamics read as text (OCR) written as <dynamics>
     slurs_to_ties: int = 0         # slurs between two equal pitches written as ties
     graces_retyped: int = 0        # flagless graces given the piece's grace type
     graces_dropped: int = 0        # half/whole "graces" (misreads)
@@ -103,7 +105,7 @@ class Stats:
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
                 "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
                 "chord_marks_deduped": self.chord_marks_deduped,
-                "slurs_to_ties": self.slurs_to_ties,
+                "slurs_to_ties": self.slurs_to_ties, "dynamics_text": self.dynamics_text,
                 "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
                 "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
@@ -911,6 +913,16 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 continue
             i = _bar_at(plan, pl.line.x + 1)
             bar = plan.chosen[gi][i]
+            if DYNAMIC.fullmatch(pl.line.text.strip()):
+                # a dynamic read as text (OCR, or Audiveris' text): a real dynamic at its beat
+                tok = pl.line.text.strip()
+                if not any(e.find(f"direction-type/dynamics/{tok}") is not None for e in bar.items):
+                    d = etree.Element("direction", placement="below")
+                    etree.SubElement(etree.SubElement(etree.SubElement(d, "direction-type"), "dynamics"), tok)
+                    B.add_direction(bar, d, _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)),
+                                    staff_no)
+                    stats.dynamics_text += 1
+                continue
             mm = re.search(r"[=♩]\s*(\d{2,3})\s*\)?\s*$", pl.line.text)
             if mm and not any(e.find("direction-type/metronome") is not None
                               for g in plan.chosen.values() for e in g[i].items):
