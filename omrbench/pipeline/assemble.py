@@ -719,8 +719,23 @@ def apply_repeats(plans: list[SysPlan], repeats: list[SL.Repeat], stats: Stats) 
             for k in range(r.bars):
                 num = r.number + k
                 pos_of[num] = (num + sum(1 for m, _ in stats.letters if m < num) - (0 if stats.pickup else 1), r.bars)
+    by_pos: dict[int, dict[int, int]] = {}      # unnumbered system: placed by its page and x
+    for r in repeats:
+        if r.number:
+            continue
+        for plan in plans:
+            st = next((st for st in plan.system.staves if abs(st.top - r.top) < st.interline), None)
+            if plan.system.page != r.page or not plan.n or st is None:
+                continue
+            gi, _ = _group_of(plan.system, st.id)
+            if gi in track:
+                i = r.index if plan.n == r.count else _bar_at(plan, r.x)
+                j = track[gi].index((plan, i))
+                for k in range(r.bars):
+                    by_pos.setdefault(gi, {})[j + k] = r.bars
+            break
     for gi, bars in track.items():
-        for j, n in sorted(pos_of.values()):
+        for j, n in sorted(set(pos_of.values()) | set(by_pos.get(gi, {}).items())):
             if not (0 <= j - n and j < len(bars)):
                 continue
             (dp, di), (sp, si) = bars[j], bars[j - n]
