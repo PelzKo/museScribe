@@ -21,6 +21,8 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 | all | all | | a curve joining two neighbouring notes of the same pitch | sometimes a slur (Ghost 13 Cello 18, Bass 7, Ghost 1a 17, Ghost 20 15, Anastasia 4 34) | convention: it is a tie (user 2026-10-16); `truth.load` turns such slurs into ties (`musicxml.slurs_to_ties`), the .mscz files stay as they are |
 | 13 | Bass | 55 | single barline (the repeat starts at 56) | double barline | mistake (minor) |
 | 13 | Bass | | Bass, sounding 8vb | "Elektrischer Bass", written an octave above sounding | convention (output uses `transpose: 8vb`) |
+| 13 | Bass | 3 | "Sim." | word "Sim." kept | open: the truths drop "sim." / "fill" (user 2026-10-16, the pattern is written out); remove the word from the truth |
+| 13 | Cello | 27, 99, 114 | "sim." | word "sim." kept | open: remove the word from the truth (same convention) |
 
 ## Anastasia
 
@@ -31,3 +33,4 @@ Status: `open` = not checked yet, `convention` = intended, keep (pipeline follow
 | 4 | Dmitry, Vlad | | octave as printed | an octave below the output | convention: the truth is right, the PDF is wrong (user, 2026-10-15); not visible from the PDF, error accepted |
 | 4A | Drums | 1–3 | x-notes, "mallets" | a "Xylophon" part: mallets = xylophone | convention (Drums row -> Xylophon, 2026-10-15) |
 | 1, 2, 4 | singers | | apostrophes `'` | typographic `‘` (we‘re, don‘t) | convention: the metric treats typographic and plain quotes as the same (user 2026-10-16) |
+| 4 | Violine 1 (and other strings) | 26 places | Tesseract finds 13 "pizz." / "arco" on the scan | 26, strictly alternating pizz. / Arco | open: check whether every Arco is printed or added by the corrector (2026-10-16) |

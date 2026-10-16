@@ -54,6 +54,9 @@ barline types), 7, 8, 11. New issues found:
    program can use them without its notes.
 5. **Ties vs slurs**: a curve between two equal pitches is a tie, otherwise a slur, and export slurs too. Ties at
    the end of a system continue to the first note of the next system.
+5a. **Tie reader for every staff layout** (user request 2026-10-16): pair each tie curve with the noteheads at both
+   ends (same staff position = tie), also on grand staves and over system breaks, and export the result. Ghost 20
+   piano: 381 ties in the truth, museScribe gets ~270 (Audiveris' ties copied), 108 missing; sheet_reader finds 18 %.
 6. **Barline types and repeats**: double (two thin strokes 2–4 pt apart), final (thin + thick), repeat dots, voltas
    (bracket line with a number). Today a double barline is collapsed to one stroke and its type is lost.
 7. **Grand staff** (Utility / keyboard, piano reduction): two staves joined by a brace = one part with two staves.

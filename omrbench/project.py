@@ -373,6 +373,11 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
                             raise ValueError(f"bad value {v!r}")
                 except ValueError as e:
                     problem(f"ERROR    {k[5:]}: {e}")
+        if "song_letters" in meta0:
+            try:
+                letter_list(meta0["song_letters"])
+            except ValueError as e:
+                problem(f"ERROR    letters: {e}")
         if song.unfinished:
             print(f"  note     unfinished truth parts (not scored): {', '.join(song.unfinished)}")
             if tparts is not None:

@@ -2068,6 +2068,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
         retyped, dropped = B.fix_graces(p.bars)
         B.single_tremolos(p.bars)
         B.apply_sim(p.bars)
+        for bar in p.bars:
+            B.drop_words(bar)
         if stats is not None:
             stats.graces_retyped += retyped
             stats.graces_dropped += dropped

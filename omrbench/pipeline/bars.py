@@ -252,6 +252,16 @@ def apply_sim(bars: list[Bar]) -> int:
     return changed
 
 
+DROP_WORDS = re.compile(r"^\(?(sim(ile)?|fill)\.?\)?$", re.I)   # not in the truths (user, 2026-10-16)
+
+
+def drop_words(bar: Bar) -> None:
+    """Directions that are only "sim." / "fill" are left out (after apply_sim used them)."""
+    bar.items = [e for e in bar.items if not (e.tag == "direction" and (ws := list(e.iter("words")))
+                                              and all(DROP_WORDS.match((w.text or "").strip()) for w in ws)
+                                              and len(ws) == len(list(e.iter("direction-type"))))]
+
+
 def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
     """(onset, element) for every note/direction, in document order."""
     out, cur, last = [], 0, 0
