@@ -90,7 +90,10 @@ whose truths look incomplete (TRUTH_DEVIATIONS). Slash articulations read from t
 sweep winner), and no grid variant moves them (best 1346 / 601). Find out per element which reader sees them at all
 (homr, Audiveris, the ensemble readers, OCR) and why the rest are lost, before any tuning.
 
-33. **Dynamics and hairpins on scans.** (2026-10-15) 699 + 387 actions, almost all missing (not misplaced): Audiveris doesn't
+33. **Dynamics and hairpins on scans.** (Next round, user 2026-10-16. Tesseract already reads some: dynamics with conf >= 70
+become `<dynamics>` at their beat, -3; on Anastasia 4 only ~120 mp / mf tokens over 14 books, few p / f. Plan: per-letter
+templates (m, p, f, s, z in the publisher's bold italic) cut from the scans where OCR is sure, numpy-FFT correlation in the
+bands below the staves, tokens from adjacent letters; then hairpins as two thin diverging lines.) (2026-10-15) 699 + 387 actions, almost all missing (not misplaced): Audiveris doesn't
 see them on the scanned parts and homr writes none. Truth hairpins are 0-1 bars long, so `max_wedge_bars` is not the cause.
 Needs a detector (template matching of p / mf / f glyphs, hairpin lines) on the crops.
 34. **Ties on born-digital piano reductions.** (2026-10-15) Ghost 20 piano: truth 381 ties, Audiveris reads 346 over the whole

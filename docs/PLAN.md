@@ -227,7 +227,11 @@ workbook row `letters` (the song's lettered bars seed `align_bars`) `f8` -394 **
 7376). Rejected: respell also skipped next to key changes (+18), double barline before every key change (+99, Ghost 20 has key
 changes without one), articulations from the PDF glyphs on vector pages (+13, Ghost 20 Reed truth has accents the page lacks),
 "arco" / "pizz." from Tesseract (-2 but a part +2), system text by tempo terms without dropping the loose text (Keyboard 1 +28).
-Compare new work against `g2` (the eval reassembles Anastasia with the `letters` row injected until the workbook has it).
+Then (user 2026-10-16) the `letters` row is in both workbooks (Anastasia 2 `72A-B`, 4 `131A, 132C, 148A-C`; empty rows
+elsewhere for the user to fill; backups `songs.xlsx.bak-20261016`); "sim." / "fill" left out `g3` -11; dynamics read by
+Tesseract (conf >= 70) and dynamic-only text as `<dynamics>` `g5` -3: **6101** (-17.3 % from 7376). **Reference from now on:
+`g5`** (outputs `results/<show>/runs/g5`). Cheap fixes have flattened out; next (user choice): a dynamics detector for the
+scans (IMPROVEMENTS #33).
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
