@@ -217,6 +217,18 @@ Rebenched 2026-10-16 as `p1-q` **7342** (metric: typographic quotes = plain ones
 Molly cue out, accents on %-bars, rehearsal marks / tempi removed: +22, Ghost 13 now 353). Then slurs between equal pitches read as ties in every truth (`truth.load`) + more Ghost 13 truth fixes:
 `p1-t` **7377** (Anastasia 5168, Ghost 2209). Compare new work against `p1-t`.
 
+**Improvements round 2 (2026-10-16, branch `improvements`)**: reassembled from `final1` (Ghost 13 from `g13`); `p1-t`
+reproduces as `x0` **7376**. Accepted (acceptance rule, `docs/IMPROVEMENTS.md`), cumulative bench ids: whole-bar rests take
+the bar's length `f1` -153; slurs between equal pitches written as ties `f2` -288; notes re-read in the bar's key when the
+crop's key was misread `f3` -81; system text only for tempo terms, loose style / label text dropped `f5` -178; "sim." bars
+get the pattern's articulations `f6` -105; measure repeats in unnumbered systems placed by page position `f7` -56 (6515);
+workbook row `letters` (the song's lettered bars seed `align_bars`) `f8` -394 **only once the row is in the workbook**
+(tested in memory with Anastasia 4 `131A, 132C, 148A-C`); Audiveris ties at bar edges by pitch `g2` -6: **6115** (-17 % from
+7376). Rejected: respell also skipped next to key changes (+18), double barline before every key change (+99, Ghost 20 has key
+changes without one), articulations from the PDF glyphs on vector pages (+13, Ghost 20 Reed truth has accents the page lacks),
+"arco" / "pizz." from Tesseract (-2 but a part +2), system text by tempo terms without dropping the loose text (Keyboard 1 +28).
+Compare new work against `g2` (the eval reassembles Anastasia with the `letters` row injected until the workbook has it).
+
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
 

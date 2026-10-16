@@ -619,6 +619,32 @@ inside it. museScribe already has its own small vector reader (`omrbench/pipelin
 measure repeats, single-staff barlines). The ideas from sheet_reader worth taking over into museScribe, and the
 feature requests for its developer, are in `docs/IMPROVEMENTS.md` #52 and `docs/sheet_reader_requests.md`.
 
+### Re-test 2026-10-16 (sheet_reader `b6b04f0`, 47 commits later)
+
+Same 14 parts, scratch adapter (each staff read as a one-staff system; marks to the nearest staff), run `sr2`,
+bench `sr2`, error report `results/errors/sr2`. Edits left **6440** (was 7111) vs **1387** for the pipeline (`p1-t`);
+bars note-perfect only in sheet_reader: 15 (was 14). New since the first test: mid-line key / clef / time changes,
+export of articulations, dynamics, hairpins, metronome marks, chord symbols, lyrics, repeat barlines and voltas,
+segno / coda / D.S., slash notation, ties over page breaks. Still missing: several systems per page, multi-rests,
+grand staff, transposition (only from printed "in Bb"), slurs and barline types in the export, words / rehearsal
+marks, fermatas (1 of 12). New problems: chord suffixes and "sim." read as lyrics (33), chord symbols on the wrong
+beat (195 of 217), 3 made-up tuplets.
+
+| category (penalty) | sheet_reader | pipeline | better |
+|---|---|---|---|
+| notes / pitch | 3839 | 375 | pipeline |
+| articulations | 566 | 306 | pipeline (sheet_reader: few false ones, low recall) |
+| dynamics | 33 | 58 | **sheet_reader** |
+| hairpins | 21 | 21 | equal |
+| ties / slurs | 466 / 279 | 164 / 136 | pipeline |
+| repeats / voltas | 4 | 8 | **sheet_reader** (all 8 found) |
+| key changes | 22 | 36 | **sheet_reader** |
+| chords | 225 | 46 | pipeline |
+
+Verdict: still no engine and no per-bar vote. Worth porting into `pipeline/vector.py` (not importing): dynamics from
+glyphs (~20-25 actions), mid-line key glyphs (~10-15), repeat barlines and voltas (~5-8). Accents from glyphs were tried
+in the pipeline and rejected (+13, `docs/TRUTH_DEVIATIONS.md`).
+
 ## Ghost 13 truth (checked bar by bar 2026-10-16, rechecked after the user's fixes)
 
 Notes: every truth bar with notes agrees with the pipeline or sheet_reader. Marks, text, ties, slurs and barlines

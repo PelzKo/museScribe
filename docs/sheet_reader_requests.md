@@ -23,6 +23,20 @@ The notes it reads are mostly right; the losses come from structure (bars, keys,
 it does not export yet. The marks it *sees* are better than ours: Ghost 13 Cello has 42 marcatos in the PDF and 42
 in the truth, the pipeline finds 26; dynamics 9 in the PDF, 10 in the truth, pipeline 5.
 
+## Re-test (2026-10-16, commit `b6b04f0`)
+
+Edits left on the same 14 parts: **6440** (was 7111; pipeline 1387). Done since the first test: request 3 (mid-line key /
+clef / time), 4 in part (articulations, dynamics, hairpins, metronome, chords, lyrics exported), 6 in part (repeat
+barlines, voltas, segno / coda), 10 (slashes), ties over page breaks. Its dynamics, repeats / voltas and key changes are
+now better than ours on these pages. Still open: 1, 2, 5 (slurs not exported, 18 % of ties found), 6 (double / final
+barline types), 7, 8, 11. New issues found:
+
+- `lyrics.py` takes chord suffixes ("maj7"), "sim.", "ditto." and stray glyphs as lyrics on instrument parts (33 made up).
+- Chord symbols land on the wrong beat (195 of 217 on Ghost 20 Guitar): snap them to the note / slash below.
+- 3 made-up tuplets; fermatas found 1 of 12; words and rehearsal marks not exported.
+- `export_score` stops when pages have different staff counts; tempo words and voltas are read above the top staff
+  of the page only (part books have 6-10 one-staff systems per page).
+
 ## Feature requests (most useful first)
 
 1. **Part books: several systems per page.** Group staves into systems (a system = staves joined by a barline

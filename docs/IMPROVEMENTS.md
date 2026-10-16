@@ -120,20 +120,23 @@ differences, not edit-penalty actions). Related older items: repeats #38 (164 mi
 #39, dynamics / hairpins #33 (~250 / 180 missing), tremolos #36 (49), cue bars under a part label #41 (user
 2026-10-15: always a cue, also vocal cues like "MOLLY:").
 
-43. **Re-spell notes when the crop's key was misread.** (~450 pitch differences, the largest pitch kind.) homr
+43. **Re-spell notes when the crop's key was misread.** (Done 2026-10-16: `bars.respell_key` at write time; homr writes no
+`<accidental>`, so a note that differs from the crop key is taken as printed; keys 7+ fifths apart (enharmonic) are left: -81.) (~450 pitch differences, the largest pitch kind.) homr
 reads the key per crop and sometimes wrongly (Anastasia 4 Cello crop s08: 2 sharps in a 3-flat bar); the assembly
 writes the right key but keeps homr's pitches (Ab -> A, Bb -> B; Anastasia 4 Cello 32, 37–38, 58–60, same bars in
 Keyboard 1, Violins, Bass, Oboe). Where the crop key differs from the chosen key, re-spell every note without its
 own `<accidental>` by the chosen key and the accidentals carried in the bar.
-44. **Whole-bar rests get the bar's length.** (175 bars.) `<rest measure="yes">` from the crop keeps 4 quarters in
+44. **Whole-bar rests get the bar's length.** (Done 2026-10-16, `bars.fit_measure_rests`: -153.) (175 bars.) `<rest measure="yes">` from the crop keeps 4 quarters in
 3/4 bars (Anastasia 2 brass and reeds), MuseScore makes the bar 4/4 long. Set the duration from the bar's time.
-45. **Double barlines.** (349 missing, every section change in the truths; the user wants them, 2026-10-16.) Audiveris' double barlines were rejected
+45. **Double barlines.** (2026-10-16: a double barline before every key change of the song's `key` row was rejected, +99:
+Ghost 20 changes key three times without one. Needs the printed barline.) (349 missing, every section change in the truths; the user wants them, 2026-10-16.) Audiveris' double barlines were rejected
 (+129, wrong bars). Vector pages: the barline type from the drawing (two strokes 2–4 pt apart, thick final stroke,
 repeat dots). Scans: a double barline where a rehearsal mark, key or time change starts a bar.
-46. **Tie read as a slur.** (138.) A slur between two neighbouring notes of the same pitch is a tie (confirmed by
+46. **Tie read as a slur.** (Done 2026-10-16: `musicxml.slurs_to_ties` on the output too: -288.) (138.) A slur between two neighbouring notes of the same pitch is a tie (confirmed by
 the user 2026-10-16: a slur only joins different pitches). Together with
 #39 this covers most of the 285 missing ties (Ghost 20 Piano 108).
-47. **Copy marks onto "sim." and %-bars.** (User 2026-10-16: like the truth.) After "sim." the pattern bar's
+47. **Copy marks onto "sim." and %-bars.** (Done 2026-10-16: `bars.apply_sim` -105; %-bars in systems without a printed
+bar number were skipped, now placed by page position -56. Open: the rehearsal mark copied into %-bars.) (User 2026-10-16: like the truth.) After "sim." the pattern bar's
 articulations go onto the following bars that repeat its rhythm (Ghost 13 Cello 27–33, 99–105); written-out
 %-bars keep the source bar's articulations (Ghost 13 Bass 114–129, ~45 accents). `assemble.apply_repeats` copies
 notes; check the articulations survive. Also: it copies the rehearsal mark into every %-bar (Ghost 13 Bass: J
@@ -145,7 +148,8 @@ position of the Audiveris head, or add 8vb lines if printed.
 101–115, 169–206, with lyrics), Männer bars missing / extra around 42–62, made-up instrument changes in Männer (19),
 Frauen two voices on one staff written as chords (57–64), lyrics in verse 2 where the truth uses verse 1 (~35).
 Mostly the singer-label routing of the piano reduction.
-50. **Words wrongly made system text.** (229.) In split-instrument books every word becomes system text
+50. **Words wrongly made system text.** (Done 2026-10-16: system text only for tempo terms, other short text above the top
+staff that is no playing word is left out: -178.) (229.) In split-instrument books every word becomes system text
 (`assemble.py` `split or ...`), and "gedämpft", "solo", "fill", "sim." and tempo words are moved to the top part;
 the truths keep them on the part. Only rit. / a tempo / accel. style texts should be system text.
 51. **Small ones from the overview.** Sextuplets written 3:2 instead of 6:4 (Anastasia 1 bar 1, 6 parts); key / time
@@ -167,9 +171,24 @@ in only 14 bars where the pipeline is not. Not an engine candidate now. Where it
       onset (Ghost one / two staff steps off: 90; accidental and key errors 38 + 20).
     - **Key, clef, time per staff from glyphs** (`staff_info.py`) as a check of the crop's key (#43 on Ghost).
     - **Barline types** (#45) from `page_dump.get_barlines`.
+    - **Re-test 2026-10-16 (commit `b6b04f0`)**: 6440 actions vs 1387 for the pipeline on the same 14 parts (was 7111);
+      note-perfect where the pipeline is not: 15 bars. Now exports articulations, dynamics, hairpins, chords, lyrics,
+      repeats / voltas, mid-line key changes. Better than the pipeline only on dynamics (33 vs 58 actions), repeats /
+      voltas (all 8 found) and key changes (22 vs 36). Still one system per page, no multi-rests, no grand staff, no
+      transposition, slurs / barline types not exported. Reading the accents from the glyphs ourselves was tried: +13
+      (Ghost 20 Reed truth has accents the page lacks). Left to port: dynamics from glyphs (~20-25), mid-line key glyphs
+      (~10-15), repeat barlines / voltas (~5-8).
   Import as a library (pinned commit, `~/sheet_reader/tools` on `sys.path`, or a git submodule) once its API returns
   positions (page, x, y, bar) and not only MusicXML; until then copy ideas, not code. Feature requests for its
   developer: `docs/sheet_reader_requests.md`.
+
+53. **Lettered bars per song (workbook row `letters`).** (Code done 2026-10-16: `131A, 132C, 148A-C` seeds `align_bars`;
+Anastasia 4 -394 with the row. Each part read only some of the letters, so the key / time rows and the bars drifted 1-4 bars.)
+Needs the row in the workbook (user).
+54. **"arco" / "pizz." on scans.** Tesseract reads 13 of the 26 in Anastasia 4 Violin 1; adding them was -2 (rejected). The
+truth alternates pizz. / arco strictly (music rule): a missing "arco" between two "pizz." is certain, but its bar is not.
+55. **Ties from the vector curves** (#34 again, 2026-10-16): Audiveris' ties are copied (72 on the Ghost 20 piano, plus edge
+notes by pitch -6), 108 are still missing there. Pair each tie curve with the notehead columns at both ends.
 
 ## Prior knowledge (cheap to enter in advance)
 
