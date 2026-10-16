@@ -34,3 +34,23 @@ def test_measure_rest_gets_the_bar_length():
     bar = B.rest_bar(2, 8, 2)          # 4/4 rest bar, two staves
     B.fit_measure_rests(bar, 6)        # written into a 3/4 bar
     assert [e.findtext("duration") for e in bar.items] == ["6", "6", "6"]
+
+
+def test_sim_copies_the_pattern_articulations():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def bar(marked, word=None):
+        items = []
+        if word:
+            items.append(etree.fromstring(f"<direction><direction-type><words>{word}</words></direction-type></direction>"))
+        for _ in range(2):
+            n = etree.fromstring("<note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration></note>")
+            if marked:
+                etree.SubElement(etree.SubElement(n, "notations"), "articulations").append(etree.Element("accent"))
+            items.append(n)
+        return B.Bar(items, "crop")
+
+    bars = [bar(True), bar(False, "sim."), bar(False), bar(True)]
+    assert B.apply_sim(bars) == 2
+    assert all(len(B._marked(b)) == 2 for b in bars)

@@ -210,6 +210,48 @@ def fit_measure_rests(bar: Bar, length: int) -> None:
             items[i + 1].find("duration").text = str(length)
 
 
+SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)
+
+
+def _marked(bar: Bar) -> list[etree._Element]:
+    return [n for n in bar.notes() if n.find("notations/articulations") is not None]
+
+
+def _rhythm(bar: Bar) -> list[tuple]:
+    return [(n.find("rest") is not None, n.find("chord") is not None, n.findtext("duration"))
+            for n in bar.notes() if n.find("grace") is None]
+
+
+def apply_sim(bars: list[Bar]) -> int:
+    """After "sim." the pattern bar's articulations go onto the following bars with the same
+    rhythm and no marks of their own (the truths write them out, user 2026-10-16). Pattern = the
+    bar before the "sim." bar, or the "sim." bar itself when it is marked. Returns bars changed."""
+    changed = 0
+    for g, bar in enumerate(bars):
+        if not any(SIM.match((w.text or "").strip()) for w in bar.items if w.tag == "direction"
+                   for w in w.iter("words")):
+            continue
+        src = g if _marked(bar) or g == 0 else g - 1
+        pat = bars[src]
+        if not _marked(pat):
+            continue
+        for h in range(src + 1, len(bars)):
+            b = bars[h]
+            if b is None or _rhythm(b) != _rhythm(pat) or _marked(b):
+                break
+            for a, n in zip([x for x in pat.notes() if x.find("grace") is None],
+                            [x for x in b.notes() if x.find("grace") is None]):
+                art = a.find("notations/articulations")
+                if art is None or n.find("rest") is not None:
+                    continue
+                nt = n.find("notations")
+                if nt is None:
+                    nt = etree.SubElement(n, "notations")
+                nt.append(copy.deepcopy(art))
+            changed += 1
+    return changed
+
+
 def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
     """(onset, element) for every note/direction, in document order."""
     out, cur, last = [], 0, 0
