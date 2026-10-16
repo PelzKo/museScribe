@@ -40,9 +40,11 @@ def load(srcs: list[Path], cache_dir: Path, musescore: str | None) -> etree._Ele
     """The song's truth as one score. Several files (one hand-corrected part each, "#13 - Bass.mscz",
     "#13 - Cello.mscz") are merged in order; there a one-part file's part is named after the text
     behind the last " - " of its file name ("Bass"), whatever the part is called inside."""
-    from .musicxml import load as load_xml, merge_parts
+    from .musicxml import load as load_xml, merge_parts, slurs_to_ties
 
     roots = [load_xml(convert(s, cache_dir, musescore)) for s in srcs]
+    for r in roots:
+        slurs_to_ties(r)        # convention: a slur between two equal pitches is a tie
     if len(roots) == 1:
         return roots[0]
     for src, root in zip(srcs, roots):

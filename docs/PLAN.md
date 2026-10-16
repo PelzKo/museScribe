@@ -4,7 +4,8 @@ Single source of state, decisions, results and next steps. Replaces `PC_PLAN.md`
 (2026-10-13). Backlog ideas without a slot yet: `docs/IMPROVEMENTS.md`. How-to docs: `docs/shows.md`
 (workbook, transcribe, bench), `docs/pipeline.md` (pipeline engine, meta keys), `docs/engine-benchmark.md`
 (samples, `run`). What hand corrections cost and the conventions of the corrected scores: `docs/CORRECTION_INFORMATION.md`;
-truth vs printed part: `docs/TRUTH_DEVIATIONS.md`.
+truth vs printed part: `docs/TRUTH_DEVIATIONS.md`. Every remaining output error by kind (basis for the next round) and the sheet_reader test:
+`docs/ERRORS.md` (`python scripts/error_report.py anastasia,ghost --run p1`).
 
 ## 1. Goal and rules
 
@@ -71,6 +72,7 @@ omrbench sweep --id ID --rebench | --report-only   # re-score finished engines /
 python scripts/reassemble.py ghost --from WORKRUN --to NEWRUN [--engine pipeline-raw] [--songs 20]
                                                    # assembly only, on a run's work dirs (~90 s)
 python scripts/compare_bench.py BASE NEW           # all-song edit penalty delta + acceptance rule (bench ids)
+python scripts/error_report.py anastasia,ghost --run p1   # every difference by kind -> results/errors/p1/
 python scripts/derive_drumkit.py [show]            # drum legend from the truth drum parts -> drumkit.yaml
 omrbench run --engines pipeline,homr --samples demo-*      # multi-engine run on data/samples
 omrbench components layout|ocr <show> --run <run>  # P6 component benchmarks
@@ -211,6 +213,9 @@ German mute words + lettered cuts + tempo in brackets = `m3` **8369** (-23). The
 2026-10-15: Anastasia Violin 2, Cello, Bass, Reed 2 / 3, Trumpet, Trombone, Männer get notes, ties and dots only, in the
 output and in the scored truth) = `p1` **7005** (a metric change, not a gain; **the reference from now on**, outputs in
 `results/<show>/runs/p1`). Ghost 13 (run `g13`, in `p1` too): 331.
+Rebenched 2026-10-16 as `p1-q` **7342** (metric: typographic quotes = plain ones -16; Ghost 13 truth fixed by the user,
+Molly cue out, accents on %-bars, rehearsal marks / tempi removed: +22, Ghost 13 now 353). Then slurs between equal pitches read as ties in every truth (`truth.load`) + more Ghost 13 truth fixes:
+`p1-t` **7377** (Anastasia 5168, Ghost 2209). Compare new work against `p1-t`.
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.

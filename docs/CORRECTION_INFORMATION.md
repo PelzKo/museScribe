@@ -58,6 +58,7 @@ What "correct" means in the truths (user decisions; deviations to check are in `
 Notes and pitch:
 - Sounding pitch under 8va (the pipeline can't read 8va lines yet); Glock / Crotales sound 15ma.
 - Full-size notes over a whole-bar rest voice are cues: deleted. Grace notes as 16ths.
+- Notes printed under another part's label ("Util.", "MOLLY:") are cues: always removed (user, 2026-10-15).
 - Male voices in treble-8vb only for chorus labels and the singers in `male_voices` (Dmitry, Vlad).
 - Anastasia 4 Dmitry / Vlad: the truth is right and the PDF is an octave off. Not visible from the PDF; accepted.
 
@@ -65,7 +66,11 @@ Bars:
 - Lettered bars take bars of their own. A cut to a plain number ("to 14") keeps the bars in between as empty
   bars; a cut to a lettered bar ("-> 132C") skips the earlier letters (132A, 132B do not exist). Anastasia 4 =
   211 bars (206 + 131A, 132C, 148A–C).
-- Measure repeats (%) are written out (Ghost 20 Drums truth).
+- A curve joining two neighbouring notes of the same pitch is a tie, never a slur; a slur joins notes of
+  different pitch (user, 2026-10-16). `truth.load` converts such slurs in the truths to ties.
+- Double barlines as printed (user, 2026-10-16; Ghost 13 truths have them).
+- Measure repeats (%) are written out (Ghost 20 Drums truth), with the articulations of the source bar; bars after
+  "sim." get the pattern bar's articulations written out too (user, 2026-10-16; Ghost 13 Cello 27–33).
 
 Marks:
 - `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Männer; Ghost: none)
@@ -77,9 +82,10 @@ Text:
 - Playing instructions in German, as the truth writes them: Mute / St. Mute / Cup Mute -> "gedämpft", Open ->
   "offen" (not at the start of a part), "to Mute" / "to Open" (preparations) left out; "pizz." and "Arco" stay.
 - Spoken dialogue dropped in the vocal parts; singer cue lines, "Vamp until ...", "Then ON to m. 60" dropped in
-  instrument parts (both shows; the Ghost 13 truth still has them); lyrics verse 1; singer part names as printed; duet labels
+  instrument parts (both shows); lyrics verse 1; singer part names as printed; duet labels
   A+B go to both parts.
-- Numeric rehearsal marks (boxed bar numbers) dropped; letter marks kept.
+- Numeric rehearsal marks (boxed bar numbers) dropped; letter marks kept. (Ghost 13 truth has none since 2026-10-16: open, `docs/TRUTH_DEVIATIONS.md`.)
+- Typographic and plain quotes are the same (we‘re = we're; the metric normalises them, user 2026-10-16).
 - Piano reductions: no chord symbols; dynamics on staff 1; hairpins at most 2 bars; uncertain articulations /
   dynamics dropped.
 

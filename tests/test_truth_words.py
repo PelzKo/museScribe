@@ -68,3 +68,25 @@ def test_plain_cell_of_a_piano_reduction_picks_the_labels():
     part = Part("4", "Violin 2", Path("x.pdf"), {}, ["Violine 2"])
     plain_row(part, "x")
     assert part.meta["plain"] is True and part.plain == ["Violine 2"]
+
+
+def _n(step, octave, *slurs):
+    s = "".join(f'<slur type="{t}" number="{k}"/>' for t, k in slurs)
+    return (f"<note><pitch><step>{step}</step><octave>{octave}</octave></pitch><duration>4</duration>"
+            f"<voice>1</voice><notations>{s}</notations></note>")
+
+
+def test_slur_between_equal_pitches_becomes_tie():
+    from lxml import etree
+    from omrbench import musicxml
+    # G-(B~B): the outer slur G..B stays, the inner B-B curve is a tie; C-D stays a slur
+    xml = (f'<score-partwise><part id="P1"><measure number="1">{_n("G", 3, ("start", 1))}'
+           f'{_n("B", 3, ("start", 2))}</measure><measure number="2">{_n("B", 3, ("stop", 2), ("stop", 1))}'
+           f'{_n("C", 4, ("start", 1))}{_n("D", 4, ("stop", 1))}</measure></part></score-partwise>')
+    root = etree.fromstring(xml)
+    assert musicxml.slurs_to_ties(root) == 1
+    notes = root.findall(".//note")
+    assert [t.get("type") for t in notes[1].iter("tied")] == ["start"]
+    assert [t.get("type") for t in notes[2].iter("tied")] == ["stop"]
+    assert [s.get("type") for s in notes[2].iter("slur")] == ["stop"]
+    assert notes[3].find("notations/slur").get("type") == "start"

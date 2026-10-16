@@ -155,6 +155,39 @@ PLAY_WORDS = re.compile(r"pizz|arco|gedämpft|offen|\bdiv|unis|\bsul\b|solo|tutt
 KEEP_DIRECTIONS = {"rehearsal", "segno", "coda", "octave-shift"}
 
 
+def slurs_to_ties(root: etree._Element) -> int:
+    """A slur from a note to the next note of the same pitch (same staff and voice) is a tie (truth
+    convention, user 2026-10-16: a slur only joins different pitches). Returns how many were turned."""
+    turned = 0
+    for part in root.iter("part"):
+        last: dict[tuple, etree._Element] = {}
+        for n in part.iter("note"):
+            if n.find("rest") is not None or n.find("chord") is not None or n.find("grace") is not None:
+                continue
+            key = (n.findtext("staff") or "1", n.findtext("voice") or "1")
+            a, last[key] = last.get(key), n
+            p, q = (x.find("pitch") if x is not None else None for x in (a, n))
+            if p is None or q is None or [p.findtext(k) or "0" for k in ("step", "alter", "octave")] != \
+                    [q.findtext(k) or "0" for k in ("step", "alter", "octave")]:
+                continue
+            for s in a.findall("notations/slur[@type='start']"):
+                stop = n.find(f"notations/slur[@type='stop'][@number='{s.get('number', '1')}']")
+                if stop is None and s.get("number") is None:
+                    stop = n.find("notations/slur[@type='stop']")
+                if stop is None or a.find("notations/tied[@type='start']") is not None:
+                    continue
+                for el, typ, sl in ((a, "start", s), (n, "stop", stop)):
+                    nt = sl.getparent()
+                    nt.replace(sl, etree.Element("tied", type=typ))
+                    tie = etree.Element("tie", type=typ)
+                    anchor = el.find("duration")
+                    if anchor is not None:
+                        anchor.addnext(tie)
+                turned += 1
+                break
+    return turned
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plain`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,
@@ -331,8 +364,11 @@ def _txt(el, path, default=None):
     return x.text.strip() if x is not None and x.text else default
 
 
+_QUOTES = str.maketrans("‘’‚ʼ`“”„", "'''''\"\"\"")   # typographic quotes = plain ones (user, 2026-10-16)
+
+
 def _norm_text(s: str) -> str:
-    s = s.lower().replace(" ", " ")
+    s = s.lower().replace(" ", " ").translate(_QUOTES)
     return re.sub(r"\s+", " ", s).strip()
 
 

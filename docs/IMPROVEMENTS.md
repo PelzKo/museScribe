@@ -102,6 +102,62 @@ Notes under another part's label at the start are a cue; drop them like small-no
 the output and to the truth part it is scored against; reference 8369 -> 7005.) Some parts get only notes, ties, dots,
 tuplets, tremolos and playing words; articulations, dynamics, hairpins, slurs, fermatas, ornaments and tempo / expression text go.
 
+Items 43–52 come from the error overview `docs/ERRORS.md` (2026-10-16, outputs `p1`, 7432 differences; counts are
+differences, not edit-penalty actions). Related older items: repeats #38 (164 missing), ties over system breaks
+#39, dynamics / hairpins #33 (~250 / 180 missing), tremolos #36 (49), cue bars under a part label #41 (user
+2026-10-15: always a cue, also vocal cues like "MOLLY:").
+
+43. **Re-spell notes when the crop's key was misread.** (~450 pitch differences, the largest pitch kind.) homr
+reads the key per crop and sometimes wrongly (Anastasia 4 Cello crop s08: 2 sharps in a 3-flat bar); the assembly
+writes the right key but keeps homr's pitches (Ab -> A, Bb -> B; Anastasia 4 Cello 32, 37–38, 58–60, same bars in
+Keyboard 1, Violins, Bass, Oboe). Where the crop key differs from the chosen key, re-spell every note without its
+own `<accidental>` by the chosen key and the accidentals carried in the bar.
+44. **Whole-bar rests get the bar's length.** (175 bars.) `<rest measure="yes">` from the crop keeps 4 quarters in
+3/4 bars (Anastasia 2 brass and reeds), MuseScore makes the bar 4/4 long. Set the duration from the bar's time.
+45. **Double barlines.** (349 missing, every section change in the truths; the user wants them, 2026-10-16.) Audiveris' double barlines were rejected
+(+129, wrong bars). Vector pages: the barline type from the drawing (two strokes 2–4 pt apart, thick final stroke,
+repeat dots). Scans: a double barline where a rehearsal mark, key or time change starts a bar.
+46. **Tie read as a slur.** (138.) A slur between two neighbouring notes of the same pitch is a tie (confirmed by
+the user 2026-10-16: a slur only joins different pitches). Together with
+#39 this covers most of the 285 missing ties (Ghost 20 Piano 108).
+47. **Copy marks onto "sim." and %-bars.** (User 2026-10-16: like the truth.) After "sim." the pattern bar's
+articulations go onto the following bars that repeat its rhythm (Ghost 13 Cello 27–33, 99–105); written-out
+%-bars keep the source bar's articulations (Ghost 13 Bass 114–129, ~45 accents). `assemble.apply_repeats` copies
+notes; check the articulations survive. Also: it copies the rehearsal mark into every %-bar (Ghost 13 Bass: J
+seven times); drop rehearsal marks from the copies.
+48. **Notes far below the bass staff.** Low notes with many ledger lines are misread (Anastasia 4 Keyboard 1 bars 20,
+23, 65: G1 -> Cb2, C1 -> F1, D2 -> A2); most of the 221 "wrong by more than a third". Check against the staff
+position of the Audiveris head, or add 8vb lines if printed.
+49. **Anastasia 4 singers.** (~1250 differences in Dmitry, Vlad, Männer, Frauen.) Whole passages missing (Dmitry
+101–115, 169–206, with lyrics), Männer bars missing / extra around 42–62, made-up instrument changes in Männer (19),
+Frauen two voices on one staff written as chords (57–64), lyrics in verse 2 where the truth uses verse 1 (~35).
+Mostly the singer-label routing of the piano reduction.
+50. **Words wrongly made system text.** (229.) In split-instrument books every word becomes system text
+(`assemble.py` `split or ...`), and "gedämpft", "solo", "fill", "sim." and tempo words are moved to the top part;
+the truths keep them on the part. Only rit. / a tempo / accel. style texts should be system text.
+51. **Small ones from the overview.** Sextuplets written 3:2 instead of 6:4 (Anastasia 1 bar 1, 6 parts); key / time
+changes one bar off after the lettered bars of Anastasia 4 (bar drift around 128–131); Ghost guitar chord symbols
+one beat off (28, see #37); missing "arco" ×32, "pizz." ×25, made-up "solo" ×12.
+52. **What sheet_reader (`~/sheet_reader`, external, developed by a friend; no changes there) can bring.** Tested
+2026-10-16 on 14 Ghost parts (`docs/ERRORS.md`): as an engine 7111 actions vs 1341 for the pipeline, note-perfect
+in only 14 bars where the pipeline is not. Not an engine candidate now. Where it helps, all on born-digital pages
+(Ghost only, 2133 of 7432 differences):
+    - **Glyph knowledge** for `pipeline/vector.py`: its `glyph_map.py` names 65 EngraverFontSet / Maestro /
+      MaestroPercussion characters (dynamics p..fff, sfz, fp, accent, marcato, fermata, harmonic, bow marks,
+      accidentals, clefs, time digits, rests, flags; 47 still marked guess). Our `vector.GLYPHS` knows 14. Reading articulations, dynamics
+      and fermatas from the glyphs and putting them on the output note by bar + x order would replace homr's marks
+      on vector pages (Ghost: articulations 319, dynamics 70, fermatas 15). Evidence: Ghost 13 Cello marcatos PDF 42
+      = truth 42, pipeline 26; dynamics PDF 9, truth 10, pipeline 5.
+    - **Ties and slurs from curves** (`export_musicxml.get_slurs_and_ties`, `resolve_ties`: a curve whose ends sit
+      on two equal pitches is a tie). Ghost: ties 300, slurs 149.
+    - **Pitch from the notehead's y position** (`pitch.py`, exact on vector pages) as a check of homr's pitch per
+      onset (Ghost one / two staff steps off: 90; accidental and key errors 38 + 20).
+    - **Key, clef, time per staff from glyphs** (`staff_info.py`) as a check of the crop's key (#43 on Ghost).
+    - **Barline types** (#45) from `page_dump.get_barlines`.
+  Import as a library (pinned commit, `~/sheet_reader/tools` on `sys.path`, or a git submodule) once its API returns
+  positions (page, x, y, bar) and not only MusicXML; until then copy ideas, not code. Feature requests for its
+  developer: `docs/sheet_reader_requests.md`.
+
 ## Prior knowledge (cheap to enter in advance)
 
 Facts known before a run that the pipeline could check its readings against. `show.yaml` already has transposition,
