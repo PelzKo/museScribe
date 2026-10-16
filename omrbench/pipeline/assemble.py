@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
+from ..musicxml import slurs_to_ties
 from . import bars as B
 from . import chords as CH
 from . import vector as SL
@@ -85,6 +86,7 @@ class Stats:
     wedges: int = 0
     marks_unplaced: int = 0
     chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
+    slurs_to_ties: int = 0         # slurs between two equal pitches written as ties
     graces_retyped: int = 0        # flagless graces given the piece's grace type
     graces_dropped: int = 0        # half/whole "graces" (misreads)
     wedges_dropped: int = 0        # hairpins longer than max_wedge_bars / unpaired
@@ -101,6 +103,7 @@ class Stats:
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
                 "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
                 "chord_marks_deduped": self.chord_marks_deduped,
+                "slurs_to_ties": self.slurs_to_ties,
                 "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
                 "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
@@ -2118,4 +2121,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 # final barline, as in the truth scores (MuseScore adds none on import)
                 bl = etree.SubElement(m, "barline", location="right")
                 etree.SubElement(bl, "bar-style").text = "light-heavy"
+    n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
+    if stats is not None:
+        stats.slurs_to_ties += n
     return root
