@@ -287,15 +287,34 @@ def copy_ties(bar: Bar, src: Bar) -> int:
     for on, n in onsets(src):
         if n.tag == "note" and (k := _note_key(on, n)) and n.find("tie") is not None:
             ties[k] = [t.get("type") for t in n.findall("tie")]
+    # onsets differ (a misread rhythm): a tie stop on the first and a tie start on the last note
+    # of a pitch carry over by pitch alone (a tie joins the bar's edge notes)
+    def edges(b: Bar) -> dict[tuple, tuple]:
+        out: dict[tuple, list] = {}
+        for on, n in onsets(b):
+            if n.tag == "note" and (k := _note_key(on, n)) and n.find("grace") is None:
+                out.setdefault(k[1:], []).append(n)
+        return {k: (v[0], v[-1]) for k, v in out.items()}
+    mine, theirs = edges(bar), edges(src)
+    by_pitch: dict[int, list[str]] = {}
+    for k, (first, last) in theirs.items():
+        if k in mine:
+            if first.find("tie[@type='stop']") is not None:
+                by_pitch.setdefault(id(mine[k][0]), []).append("stop")
+            if last.find("tie[@type='start']") is not None:
+                by_pitch.setdefault(id(mine[k][1]), []).append("start")
     added = 0
     for on, n in onsets(bar):
-        if n.tag != "note" or n.find("tie") is not None or (k := _note_key(on, n)) not in ties:
+        if n.tag != "note" or n.find("tie") is not None:
+            continue
+        kinds = ties.get(_note_key(on, n)) or by_pitch.get(id(n))
+        if not kinds:
             continue
         idx = max(i for i, c in enumerate(n) if c.tag in ("duration", "pitch", "chord", "grace")) + 1
         nt = n.find("notations")
         if nt is None:
             nt = etree.SubElement(n, "notations")
-        for kind in ties[k]:
+        for kind in sorted(kinds, key=lambda t: t != "stop"):
             n.insert(idx, etree.Element("tie", type=kind))
             idx += 1
             etree.SubElement(nt, "tied", type=kind)
