@@ -3,7 +3,9 @@
 Single source of state, decisions, results and next steps. Replaces `PC_PLAN.md` and `PLAN_full.md`
 (2026-10-13). Backlog ideas without a slot yet: `docs/IMPROVEMENTS.md`. How-to docs: `docs/shows.md`
 (workbook, transcribe, bench), `docs/pipeline.md` (pipeline engine, meta keys), `docs/engine-benchmark.md`
-(samples, `run`).
+(samples, `run`). What hand corrections cost and the conventions of the corrected scores: `docs/CORRECTION_INFORMATION.md`;
+truth vs printed part: `docs/TRUTH_DEVIATIONS.md`. Every remaining output error by kind (basis for the next round) and the sheet_reader test:
+`docs/ERRORS.md` (`python scripts/error_report.py anastasia,ghost --run p1`).
 
 ## 1. Goal and rules
 
@@ -69,6 +71,9 @@ omrbench sweep --id ID --resume                    # after a crash: skips finish
 omrbench sweep --id ID --rebench | --report-only   # re-score finished engines / rebuild the report
 python scripts/reassemble.py ghost --from WORKRUN --to NEWRUN [--engine pipeline-raw] [--songs 20]
                                                    # assembly only, on a run's work dirs (~90 s)
+python scripts/compare_bench.py BASE NEW           # all-song edit penalty delta + acceptance rule (bench ids)
+python scripts/error_report.py anastasia,ghost --run p1   # every difference by kind -> results/errors/p1/
+python scripts/derive_drumkit.py [show]            # drum legend from the truth drum parts -> drumkit.yaml
 omrbench run --engines pipeline,homr --samples demo-*      # multi-engine run on data/samples
 omrbench components layout|ocr <show> --run <run>  # P6 component benchmarks
 bash scripts/smoke_docker.sh                       # demo sample through the containers
@@ -147,8 +152,9 @@ Images (all built and verified on the PC, GPU visible where used):
 ### Shows
 
 - `data/anastasia/pdfs/`: 14 full-book PDFs, all scans (97–405 pages each) except the vector `PianoReduction`.
-  Expected bar counts: song 1: 32, 2: 78 (1–76 + 72A/72B), 3: 245, 4: 213 (206 + 131A, 132A–C, 148A–C; lettered
-  and cut lettered bars count), 4A: 6.
+  Expected bar counts: song 1: 32, 2: 78 (1–76 + 72A/72B), 3: 245, 4: 211 (206 + 131A, 132C, 148A–C), 4A: 6.
+  Lettered bars count; a cut to a plain number ("to 14") keeps the bars between as empty bars, a cut to a lettered
+  bar ("-> 132C") skips the earlier letters (132A, 132B don't exist; `assemble.align_bars`, 2026-10-15).
 - `data/ghost/pdfs/`: 9 PDFs, born-digital vector pages (music fonts `Maestro`, `EngraverFontSet`) with a few
   scanned covers. 31 sheets (1..24 incl. 1a, 11a, 13A, 14a, 20A–C), titles "English / German". Every song starts
   on a fresh page; blank page-turn pages excluded via comma ranges (Utility 6, 8). PianoReduction = German
@@ -162,20 +168,17 @@ Images (all built and verified on the PC, GPU visible where used):
 | Show / song | File | Linked in workbook | Notes |
 |---|---|---|---|
 | Anastasia 1 | `truth/01_Opening_Fanfare_and_Opening_Scene.mscz` | yes | |
-| Anastasia 2 | `truth/02_Prologue_Once_upon_a_december_fertig.mscz` | yes | Klavierauszug empty = not annotated (`Piano=-`) |
-| Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "Xylophon" = placeholder for drum-set x-notes (Drums row truth `-`) |
-| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | partial: Reed 2 / 3, Keyboard 2 and all percussion empty (rows without `truth`); soloists so far Dmitry, Vlad; 217 bars (expected 213); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output (tenor / baritone clef; 1 bulk shift each) |
+| Anastasia 2 | `truth/02_Prologue_Once_upon_a_december_fertig.mscz` | yes | Klavierauszug not corrected yet (`unfinished`); truth updated 2026-10-15 |
+| Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "mallets" in the drum book = xylophone: Drums row -> `Xylophon` (instrument `Xylophone`, 2026-10-15; the reader finds 1 of 5 notes) |
+| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | partial: Reed 2 / 3, Keyboard 2 and all percussion empty (rows without `truth`); soloists so far Dmitry, Vlad; 211 bars (truth updated 2026-10-15); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output: the truth is right, the PDF wrong (accepted, 1 bulk shift each) |
+| Ghost 13 | `truth/#13 - Bass.mscz; truth/#13 - Cello.mscz` | yes (2026-10-15) | two single-part files (B2 lists both, `;`); parts named Bass / Cello from the file names; run `g13`, bench `g13-m3`: 333 |
 | Ghost 20 | `truth/#20 - I'm Outta Here_Fertig.mscz` | yes | 7377 truth notes (Anastasia 1/2/4A together: 2708) |
 | Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261013`) | TACET rows `-` |
 
 Theresa's earlier song 4 corrections are deleted and no longer relevant.
 
-Truth conventions (user decisions): sounding pitch under 8va (pipeline can't read 8va yet); Glock / Crotales
-sound 15ma; full-size notes over a whole-bar rest voice are cues (dropped); male voices in treble-8vb only for
-chorus labels; duet labels A+B go to both parts; singer part names as printed; lyrics verse 1; spoken dialogue
-dropped; piano dynamics on staff 1; grace notes as 16ths. German truth part names: Flöte 1 = Reed 1 Flute,
-Klarinette in B 1 = Reed 2 in song 1 but Reed 1 in song 2, Fagott = Reed 3, Pauken = Timpani, Glockenbaum =
-Mark Tree, Splash-Becken = Cymbal, Frauen = "Russian Chorus", Klavierauszug = PianoReduction Piano.
+Truth conventions (user decisions, pitch, bars, text, part names): `docs/CORRECTION_INFORMATION.md`. Klarinette in
+B 1 = Reed 2 in song 1 but Reed 1 in song 2.
 
 Most truth songs contain keyboard, guitar and drums; Anastasia 4 adds choir.
 
@@ -191,6 +194,44 @@ parts in from scratch.
 | Ghost 1a | `results/ghost/runs/g1a-base` | `runs/g1a-fix4` | `edits-g1a-fix4` | **235** (32.5 %) | 0.622 | 0.941 |
 | Ghost 11a (smoke, no truth) | `results/ghost/runs/ghost11a-final` | `runs/g11a-fix` | – | – | – |
 | Anastasia 4 | `results/anastasia/runs/20261013-222736` | same | `a4-first` | **6121** (30.4 %) | 0.667 | |
+
+**Reference 2026-10-15 (improvements round 1, branch `improvements`)**: all 6 truth songs re-transcribed with the default
+`pipeline` into `results/<show>/runs/ref` (work dirs; reassemble from these). Edit penalty with metric #24 (wrong-length
+bars): base `s-base` **12617** -> `r1` **9586** (-24 %; Anastasia 1 773, 2 671, 4 5941, 4A 186, Ghost 1a 227, 20 1788).
+Per step (cumulative, `scripts/compare_bench.py`): drums -106, song time -1279, song key -134, chord symbols -109,
+slash reader -619, "(loco & 8va)" -251, vector barlines -487, measure repeats -46. Remaining top categories: notes 2390,
+articulations 1448, dynamics 683, slurs 596, words 594, ties 526, bars 476, lyrics 459.
+Round 1 continued (same reference work dirs): slash articulations + chord beats from the slashes -131, ties from
+Audiveris -69, cue / dialogue / label words -231, misread time carried too long -515, single tremolos -140,
+stage-management words -33: **8467** (-33 % from 12617). Rejected (measured worse): slurs from Audiveris (+106),
+Audiveris double barlines (+129), vector barlines on multi-staff systems (+4584). Bench ids `s-*` (cumulative steps),
+`r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription of all 6 songs, `results/<show>/runs/final1`): **8464**.
+
+**New reference 2026-10-15 (truths of Anastasia 2 and 4 updated, 4A Drums -> Xylophon)**: `final1` outputs rebenched =
+`final1-t2` **8392** (6 songs; these bench ids also list Ghost 13 as from scratch, leave it out). Reassembled from `final1`:
+German mute words + lettered cuts + tempo in brackets = `m3` **8369** (-23). Then `plain` parts (workbook column, user
+2026-10-15: Anastasia Violin 2, Cello, Bass, Reed 2 / 3, Trumpet, Trombone, Männer get notes, ties and dots only, in the
+output and in the scored truth) = `p1` **7005** (a metric change, not a gain; **the reference from now on**, outputs in
+`results/<show>/runs/p1`). Ghost 13 (run `g13`, in `p1` too): 331.
+Rebenched 2026-10-16 as `p1-q` **7342** (metric: typographic quotes = plain ones -16; Ghost 13 truth fixed by the user,
+Molly cue out, accents on %-bars, rehearsal marks / tempi removed: +22, Ghost 13 now 353). Then slurs between equal pitches read as ties in every truth (`truth.load`) + more Ghost 13 truth fixes:
+`p1-t` **7377** (Anastasia 5168, Ghost 2209). Compare new work against `p1-t`.
+
+**Improvements round 2 (2026-10-16, branch `improvements`)**: reassembled from `final1` (Ghost 13 from `g13`); `p1-t`
+reproduces as `x0` **7376**. Accepted (acceptance rule, `docs/IMPROVEMENTS.md`), cumulative bench ids: whole-bar rests take
+the bar's length `f1` -153; slurs between equal pitches written as ties `f2` -288; notes re-read in the bar's key when the
+crop's key was misread `f3` -81; system text only for tempo terms, loose style / label text dropped `f5` -178; "sim." bars
+get the pattern's articulations `f6` -105; measure repeats in unnumbered systems placed by page position `f7` -56 (6515);
+workbook row `letters` (the song's lettered bars seed `align_bars`) `f8` -394 **only once the row is in the workbook**
+(tested in memory with Anastasia 4 `131A, 132C, 148A-C`); Audiveris ties at bar edges by pitch `g2` -6: **6115** (-17 % from
+7376). Rejected: respell also skipped next to key changes (+18), double barline before every key change (+99, Ghost 20 has key
+changes without one), articulations from the PDF glyphs on vector pages (+13, Ghost 20 Reed truth has accents the page lacks),
+"arco" / "pizz." from Tesseract (-2 but a part +2), system text by tempo terms without dropping the loose text (Keyboard 1 +28).
+Then (user 2026-10-16) the `letters` row is in both workbooks (Anastasia 2 `72A-B`, 4 `131A, 132C, 148A-C`; empty rows
+elsewhere for the user to fill; backups `songs.xlsx.bak-20261016`); "sim." / "fill" left out `g3` -11; dynamics read by
+Tesseract (conf >= 70) and dynamic-only text as `<dynamics>` `g5` -3: **6101** (-17.3 % from 7376). **Reference from now on:
+`g5`** (outputs `results/<show>/runs/g5`). Cheap fixes have flattened out; next (user choice): a dynamics detector for the
+scans (IMPROVEMENTS #33).
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
@@ -221,7 +262,7 @@ instrument; bars are score-wide) + contents = `from_scratch`. Rehearsal marks, t
 (`system="only-top"` words in the truth, e.g. rit.) count once per song over the union of all output parts.
 Slash noteheads: rhythm only; drums: by staff position (kit instrument), simultaneous hits kept.
 A section one or two octaves off (Celesta after an instrument change in Ghost 20 Utility) = 1 action per section
-(`octave`, 2026-10-14). Known limits: a chord with a wrong duration costs one per note; split-instrument outputs
+(`octave`, 2026-10-14). Known limits: split-instrument outputs
 compare instrument changes by position only; a dynamic printed in two overlaid split parts counts twice; a short
 (underfilled) output bar puts its final barline at a different onset (+1).
 
@@ -360,10 +401,10 @@ Baselines with all of it (reassembled, not yet saved as runs): Anastasia 1531, G
    full grid on all truth songs incl. Anastasia 4 (`--id full --full`: base `pipeline-allreaders` + 42 variants
    reassembled from it, Tesseract only, OMR-NED on every variant). Weed rebenched 2026-10-14 (page-engine part
    names fixed, PianoReduction rows out of the ranking): `pipeline` 932 = `ensemble-wk` 932 (18x the time); OCR
-   variants within 1.5 %; other main readers 37-130 % worse; homr page 1697, Audiveris 2316, Clarity 2555. Open questions: `CHECKS.md`. Includes the gated SMT models once the Hugging Face access is approved
+   variants within 1.5 %; other main readers 37-130 % worse; homr page 1697, Audiveris 2316, Clarity 2555. `smt-fp` stays in (resume it; drop it only if it crashes the PC again). Includes the gated SMT models once the Hugging Face access is approved
    (`HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).
-2. **Truth wiring**: link Anastasia 4 when its truth arrives (incl. choir; `omrbench check` suggests the cells)
-   and bench run `20261013-222736`; remove `unfinished: Voice 1` from Ghost 20 when Oda Mae is done.
+2. **Truth wiring**: fill the `unfinished` parts as they get corrected (Anastasia 2 Klavierauszug, Anastasia 4 Reed 2 / 3,
+   Keyboard 2, percussion; Ghost 20 Voice 1 / 2); add Ghost 13 to the reference total once more of it is corrected.
 3. **Regression safety** (IMPROVEMENTS #3): small regression samples from real failures (Ghost Trumpet system 8,
    Reed system 1, Anastasia 2 Violin 1) with stored work dirs, checked in pytest via `reassemble()`.
 4. **Quality work, biggest penalty first** (from the sweep's "penalty by category"; current order):

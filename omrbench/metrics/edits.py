@@ -14,6 +14,8 @@ action costs 1:
              fermata are one action each. Clef / key / time count only where they change.
   bars       bars are aligned by dynamic programming: deleting an extra output bar = 1 (its
              contents go with it), inserting a missing bar = 1 + everything in it.
+  barlen     a matched bar whose filled length (longest voice, rests included) differs from the
+             truth bar = 1: it breaks in MuseScore (a 4/4 bar in a 3/4 song); empty bars are free.
   shift      a whole part off by an octave or a transposition = 1 bulk action (select all,
              transpose), then scored after the shift.
   octave     a section of bars one or two octaves off (Celesta after an instrument change) = 1
@@ -56,6 +58,9 @@ def part_bars(parts: list[etree._Element], system_words: frozenset = frozenset()
             bars[b][0][(staff, onset, pitch, dur)] += 1
             playing[b] = k if playing[b] is None else playing[b]
         _add_items(bars, part_staves(part), system_words)
+        for b, length in enumerate(notef1.bar_lengths(part)):
+            if length:
+                bars[b][1][("barlen", 0, 0, length)] = 1
     if len(parts) > 1:
         last = None
         for b, k in enumerate(playing):
@@ -141,7 +146,8 @@ def _items_cost(p: Counter, t: Counter, detail: Counter | None = None) -> int:
     tc = Counter(k[0] for k in (t - p).elements())
     total = 0
     for cat in pc.keys() | tc.keys():
-        cost = max(pc[cat], tc[cat])
+        # a bar of the wrong length breaks in MuseScore (1 fix); an inserted / empty bar gets the right one
+        cost = min(pc[cat], tc[cat]) if cat == "barlen" else max(pc[cat], tc[cat])
         if detail is not None:
             detail[cat] += cost
         total += cost

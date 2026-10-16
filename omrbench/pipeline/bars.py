@@ -35,6 +35,7 @@ class Bar:
     key: str | None = None                 # fifths
     time: tuple[str, str] | None = None    # beats, beat-type
     multirest: int = 0                     # printed <multiple-rest> count (homr)
+    read_key: str | None = None            # key the reader spelled the notes in (fifths)
 
     def notes(self) -> list[etree._Element]:
         return [e for e in self.items if e.tag == "note"]
@@ -139,7 +140,7 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
             items.append(c)
         if start is None:
             start = (dict(clefs), key, time)
-        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest))
+        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest, start[1]))
     return bars
 
 
@@ -193,6 +194,74 @@ def bar_ok(bar: Bar, length: int | None) -> bool:
     return bool(lens) and all(v == length for v in lens.values())
 
 
+def fit_measure_rests(bar: Bar, length: int) -> None:
+    """A whole-bar rest lasts the bar in any meter: the crop's duration (4 quarters in a 3/4 bar, or
+    in other divisions) would make MuseScore stretch the bar. A <backup> right after it moves along."""
+    items = bar.items
+    for i, n in enumerate(items):
+        r = n.find("rest") if n.tag == "note" else None
+        if r is None or r.get("measure") != "yes" or n.find("chord") is not None:
+            continue
+        d = n.find("duration")
+        if d is None or int(d.text or 0) == length:
+            continue
+        old, d.text = d.text, str(length)
+        if i + 1 < len(items) and items[i + 1].tag == "backup" and items[i + 1].findtext("duration") == old:
+            items[i + 1].find("duration").text = str(length)
+
+
+SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)
+
+
+def _marked(bar: Bar) -> list[etree._Element]:
+    return [n for n in bar.notes() if n.find("notations/articulations") is not None]
+
+
+def _rhythm(bar: Bar) -> list[tuple]:
+    return [(n.find("rest") is not None, n.find("chord") is not None, n.findtext("duration"))
+            for n in bar.notes() if n.find("grace") is None]
+
+
+def apply_sim(bars: list[Bar]) -> int:
+    """After "sim." the pattern bar's articulations go onto the following bars with the same
+    rhythm and no marks of their own (the truths write them out, user 2026-10-16). Pattern = the
+    bar before the "sim." bar, or the "sim." bar itself when it is marked. Returns bars changed."""
+    changed = 0
+    for g, bar in enumerate(bars):
+        if not any(SIM.match((w.text or "").strip()) for w in bar.items if w.tag == "direction"
+                   for w in w.iter("words")):
+            continue
+        src = g if _marked(bar) or g == 0 else g - 1
+        pat = bars[src]
+        if not _marked(pat):
+            continue
+        for h in range(src + 1, len(bars)):
+            b = bars[h]
+            if b is None or _rhythm(b) != _rhythm(pat) or _marked(b):
+                break
+            for a, n in zip([x for x in pat.notes() if x.find("grace") is None],
+                            [x for x in b.notes() if x.find("grace") is None]):
+                art = a.find("notations/articulations")
+                if art is None or n.find("rest") is not None:
+                    continue
+                nt = n.find("notations")
+                if nt is None:
+                    nt = etree.SubElement(n, "notations")
+                nt.append(copy.deepcopy(art))
+            changed += 1
+    return changed
+
+
+DROP_WORDS = re.compile(r"^\(?(sim(ile)?|fill)\.?\)?$", re.I)   # not in the truths (user, 2026-10-16)
+
+
+def drop_words(bar: Bar) -> None:
+    """Directions that are only "sim." / "fill" are left out (after apply_sim used them)."""
+    bar.items = [e for e in bar.items if not (e.tag == "direction" and (ws := list(e.iter("words")))
+                                              and all(DROP_WORDS.match((w.text or "").strip()) for w in ws)
+                                              and len(ws) == len(list(e.iter("direction-type"))))]
+
+
 def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
     """(onset, element) for every note/direction, in document order."""
     out, cur, last = [], 0, 0
@@ -212,6 +281,55 @@ def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
             off = el.findtext("offset")
             out.append((cur + (int(off) if off and off.strip().lstrip("-").isdigit() else 0), el))
     return out
+
+
+def _note_key(on: int, n: etree._Element) -> tuple | None:
+    p = n.find("pitch")
+    if p is None:
+        return None
+    return (on, n.findtext("staff") or "1", p.findtext("step"), p.findtext("alter") or "0", p.findtext("octave"))
+
+
+def copy_ties(bar: Bar, src: Bar) -> int:
+    """Ties of `src` (Audiveris' reading of the same bar) onto the notes of `bar` with the same
+    onset, staff and pitch (homr writes no ties). Returns the ties added."""
+    ties: dict[tuple, list[str]] = {}
+    for on, n in onsets(src):
+        if n.tag == "note" and (k := _note_key(on, n)) and n.find("tie") is not None:
+            ties[k] = [t.get("type") for t in n.findall("tie")]
+    # onsets differ (a misread rhythm): a tie stop on the first and a tie start on the last note
+    # of a pitch carry over by pitch alone (a tie joins the bar's edge notes)
+    def edges(b: Bar) -> dict[tuple, tuple]:
+        out: dict[tuple, list] = {}
+        for on, n in onsets(b):
+            if n.tag == "note" and (k := _note_key(on, n)) and n.find("grace") is None:
+                out.setdefault(k[1:], []).append(n)
+        return {k: (v[0], v[-1]) for k, v in out.items()}
+    mine, theirs = edges(bar), edges(src)
+    by_pitch: dict[int, list[str]] = {}
+    for k, (first, last) in theirs.items():
+        if k in mine:
+            if first.find("tie[@type='stop']") is not None:
+                by_pitch.setdefault(id(mine[k][0]), []).append("stop")
+            if last.find("tie[@type='start']") is not None:
+                by_pitch.setdefault(id(mine[k][1]), []).append("start")
+    added = 0
+    for on, n in onsets(bar):
+        if n.tag != "note" or n.find("tie") is not None:
+            continue
+        kinds = ties.get(_note_key(on, n)) or by_pitch.get(id(n))
+        if not kinds:
+            continue
+        idx = max(i for i, c in enumerate(n) if c.tag in ("duration", "pitch", "chord", "grace")) + 1
+        nt = n.find("notations")
+        if nt is None:
+            nt = etree.SubElement(n, "notations")
+        for kind in sorted(kinds, key=lambda t: t != "stop"):
+            n.insert(idx, etree.Element("tie", type=kind))
+            idx += 1
+            etree.SubElement(nt, "tied", type=kind)
+            added += 1
+    return added
 
 
 def signature(bar: Bar) -> Counter:
@@ -449,6 +567,36 @@ def respell(bar: Bar, fifths: int) -> int:
     return changed
 
 
+def respell_key(bar: Bar, old: int, new: int) -> int:
+    """The reader spelled the notes in key `old`, the bar is in key `new` (a misread key signature):
+    a note that differs from what `old` and the accidentals before it in the bar give had a printed
+    accidental and keeps its pitch (held for its step, octave and staff to the end of the bar); the
+    others are re-read in `new`. Returns the notes changed."""
+    held: dict[tuple, int] = {}
+    changed = 0
+    for n in bar.notes():
+        p = n.find("pitch")
+        if p is None:
+            continue
+        step = p.findtext("step")
+        k = (step, p.findtext("octave"), n.findtext("staff", "1"))
+        alter_el = p.find("alter")
+        cur = int(float(alter_el.text)) if alter_el is not None and alter_el.text else 0
+        if n.find("accidental") is not None or cur != held.get(k, key_alter(old, step)):
+            held[k] = cur
+            continue
+        want = held.get(k, key_alter(new, step))
+        if want != cur:
+            changed += 1
+            if alter_el is None:
+                alter_el = etree.Element("alter")
+                p.insert(1, alter_el)
+            alter_el.text = str(want)
+            if want == 0:
+                p.remove(alter_el)
+    return changed
+
+
 def dedupe_unison(bar: Bar) -> int:
     """Two voices of a staff on one shared notehead (choir unison) are read as two
     notes: the later voice's copy becomes a <forward>. Returns the notes removed."""
@@ -602,6 +750,18 @@ def dedupe_chord_marks(bar: Bar) -> int:
 
 
 GRACE_FLAGGED = ("eighth", "16th", "32nd")
+
+
+def single_tremolos(bars: list[Bar]) -> int:
+    """homr writes single-note tremolos (strokes through one stem) as two-note start / stop
+    pairs; the truths have practically no two-note tremolos (Anastasia: 1 of 190)."""
+    n = 0
+    for bar in bars:
+        for t in (t for note in bar.notes() for t in note.iter("tremolo")):
+            if t.get("type") in ("start", "stop"):
+                t.set("type", "single")
+                n += 1
+    return n
 
 
 def fix_graces(bars: list[Bar]) -> tuple[int, int]:

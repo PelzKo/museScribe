@@ -18,11 +18,16 @@ from __future__ import annotations
 import copy
 import re
 from collections import Counter
+from fractions import Fraction
 from dataclasses import dataclass, field
 
 from lxml import etree
 
+from ..musicxml import PLAY_WORDS, slurs_to_ties
+from .ocr import DYNAMIC
 from . import bars as B
+from . import chords as CH
+from . import vector as SL
 from . import text as T
 from .layout import Page, System, where
 
@@ -44,6 +49,7 @@ class SysPlan:
     mr: dict[int, tuple[str, int, int]] = field(default_factory=dict) # bar -> multi-rest evidence
     evidence: list[tuple[float, str, int, int]] = field(default_factory=list)  # x, kind, a, b
     aud: list[B.Bar] | None = None       # Audiveris bars of the system, if their count is n
+    beats: dict[tuple[int, int], list[tuple[float, int]]] = field(default_factory=dict)  # (group, bar) -> [(x, onset)]
     # vocal score: (group, bar) -> [(onset, singer)] from "DMITRY:" labels; bar -> text
     # of the voices not on a vocal staff (dialogue, stage directions)
     singers: dict[tuple[int, int], list[tuple[int, str]]] = field(default_factory=dict)
@@ -59,6 +65,15 @@ class Stats:
     keys_respelled: int = 0
     crops_failed: int = 0
     cue_notes_removed: int = 0
+    chord_symbols: int = 0
+    slash_bars: int = 0
+    octave_bars: int = 0
+    repeat_bars: int = 0
+    ties_copied: int = 0
+    words_dropped: int = 0
+    times_set: int = 0
+    pickup: bool = False
+    letters: list = field(default_factory=list)   # lettered bars (n, "A") found by align_bars
     words: int = 0
     notes: list[str] = field(default_factory=list)
     failed_crops: list = field(default_factory=list)   # (system, group, staves, image, reasons)
@@ -72,6 +87,8 @@ class Stats:
     wedges: int = 0
     marks_unplaced: int = 0
     chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
+    dynamics_text: int = 0         # dynamics read as text (OCR) written as <dynamics>
+    slurs_to_ties: int = 0         # slurs between two equal pitches written as ties
     graces_retyped: int = 0        # flagless graces given the piece's grace type
     graces_dropped: int = 0        # half/whole "graces" (misreads)
     wedges_dropped: int = 0        # hairpins longer than max_wedge_bars / unpaired
@@ -88,6 +105,7 @@ class Stats:
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
                 "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
                 "chord_marks_deduped": self.chord_marks_deduped,
+                "slurs_to_ties": self.slurs_to_ties, "dynamics_text": self.dynamics_text,
                 "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
                 "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
@@ -218,10 +236,53 @@ def _onset_at(plan: SysPlan, bar: B.Bar, i: int, x: float, length: int | None) -
     return min(ons, key=lambda o: abs(o - raw))
 
 
+def _main_time(song_time: list[tuple[int, str, str]]) -> tuple[str, str]:
+    """The time signature that covers most bars of the song (entries in bar order)."""
+    span: Counter = Counter()
+    for (n, _, v), nxt in zip(song_time, song_time[1:] + [(song_time[-1][0] + 1, "", "")]):
+        span[v] += max(nxt[0] - n, 1)
+    return tuple(span.most_common(1)[0][0].split("/"))
+
+
+def song_positions(spec: list[tuple[int, str, str]], letters: list, pickup: bool, n: int) -> list[str | None]:
+    """The song setting in force at each of the n output bars (after align_bars: output bar j is
+    printed position j + 1, or j with a pickup bar; lettered bars take positions of their own)."""
+    def position(num: int, letter: str) -> int:
+        return num + sum(1 for m, _ in letters if m < num) + (ord(letter) - ord("A") + 1 if letter else 0)
+    marks = sorted((position(num, letter), v) for num, letter, v in spec)
+    out, cur, k = [], marks[0][1] if marks else None, 0
+    for j in range(n):
+        pos = j if pickup else j + 1
+        while k < len(marks) and marks[k][0] <= pos:
+            cur = marks[k][1]
+            k += 1
+        out.append(cur)
+    return out
+
+
+def apply_song_time(plans: list[SysPlan], spec: list[tuple[int, str, str]], D: int, stats: Stats) -> None:
+    """The time signatures of the song's `time` row onto the aligned bars; rest bars planned
+    in a misread time get the right length."""
+    flat = [(p, i) for p in plans for i in range(p.n)]
+    for (p, i), v in zip(flat, song_positions(spec, stats.letters, stats.pickup, len(flat))):
+        t = tuple(v.split("/")) if v else None
+        if t and p.times[i] != t:
+            p.times[i] = t
+            stats.times_set += 1
+            length = B.bar_length(t, D)
+            for gi, bars in p.chosen.items():
+                old = bars[i]
+                if old.rest_only and B.voice_lengths(old) and max(B.voice_lengths(old).values()) != length:
+                    bars[i] = B.rest_bar(old.staves, length, D)
+                    bars[i].items += [e for e in old.items if e.tag not in ("note", "backup", "forward")]
+                    bars[i].clefs, bars[i].key, bars[i].source = old.clefs, old.key, old.source
+
+
 def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[str],
                  stats: Stats, raw: bool = False, extra_votes: dict | None = None,
                  alts: dict | None = None, pick_mode: str = "agree",
-                 weights: dict | None = None) -> list[SysPlan]:
+                 weights: dict | None = None, song_time: list | None = None,
+                 vector_bars: dict | None = None) -> list[SysPlan]:
     """raw: the crop reader's bars as read (no vote with Audiveris, no repairs); Audiveris
     bars only for groups whose crop failed. For comparing readers without homr tuning.
     extra_votes: {system index: bar count} of another layout provider (OLA), one more vote.
@@ -235,6 +296,13 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
     chords = {p.number: [c for c in p.chords if not c.small] for p in pages}
     plans: list[SysPlan] = []
     cur_time = None
+    allowed = {tuple(v.split("/")) for _, _, v in song_time or ()}
+    main_time = _main_time(song_time) if song_time else None
+    # the longest run of each time in the song: a misread carried past it falls back to the main time
+    max_run: dict = {}
+    for (n0, _, v), (n1, _, _) in zip(song_time or [], (song_time or [])[1:]):
+        max_run[tuple(v.split("/"))] = max(max_run.get(tuple(v.split("/")), 0), n1 - n0)
+    run = 0
     # bar numbers printed below each system (one per bar in parts that number every bar)
     labels: dict[int, list[T.Placed]] = {}
     for p in pages:
@@ -285,6 +353,16 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             for gi, group in enumerate(groups):
                 bar = B.rest_bar(len(group), B.bar_length(cur_time, D), D)
                 h_bars[gi] = [bar]
+        vx = None
+        if not raw and vector_bars and len(sy.staves) == 1:
+            # born-digital part: the printed barlines are the bar count and the bar x ranges
+            # (multi-staff systems: piano and vocal staves are barred apart, not handled)
+            top = sy.staves[0].top
+            vx = next((xs for t, xs in vector_bars.get(sy.page, ()) if abs(t - top) < il), None)
+            if vx:
+                n, how = len(vx), "vector"
+            else:
+                vx = None
         stats.systems[how] += 1
         plan.n = n
         if n == 0:
@@ -292,7 +370,9 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             continue
         # x-range per bar: Audiveris stacks if they match, else an even split
         staff_right = max(s.right for s in sy.staves) if sy.staves else 0
-        if len(sy.stacks) == n:
+        if vx:
+            plan.xs = vx
+        elif len(sy.stacks) == n:
             plan.xs = [(s.left, s.right) for s in sy.stacks]
         elif sy.stacks and len(sy.stacks) < n and staff_right - sy.stacks[-1].right >= 8 * il:
             # Audiveris missed the last barline(s): its stacks for the bars they cover, the
@@ -314,6 +394,11 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             t = h_src[i].time if h_src and h_src[i].time else None
             if t is None:
                 t = cur_time or (a_src[i].time if a_src else None)
+            if allowed and t not in allowed:
+                t = main_time       # the song never has this time: a misread
+            run = run + 1 if t == cur_time and not (h_src and h_src[i].time) else 1
+            if allowed and t != main_time and t in max_run and run > max_run[t]:
+                t = main_time
             plan.times.append(t)
             cur_time = t
         for gi, group in enumerate(groups):
@@ -334,13 +419,13 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             hb = h_bars.get(gi) if h_bars.get(gi) and len(h_bars[gi]) == n else None
             ab = a_bars.get(gi) if a_bars.get(gi) and len(a_bars[gi]) == n else None
             order = prefer
-            if all(st.clef == "PERCUSSION_CLEF" for st in group):
-                # homr reads percussion staves as pitched (often with a C clef)
-                order = ["audiveris", "crop"]
-                if hb:
-                    hb = [B.to_unpitched(b) for b in hb]
-            options = {"crop": hb, "audiveris": ab}
             perc = all(st.clef == "PERCUSSION_CLEF" for st in group)
+            if perc:
+                # homr reads percussion staves as pitched (often with a C clef): its bars only
+                # where Audiveris lacks the system's bar count (Ghost 20 Drums: 1180 vs 695 notes)
+                order = ["audiveris", "crop"]
+                hb = None if ab else hb and [B.to_unpitched(b) for b in hb]
+            options = {"crop": hb, "audiveris": ab}
             alt_opts = {f"alt:{name}": [B.to_unpitched(b) for b in v] if perc else v
                         for name, d in (alts or {}).items() if (v := d.get((k, gi))) and len(v) == n}
             primary = next((options[s] for s in order if options.get(s)), None)
@@ -367,7 +452,10 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     cands = with_notes + [c for c in cands if c not in with_notes]
                 ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
                 st_i = sy.stacks[i] if i < len(sy.stacks) else None
-                multirest = st_i is not None and st_i.special == "MULTI_REST" and plan.xs[i] == (st_i.left, st_i.right)
+                if vx:      # printed bars: the Audiveris stack in this bar
+                    st_i = next((st for st in sy.stacks if l <= (st.left + st.right) / 2 < r), None)
+                multirest = st_i is not None and st_i.special == "MULTI_REST" and \
+                    (vx is not None or plan.xs[i] == (st_i.left, st_i.right))
                 if multirest:
                     # Audiveris' multi-rest (its stack kept for this bar): homr reads the printed
                     # count above it as notes. Its rest bar, else a rest bar of the right length
@@ -393,9 +481,12 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     pick = (ok[0] if ok else None) or next(((s, b) for s, b in cands if not b.empty), None)
                 if pick is None:
                     # neither source has this system's bar count: best effort by position
-                    loose = [v for v in (h_bars.get(gi), a_bars.get(gi)) if v]
+                    loose = [v for v in ((a_bars.get(gi), h_bars.get(gi)) if perc else (h_bars.get(gi), a_bars.get(gi))) if v]
                     src = next((v for v in loose if i < len(v)), None)
-                    pick = ("fallback", src[i]) if src else ("rest", B.rest_bar(len(group), length, D))
+                    if src:
+                        pick = ("fallback", B.to_unpitched(src[i]) if perc and src is h_bars.get(gi) else src[i])
+                    else:
+                        pick = ("rest", B.rest_bar(len(group), length, D))
                 s, bar = pick
                 stats.bars[s] += 1
                 bar = copy.deepcopy(bar)
@@ -410,7 +501,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     # Audiveris reads no key: homr's notes are re-read in C (elsewhere
                     # homr's key is the better one: Audiveris drops faint flats)
                     B.respell(bar, int(a_key))
-                    bar.key = a_key
+                    bar.key = bar.read_key = a_key
                     stats.keys_respelled += 1
                 # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
                 if s != "audiveris" and bar.source != "audiveris" and a_n:   # a fallback bar may be Audiveris'
@@ -421,6 +512,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                             if el.tag == "direction":
                                 st = el.findtext("staff")
                                 B.add_direction(bar, el, on, int(st) if st and st.isdigit() else None)
+                        if len(src) == n:
+                            stats.ties_copied += B.copy_ties(bar, src[i])
                 chosen.append(bar)
             plan.chosen[gi] = chosen
         plans.append(plan)
@@ -511,6 +604,199 @@ def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> 
                         plan.cues.add((gi, i))
 
 
+TYPES = {Fraction(4): ("whole", 0), Fraction(3): ("half", 1), Fraction(2): ("half", 0),
+         Fraction(3, 2): ("quarter", 1), Fraction(1): ("quarter", 0), Fraction(3, 4): ("eighth", 1),
+         Fraction(1, 2): ("eighth", 0), Fraction(1, 4): ("16th", 0)}
+
+
+def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
+    """The bar of a slash reading: slashes on the middle line (B4), the old bar's directions kept."""
+    items = [e for e in old.items if e.tag in ("direction", "harmony")]
+    for ev in sb.events:
+        if ev.dur not in TYPES:
+            return None
+        typ, dots = TYPES[ev.dur]
+        n = etree.Element("note")
+        if ev.kind == "rest":
+            etree.SubElement(n, "rest")
+        else:
+            pitch = etree.SubElement(n, "pitch")
+            etree.SubElement(pitch, "step").text = "B"
+            etree.SubElement(pitch, "octave").text = "4"
+        etree.SubElement(n, "duration").text = str(int(ev.dur * D))
+        for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+            if on:
+                etree.SubElement(n, "tie", type=kind)
+        etree.SubElement(n, "voice").text = "1"
+        etree.SubElement(n, "type").text = typ
+        for _ in range(dots):
+            etree.SubElement(n, "dot")
+        if ev.kind != "rest":
+            etree.SubElement(n, "stem").text = "down"
+            etree.SubElement(n, "notehead").text = "slash"
+            if ev.tie_start or ev.tie_stop or ev.marks:
+                nt = etree.SubElement(n, "notations")
+                for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+                    if on:
+                        etree.SubElement(nt, "tied", type=kind)
+                if ev.marks:
+                    arts = etree.SubElement(nt, "articulations")
+                    for m in dict.fromkeys(ev.marks):
+                        etree.SubElement(arts, m)
+        items.append(n)
+    return B.Bar(items, "slash", old.staves, dict(old.clefs), old.key, old.time)
+
+
+def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, stats: Stats) -> None:
+    """Bars read from the slash glyphs replace the readers' bars on single-staff parts."""
+    for sb in slash_bars:
+        for plan in plans:
+            if plan.system.page != sb.page or not plan.n:
+                continue
+            st = next((st for st in plan.system.staves if abs(st.top - sb.top) < st.interline), None)
+            if st is None:
+                continue
+            gi, _ = _group_of(plan.system, st.id)
+            if gi not in plan.chosen or len(plan.system.groups()[gi]) != 1:
+                break
+            i = _bar_at(plan, (sb.x0 + sb.x1) / 2)
+            if sb.length * D != B.bar_length(plan.times[i], D):
+                break
+            bar = slash_bar(sb, plan.chosen[gi][i], D)
+            if bar is not None:
+                plan.chosen[gi][i] = bar
+                stats.slash_bars += 1
+                on = 0
+                for ev in sb.events:      # where each beat is printed: chord symbols line up with it
+                    plan.beats.setdefault((gi, i), []).append((ev.x, int(on * D)))
+                    on += ev.dur
+            break
+
+
+OTTAVA_ON = re.compile(r"\(.*\b8va\)", re.I)       # "STR. ENS. (loco & 8va)": a patch an octave up
+OTTAVA_OFF = re.compile(r"\(loco\)", re.I)
+
+
+def _octave_shift(kind: str) -> etree._Element:
+    d = etree.Element("direction", placement="above")
+    etree.SubElement(etree.SubElement(d, "direction-type"), "octave-shift", type=kind, size="8")
+    return d
+
+
+def patch_octaves(plans: list[SysPlan], stats: Stats) -> None:
+    """Keyboard patch labels "(loco & 8va)" .. "(loco)": staff 1 an octave up with an 8va line
+    (the truths' convention, user 2026-10-15)."""
+    on: dict[int, bool] = {}
+    for plan in plans:
+        for gi, bars in plan.chosen.items():
+            for bar in bars:
+                texts = [w.text or "" for d in bar.items if d.tag == "direction" for w in d.iter("words")]
+                was = on.setdefault(gi, False)
+                if any(OTTAVA_ON.search(t) for t in texts):
+                    on[gi] = True
+                elif any(OTTAVA_OFF.search(t) for t in texts):
+                    on[gi] = False
+                if on.get(gi) != was:
+                    B.add_direction(bar, _octave_shift("down" if on[gi] else "stop"), 0, 1)
+                if not on.get(gi):
+                    continue
+                stats.octave_bars += 1
+                for n in bar.notes():
+                    o = n.find("pitch/octave")
+                    if o is not None and (n.findtext("staff") or "1") == "1":
+                        o.text = str(int(o.text) + 1)
+
+
+def apply_repeats(plans: list[SysPlan], repeats: list[SL.Repeat], stats: Stats) -> None:
+    """Measure-repeat signs: the bar(s) get the notes of the bar(s) before them (the truths write
+    them out). Placed by printed bar number after align_bars (output bar j = printed position
+    j + 1); in bar order, so a repeat of a repeated bar copies the copy."""
+    track: dict[int, list[tuple[SysPlan, int]]] = {}
+    for plan in plans:
+        for gi in plan.chosen:
+            track.setdefault(gi, []).extend((plan, i) for i in range(plan.n))
+    pos_of = {}
+    for r in repeats:
+        if r.number:
+            for k in range(r.bars):
+                num = r.number + k
+                pos_of[num] = (num + sum(1 for m, _ in stats.letters if m < num) - (0 if stats.pickup else 1), r.bars)
+    by_pos: dict[int, dict[int, int]] = {}      # unnumbered system: placed by its page and x
+    for r in repeats:
+        if r.number:
+            continue
+        for plan in plans:
+            st = next((st for st in plan.system.staves if abs(st.top - r.top) < st.interline), None)
+            if plan.system.page != r.page or not plan.n or st is None:
+                continue
+            gi, _ = _group_of(plan.system, st.id)
+            if gi in track:
+                i = r.index if plan.n == r.count else _bar_at(plan, r.x)
+                j = track[gi].index((plan, i))
+                for k in range(r.bars):
+                    by_pos.setdefault(gi, {})[j + k] = r.bars
+            break
+    for gi, bars in track.items():
+        for j, n in sorted(set(pos_of.values()) | set(by_pos.get(gi, {}).items())):
+            if not (0 <= j - n and j < len(bars)):
+                continue
+            (dp, di), (sp, si) = bars[j], bars[j - n]
+            old, src = dp.chosen[gi][di], sp.chosen[gi][si]
+            if src.rest_only:
+                continue
+            bar = copy.deepcopy(src)
+            bar.items = [e for e in bar.items if e.tag not in ("direction", "harmony")] + \
+                [e for e in old.items if e.tag in ("direction", "harmony")]
+            dp.chosen[gi][di] = bar
+            stats.repeat_bars += 1
+
+
+def place_chords(plans: list[SysPlan], pages: list[Page], symbols: list[CH.Symbol], D: int,
+                 stats: Stats) -> None:
+    """Chord symbols onto the bar and beat under them: the staff right below (within 5 staff
+    spaces), the beat by x. Bars that get one lose any chords Audiveris read there."""
+    lyrics = {p.number: [t for t in p.texts if t.role == "Lyrics" or t.kind == "syllable"] for p in pages}
+    cleared: set = set()
+    for sym in symbols:
+        if any(CH.overlaps(sym, t.x, t.y, t.w, t.h) for t in lyrics.get(sym.page, ())):
+            continue
+        bottom = sym.y + sym.h
+        best = None
+        for plan in plans:
+            if plan.system.page != sym.page or not plan.n:
+                continue
+            for st in plan.system.staves:
+                gap = st.top - bottom
+                if -st.interline <= gap <= 5 * st.interline and st.left - st.interline <= sym.x <= st.right \
+                        and (best is None or gap < best[0]):
+                    best = (gap, plan, st)
+        if best is None:
+            continue
+        _, plan, st = best
+        gi, staff_no = _group_of(plan.system, st.id)
+        if gi not in plan.chosen:
+            continue
+        i = _bar_at(plan, sym.x + 1)
+        bar = plan.chosen[gi][i]
+        if id(bar) not in cleared:
+            bar.items = [e for e in bar.items if e.tag != "harmony"]
+            cleared.add(id(bar))
+        h = CH.harmony(sym)
+        # chord symbols sit over slashes / rests more than notes: beat by x on an eighth grid
+        length = B.bar_length(plan.times[i], D) or 4 * D
+        l, r = plan.xs[i]
+        step = max(D // 2, 1)
+        on = min(round(max(0.0, (sym.x - l) / (r - l)) * length / step) * step, length - step) if r > l else 0
+        if plan.beats.get((gi, i)):     # a slash bar: the slash / rest the symbol stands over
+            on = min(plan.beats[(gi, i)], key=lambda b: abs(b[0] - sym.x))[1]
+        if on:
+            etree.SubElement(h, "offset").text = str(on)
+        if bar.staves > 1:
+            etree.SubElement(h, "staff").text = str(staff_no)
+        bar.items.insert(0, h)
+        stats.chord_symbols += 1
+
+
 def _group_of(sy: System, staff_id: int) -> tuple[int, int]:
     for gi, g in enumerate(sy.groups()):
         for si, st in enumerate(g):
@@ -577,9 +863,26 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
             plan.voice_text.setdefault(i, []).append(B.words_direction(t, "above"))
 
 
+SINGER_LABEL = re.compile(r"^[A-Z][A-Z0-9 .#'&+-]*:")              # "DMITRY:", "BLACK MARKETEER #3:"
+SHOW_FLOW = re.compile(r"\b(attacca|segue|applause|safety|jump on cue)\b", re.I)    # stage-management notes
+ORCH_CUE = re.compile(r"^(\+\s*\w|w/)|\b[A-Z][a-z]{0,3}\.? ?\d? ?/ ?[A-Z][a-z]{1,3}\b")   # "+ Kbd", "w/ Hn", "Cl 2/Bsn"
+
+
+def _cue_text(text: str, pl: T.Placed) -> bool:
+    """Text of an instrument part that the truths leave out: the part name left of every system
+    ("Util."), the show's cue lines (singer labels, spoken dialogue, "+ Kbd" / "w/ Hn"
+    orchestration cues), stage-management notes ("attacca", "Safety (jump on cue)") and cut
+    marks ("[to] 29")."""
+    if OTTAVA_ON.search(text) or OTTAVA_OFF.search(text):
+        return False        # keyboard patch labels drive patch_octaves
+    return (pl.line.right <= pl.staff.left or SINGER_LABEL.match(text) is not None
+            or len(text.split()) >= 6 or ORCH_CUE.search(text) is not None
+            or text.lower().startswith("[to]") or SHOW_FLOW.search(text) is not None)
+
+
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
-               meta: dict, split: bool, estimate_onset: bool = False
-               ) -> tuple[list[T.Line], list[dict]]:
+               meta: dict, split: bool, estimate_onset: bool = False,
+               symbols: list[CH.Symbol] = ()) -> tuple[list[T.Line], list[dict]]:
     by_sys = {id(p.system): p for p in plans}
     vocal = any(p.system.piano_group is not None for p in plans)
     running = T.running_headers(pages)
@@ -591,40 +894,67 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
     instruments = instruments_from(meta, credits, words) if split or meta.get("doubling") else []
     # without "(Vln)"-style aliases, parenthesized text is never an instrument label
     paren_aliases = any(a.startswith("(") for i in instruments for a in i["aliases"])
+    muted = False
     for pt in classified:
         for pl in pt.words:
             plan = by_sys.get(id(pl.system))
             if not plan or not plan.n:
                 continue
+            if symbols:
+                # chord symbols placed from the text layer: Audiveris' OCR of them ("Bl? F") goes
+                atoms = [a for a in pl.line.atoms if not any(
+                    sy.page == a.page and CH.overlaps(sy, a.x, a.y, a.w, a.h) for sy in symbols)]
+                if not atoms:
+                    continue
+                if len(atoms) < len(pl.line.atoms):
+                    pl = T.Placed(T.Line(pl.line.page, atoms), pl.system, pl.staff, pl.above)
             gi, staff_no = _group_of(pl.system, pl.staff.id)
             if gi not in plan.chosen:
                 continue
             i = _bar_at(plan, pl.line.x + 1)
             bar = plan.chosen[gi][i]
-            mm = re.search(r"[=♩]\s*(\d{2,3})\s*$", pl.line.text)
+            if DYNAMIC.fullmatch(pl.line.text.strip()):
+                # a dynamic read as text (OCR, or Audiveris' text): a real dynamic at its beat
+                tok = pl.line.text.strip()
+                if not any(e.find(f"direction-type/dynamics/{tok}") is not None for e in bar.items):
+                    d = etree.Element("direction", placement="below")
+                    etree.SubElement(etree.SubElement(etree.SubElement(d, "direction-type"), "dynamics"), tok)
+                    B.add_direction(bar, d, _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)),
+                                    staff_no)
+                    stats.dynamics_text += 1
+                continue
+            mm = re.search(r"[=♩]\s*(\d{2,3})\s*\)?\s*$", pl.line.text)
             if mm and not any(e.find("direction-type/metronome") is not None
                               for g in plan.chosen.values() for e in g[i].items):
                 # "Maestoso ♩ = 92" where Audiveris found no metronome (unit assumed quarter)
                 B.add_direction(bar, B.metronome_direction(mm.group(1)), 0, staff_no)
-            text = T.clean_words(pl.line.text)
+            text, muted = T.playing_words(T.clean_words(pl.line.text), muted)
+            if re.fullmatch(r"[Il|]{2,4}", text):
+                continue            # a boxed bar number read as letters ("111" -> "III")
             if not T.is_words(text):
                 continue
             if (gi, i) in plan.cues and text.startswith("("):
                 continue            # "(Clar)": the label of cue notes that were removed
+            name = match_instrument(text, instruments) if instruments else None
+            if name and text.startswith("(") and not paren_aliases:
+                name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
+            if not name and not vocal and _cue_text(text, pl):
+                stats.words_dropped += 1
+                continue
+            top = split or (pl.above and pl.staff is min(pl.system.staves, key=lambda s: s.top))
+            if top and not name and not vocal and _loose_text(text):
+                stats.words_dropped += 1
+                continue            # "Regal, ghostly", "kbd (cel)": not in the truths
             on = _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D)) \
                 if estimate_onset else 0
             d = B.add_direction(bar, B.words_direction(text, "above" if pl.above else "below"),
                                 on, staff_no)
             stats.words += 1
-            name = match_instrument(text, instruments) if instruments else None
-            if name and text.startswith("(") and not paren_aliases:
-                name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
             if name and TO_LABEL.match(text):
                 plan.pending[(gi, i)] = name
             elif name:
                 plan.labels[(gi, i)] = name
-            elif split or (pl.above and pl.staff is min(pl.system.staves, key=lambda s: s.top)
-                           and is_system_text(text)):
+            elif top and is_system_text(text):
                 d.set("system-text", "yes")   # moved to the top part when writing
         for pl, value in pt.rehearsals:
             plan = by_sys.get(id(pl.system))
@@ -1033,7 +1363,7 @@ def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
         _clamp_vocal(plan)
 
 
-def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
+def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None) -> None:
     """Insert rest bars so that bar n of the output is printed bar n.
 
     Evidence: printed bar numbers, the first number of printed ranges ("15-17"), and
@@ -1042,7 +1372,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
     position of its own, so all parts showing them line up. OCR
     misreads some numbers, so the offset (printed - position) is chosen as the
     non-decreasing step function that agrees with the most evidence; every step costs
-    ALIGN_PENALTY, so one stray number never shifts the rest of the part. Bars are
+    ALIGN_PENALTY, so one stray number never shifts the rest of the part. `letters`: the song's
+    lettered bars [(131, "A"), ...] when known (workbook row), else only those read. Bars are
     only added, never removed: evidence that the output is ahead is reported.
     """
     flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
@@ -1055,7 +1386,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         start[k] = pos
         pos += p.n
     # lettered bars ("131A": added after 131) shift every later number by one; a cut to
-    # "132C" means 132A and 132B exist (in other parts) and were cut here
+    # "132C" means 132A and 132B are skipped in this production and exist in no part
+    # (user, 2026-10-15; a cut to a plain number keeps the bars between, as empty bars)
     # a lettered number counts only when plain numbers near it agree ("7A" is a misread
     # "72A"; taken as bar 7A it would shift every bar from 8 on)
     plain = [(start[k] + i, v) for k, p in enumerate(plans) for i, v in p.printed.items()
@@ -1065,18 +1397,24 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
         near = sorted(v for jj, v in plain if abs(jj - j) <= LETTER_NEAR)
         return not near or abs(near[len(near) // 2] - n) <= LETTER_NEAR
 
-    extra: set[tuple[int, str]] = set()
+    extra: set[tuple[int, str]] = set(letters or ())    # the song's `letters` row: known in advance
     bogus: set[tuple[int, int]] = set()
     for k, p in enumerate(plans):
         for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
             if letter and not plausible(start[k] + i, n):
                 bogus.add((k, i))
-                continue
-            for c in range(ord("A"), ord(letter) + 1 if letter else ord("A")):
-                extra.add((n, chr(c)))
+    first = {}      # bar -> first lettered bar that exists after it ("[to] 132C" -> "C")
+    for k, p in enumerate(plans):
+        for i, (n, letter) in p.jumps.items():
+            if letter and (k, i) not in bogus:
+                first[n] = max(first.get(n, "A"), letter)
+    for k, p in enumerate(plans):
+        for i, (n, letter) in list(p.lettered.items()) + list(p.jumps.items()):
+            if letter and (k, i) not in bogus:
+                extra.update((n, chr(c)) for c in range(ord(first.get(n, "A")), ord(letter) + 1))
 
     def position(n: int, letter: str = "") -> int:
-        return n + sum(1 for m, _ in extra if m < n) + (ord(letter) - ord("A") + 1 if letter else 0)
+        return n + sum(1 for m, c in extra if m < n or (m == n and c <= letter))
 
     obs: list[_Obs] = []
     for k, p in enumerate(plans):
@@ -1136,9 +1474,10 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None) -> None:
                 log.warning(msg)
             for k, i in reversed(lead):
                 _drop_bar(plans, k, i)
-            return align_bars(plans, D, stats, log)
+            return align_bars(plans, D, stats, log, letters)
     # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
     base = -1 if chain and obs[chain[0]].offset == -1 else 0
+    stats.pickup, stats.letters = base == -1, sorted(extra)
     # numbers inside a step whose offsets lie between its two sides split it: the total
     # padding stays, part of it moves to where the evidence puts it (a cut mark whose
     # "[to]" OCR lost leaves only the number)
@@ -1274,10 +1613,17 @@ def is_system_text(text: str) -> bool:
     t = text.strip()
     if ":" in t or t.startswith(("(", "[")) or STAFF_TERMS.search(t):
         return False
-    if TEMPO_TERMS.search(t):
-        return True
+    return bool(TEMPO_TERMS.search(t))
+
+
+def _loose_text(text: str) -> bool:
+    """Short text above the top staff that is neither a tempo mark nor a playing instruction
+    (style words, labels of the piano reduction's cue lines)."""
+    t = text.strip()
     words = t.split()
-    return len(words) <= 3 and not (len(words) > 1 and t[-1] in ".?!;,")
+    return not is_system_text(t) and not STAFF_TERMS.search(t) and not PLAY_WORDS.search(t) \
+        and not re.search(r"\b(mute|open|fill|sim)\b", t, re.I) and len(words) <= 3 \
+        and not (len(words) > 1 and t[-1] in ".?!;,")
 
 
 def _norm(s: str) -> list[str]:
@@ -1689,8 +2035,18 @@ def _attr_clef(a, staff: int, clef: B.Clef, staves: int) -> None:
         etree.SubElement(c, "clef-octave-change").text = clef[2]
 
 
+def written_key(concert: int, chromatic: int) -> int:
+    """Key signature of a part whose written pitch is `chromatic` semitones above sounding."""
+    shift = (-chromatic * 7) % 12
+    f = concert + (shift - 12 if shift > 6 else shift)
+    return f - 12 if f > 7 else f + 12 if f < -7 else f
+
+
 def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int,
-                beam: bool = True, stats: Stats | None = None) -> etree._Element:
+                beam: bool = True, stats: Stats | None = None,
+                song_key: list[str | None] | None = None) -> etree._Element:
+    """song_key: the concert key (fifths) of every bar from the song's `key` row, written into
+    every pitched part in its own transposition."""
     root = etree.Element("score-partwise", version="4.0")
     ident = etree.SubElement(root, "identification")
     etree.SubElement(etree.SubElement(ident, "encoding"), "software").text = "omrbench pipeline"
@@ -1722,6 +2078,10 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 parts[0].bars[g].items.insert(0, el)
     for p in parts:
         retyped, dropped = B.fix_graces(p.bars)
+        B.single_tremolos(p.bars)
+        B.apply_sim(p.bars)
+        for bar in p.bars:
+            B.drop_words(bar)
         if stats is not None:
             stats.graces_retyped += retyped
             stats.graces_dropped += dropped
@@ -1745,6 +2105,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
         state_key, state_time, state_clefs = None, None, {}
         state_tr = (0, 0, 0)
         first_clefs = next((b.clefs for b in p.bars if b is not None and b.clefs), {})
+        perc = bool(first_clefs) and all(c and c[0] == "percussion" for c in first_clefs.values())
         for g, bar in enumerate(p.bars):
             t = times[g] if g < len(times) else None
             length = B.bar_length(t, D)
@@ -1755,6 +2116,9 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
             if g == 0:
                 etree.SubElement(a, "divisions").text = str(D)
             key = bar.key if bar.key is not None else (state_key if g else "0")
+            if song_key and g < len(song_key) and song_key[g] is not None and not perc:
+                tr = parse_transpose(p.changes[g].get("transpose")) if g in p.changes else state_tr
+                key = str(written_key(int(song_key[g]), tr[1]))
             if key is not None and key != state_key:
                 etree.SubElement(etree.SubElement(a, "key"), "fifths").text = key
                 state_key = key
@@ -1784,6 +2148,14 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     state_tr = tr
             if len(a):
                 m.append(a)
+            if length:
+                B.fit_measure_rests(bar, length)
+            if bar.source == "crop" and bar.read_key is not None and key is not None and not perc \
+                    and bar.read_key != key and abs(int(bar.read_key) - int(key)) < 7:
+                # (7 or more apart = an enharmonic spelling of the key, e.g. Db vs C#: not a misread)
+                n = B.respell_key(bar, int(bar.read_key), int(key))
+                if stats is not None:
+                    stats.keys_respelled += bool(n)
             for el in bar.items:
                 if p.staves == 1:
                     for st in el.findall("staff"):
@@ -1796,4 +2168,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 # final barline, as in the truth scores (MuseScore adds none on import)
                 bl = etree.SubElement(m, "barline", location="right")
                 etree.SubElement(bl, "bar-style").text = "light-heavy"
+    n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
+    if stats is not None:
+        stats.slurs_to_ties += n
     return root

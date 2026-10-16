@@ -186,3 +186,12 @@ def test_chord_with_wrong_duration_is_one_retype_in_chord_only_bars():
     # a bar with a single note too: per note as before
     t = part(chord(2, "C4", "E4", "G4") + note("D4", 2))
     assert pen(part(chord(1, "C4", "E4", "G4") + fwd + note("D4", 2)), t)["penalty"] == 3
+
+
+def test_wrong_length_bar_costs_one_each():
+    three = "<attributes><divisions>1</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>"
+    rest = "<note><rest/><duration>1</duration><type>quarter</type></note>"
+    t = part(note("C4") + note("D4") + note("E4"), note("C4") + note("D4") + note("E4"), first=three)
+    e = pen(part(note("C4") + note("D4") + note("E4") + rest, note("C4") + note("D4") + note("E4") + rest), t)
+    assert e["by_cat"]["barlen"] == 2 and e["penalty"] == 2 + 1     # 2 bars + the time signature
+    assert "barlen" not in pen([], t)["by_cat"]                       # typing it in: bars come right

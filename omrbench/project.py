@@ -8,7 +8,9 @@
 Song sheet layout (sheets whose name starts with "_" are ignored):
 
   A1 "title"  B1 <song title>
-  A2 "truth"  B2 <truth file, relative to the show folder>   (optional; empty = no benchmark)
+  A2 "truth"  B2 <truth file, relative to the show folder>   (optional; empty = no benchmark).
+               Several files separated by ";" (single hand-corrected parts) are merged; a one-part
+               file's part is then named after the text behind the last " - " ("#13 - Bass" -> Bass)
   A3 "unfinished"  B3 <truth part names not hand-corrected yet, "Voice 1, Drum Kit"> (optional;
                bench leaves them out until they are removed here)
   header row: file | pages | skip | instruments | extra | truth | notes
@@ -21,10 +23,21 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   extra        raw YAML keys, "chord_names: false, lyrics: true"; "lyrics: null" leaves out a
                part default (the engine's own default applies)
   truth        part name(s) in the truth score this row is compared with (optional column)
+  plain        "x": the row's parts get notes, ties, dots, tuplets and tremolos only (no articulations,
+               dynamics, hairpins, slurs, fermatas, tempo / expression text; musicxml.strip_marks),
+               in the output and in the truth it is scored against. A piano reduction lists truth
+               part names and / or voice labels instead ("Männer, Men"): listed labels and labels
+               mapped only to listed truth parts get it. (optional column)
   notes        ignored
 
-Every key/value row above the header (column A = key) is a song setting; `title`, `truth` and
-`unfinished` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
+  A4.. "time" <printed bar: time, ...> "1: 4/4, 68: 2/4, 69: 4/4" (optional; lettered bars "72A: 3/4",
+               pickup "0: 1/4"); "key" the same with concert fifths "1: 0, 54: -5"; "bars" the
+               expected bar count; "letters" the lettered bars of the song "131A, 132C, 148A-C" (bars added
+               in a revision; a cut to "132C" skips 132A / B). Passed to every part as meta song_time /
+               song_key / song_bars / song_letters.
+
+Every key/value row above the header (column A = key) is a song setting; `title`, `truth`,
+`unfinished`, `time`, `key`, `bars` and `letters` are used. Nothing is generated on disk: `load` builds every part's meta in memory,
 `check` validates the workbook and shows what each part resolves to.
 """
 from __future__ import annotations
@@ -36,7 +49,7 @@ from pathlib import Path
 
 import yaml
 
-HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "notes"]
+HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plain", "notes"]
 KEY_ORDER = ["pages", "type", "source", "transpose", "keep_staves", "skip_systems",
              "split_instruments", "doubling"]
 SHOW_FILE = "show.yaml"
@@ -50,6 +63,7 @@ class Part:
     meta: dict                 # show meta + part meta (part keys win)
     truth: list[str] = field(default_factory=list)   # truth part name(s)
     instruments: list[str] = field(default_factory=list)
+    plain: list[str] = field(default_factory=list)   # truth parts scored without marks (`plain`)
 
 
 @dataclass
@@ -60,6 +74,7 @@ class Song:
     parts: list[Part]
     errors: list[str] = field(default_factory=list)   # rows that could not be resolved
     unfinished: list[str] = field(default_factory=list)   # truth parts not hand-corrected yet
+    truth_files: list[Path] = field(default_factory=list)   # all of B2; `truth` is the first
 
 
 @dataclass
@@ -194,6 +209,32 @@ def read_workbook(path: Path) -> dict[str, dict]:
     return songs
 
 
+BAR_LABEL = re.compile(r"^(\d+)([A-Z]?)$")
+
+
+def bar_map(spec: str) -> list[tuple[int, str, str]]:
+    """"1: 4/4, 72A: 3/4" -> [(1, "", "4/4"), (72, "A", "3/4")] in bar order."""
+    out = []
+    for item in filter(None, (x.strip() for x in str(spec).split(","))):
+        label, _, value = item.partition(":")
+        m = BAR_LABEL.match(label.strip().upper())
+        if not m or not value.strip():
+            raise ValueError(f"bad bar entry {item!r} (want 'bar: value', e.g. '68: 2/4')")
+        out.append((int(m.group(1)), m.group(2), value.strip()))
+    return sorted(out)
+
+
+def letter_list(spec: str) -> list[tuple[int, str]]:
+    """"131A, 132C, 148A-C" -> [(131, "A"), (132, "C"), (148, "A"), (148, "B"), (148, "C")]."""
+    out = []
+    for item in filter(None, (x.strip().upper() for x in str(spec).split(","))):
+        m = re.fullmatch(r"(\d+)([A-Z])(?:-([A-Z]))?", item)
+        if not m:
+            raise ValueError(f"bad lettered bar {item!r} (want e.g. '131A' or '148A-C')")
+        out += [(int(m.group(1)), chr(c)) for c in range(ord(m.group(2)), ord(m.group(3) or m.group(2)) + 1)]
+    return sorted(out)
+
+
 def find(data_dir: Path, name: str) -> Path | None:
     """The show folder for a name ("anastasia") or a path (folder or its show.yaml)."""
     for p in (Path(name), Path(data_dir) / name):
@@ -219,19 +260,27 @@ def load(folder: Path) -> Project:
         st = sheet["settings"]
         ctx = {"song": sid, "title": st.get("title", "")}
         folder_meta = {k: _fmt(v, ctx) for k, v in (show.get("meta") or {}).items()}
-        song = Song(sid, ctx["title"], folder / st["truth"] if st.get("truth") else None, [],
-                    unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()])
+        folder_meta.update({f"song_{k}": st[k] for k in ("time", "key", "bars", "letters") if st.get(k)})
+        tfiles = [folder / x.strip() for x in st.get("truth", "").split(";") if x.strip()]
+        song = Song(sid, ctx["title"], tfiles[0] if tfiles else None, [],
+                    unfinished=[x.strip() for x in st.get("unfinished", "").split(",") if x.strip()],
+                    truth_files=tfiles)
         for row in sheet["rows"]:
             if not row["pages"]:
                 continue
             try:
                 meta = {**folder_meta, **part_meta(row, show, ctx)}
+                if meta.get("type") == "drums":
+                    meta["show"] = folder.name     # the pipeline looks up the show's drum legend
             except Exception as e:  # noqa: BLE001 - one bad row never hides the others
                 song.errors.append(f"{row['file']}: {type(e).__name__}: {e}")
                 continue
-            song.parts.append(Part(sid, row["file"], pdfs / f"{row['file']}.pdf", meta,
-                                   [x.strip() for x in row["truth"].split(",") if x.strip()],
-                                   [n for n, _ in split_instruments_cell(row["instruments"])]))
+            part = Part(sid, row["file"], pdfs / f"{row['file']}.pdf", meta,
+                        [x.strip() for x in row["truth"].split(",") if x.strip()],
+                        [n for n, _ in split_instruments_cell(row["instruments"])])
+            if row["plain"]:
+                plain_row(part, row["plain"])
+            song.parts.append(part)
         songs[sid] = song
     return Project(folder.name, folder, show, workbook, pdfs, songs)
 
@@ -240,6 +289,21 @@ def truth_names(part: Part) -> list[str]:
     """The truth part names a row's `truth` cell refers to ("Out=Truth" -> Truth; "-" = none)."""
     names = [e.partition("=")[2].strip() if "=" in e else e.strip() for e in part.truth]
     return [n for n in names if n and n != "-"]
+
+
+def plain_row(part: Part, cell: str) -> None:
+    """`plain` cell -> meta plain (True, or the output part names it applies to) + part.plain."""
+    if cell.lower() in ("x", "yes", "true", "1"):
+        part.meta["plain"], part.plain = True, truth_names(part)
+        return
+    part.plain = [x.strip() for x in cell.split(",") if x.strip()]
+    targets: dict[str, set[str]] = {}
+    for e in part.truth:
+        out, _, t = e.partition("=")
+        targets.setdefault(out.strip(), set()).add(t.strip())
+    # a voice label mapped only to listed truth parts, or listed itself (songs without a truth)
+    part.meta["plain"] = [o for o, ts in targets.items() if o in part.plain or ts <= set(part.plain)] \
+        + [n for n in part.plain if n not in targets]
 
 
 def _suggest_truth(proj: Project, part: Part, tparts: dict[str, int]) -> str | None:
@@ -287,19 +351,33 @@ def check(proj: Project, songs_only: list[str] | None = None, verbose: bool = Fa
         truth = f"   truth: {song.truth.name}" if song.truth else ""
         print(f"{proj.name} {song.id}  ({song.title}){truth}")
         tparts: dict[str, int] | None = None   # truth part name -> note count
-        if song.truth and not song.truth.exists():
-            problem(f"ERROR    truth file {song.truth} missing")
+        if gone := [f for f in song.truth_files if not f.exists()]:
+            problem(f"ERROR    truth file {', '.join(map(str, gone))} missing")
         elif song.truth and truth_cache is not None:
-            from . import musicxml
             from . import truth as truth_mod
             from .metrics import notef1
             try:
-                troot = musicxml.load(truth_mod.convert(song.truth, truth_cache, musescore))
+                troot = truth_mod.load(song.truth_files, truth_cache, musescore)
                 tparts = {n: len(notef1.notes(p)) for n, p in truth_mod.parts(troot)}
             except Exception as e:  # noqa: BLE001
                 problem(f"ERROR    truth file {song.truth.name}: {e}")
         for e in song.errors:
             problem(f"ERROR    {e}")
+        meta0 = song.parts[0].meta if song.parts else {}
+        for k in ("song_time", "song_key"):
+            if k in meta0:
+                try:
+                    for _, _, v in bar_map(meta0[k]):
+                        if k == "song_time" and not re.fullmatch(r"\d+(\+\d+)*/\d+", v) \
+                                or k == "song_key" and not re.fullmatch(r"-?[0-7]", v):
+                            raise ValueError(f"bad value {v!r}")
+                except ValueError as e:
+                    problem(f"ERROR    {k[5:]}: {e}")
+        if "song_letters" in meta0:
+            try:
+                letter_list(meta0["song_letters"])
+            except ValueError as e:
+                problem(f"ERROR    letters: {e}")
         if song.unfinished:
             print(f"  note     unfinished truth parts (not scored): {', '.join(song.unfinished)}")
             if tparts is not None:

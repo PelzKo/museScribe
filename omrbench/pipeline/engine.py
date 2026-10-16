@@ -43,9 +43,13 @@ from ..engines.audiveris import Audiveris
 from ..engines.base import Engine, EngineResult
 from ..monitor import RunStats
 from ..pdfkind import is_scan
+from ..project import bar_map, letter_list
 from ..rasterize import rasterize
 from . import assemble as A
 from . import bars as B
+from . import chords as CH
+from . import vector as SL
+from . import drumkit
 from . import layout
 from . import ocr
 from . import recognizer as R
@@ -384,9 +388,13 @@ class Pipeline(Engine):
         repairs = bool(self.cfg.get("repairs", True))
         votes = self.measure_votes(sample, pages, workdir) if workdir else None
         alts = self.ensemble_bars(ens, systems, D)
+        song_time = bar_map(sample.meta["song_time"]) if sample.meta.get("song_time") else None
         plans = A.plan_systems(pages, aud_bars, crop_bars, D, prefer, stats, raw=not repairs, extra_votes=votes,
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
-                                 weights=self.cfg.get("ensemble_weights"))
+                                 weights=self.cfg.get("ensemble_weights"), song_time=song_time,
+                                 vector_bars=None if is_scan(sample.pdf) else SL.read_all_systems(sample.pdf, pages))
+        if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction"):
+            A.place_slashes(plans, SL.read(sample.pdf, pages), D, stats)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
@@ -396,11 +404,21 @@ class Pipeline(Engine):
         # text_onset: bar = at the start of the bar it is printed in (the convention of the
         # ground truths here); estimated = beat estimated from its x position
         estimate = self.cfg.get("text_onset", "bar") == "estimated"
-        credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate)
+        # chord symbols of born-digital pages from the PDF text layer (Audiveris misses them)
+        symbols = [] if is_scan(sample.pdf) else CH.read(sample.pdf, pages)
+        if sample.score_type != "piano_reduction":     # the truths have no chord symbols there
+            A.place_chords(plans, pages, symbols, D, stats)
+        credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate, symbols)
+        A.patch_octaves(plans, stats)
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):
-            A.align_bars(plans, D, stats, LOG)
+            A.align_bars(plans, D, stats, LOG, letter_list(sample.meta["song_letters"])
+                         if sample.meta.get("song_letters") else None)
+        if song_time:
+            A.apply_song_time(plans, song_time, D, stats)
+        if repairs and not is_scan(sample.pdf):
+            A.apply_repeats(plans, SL.read_all_repeats(sample.pdf, pages), stats)
         beam = bool(self.cfg.get("auto_beam", True))
         max_wedge = int(self.cfg.get("max_wedge_bars", 2))
         files: dict[str, object] = {}
@@ -413,8 +431,9 @@ class Pipeline(Engine):
             parts = voices + [piano]
             if max_wedge:
                 A.limit_wedges(parts, max_wedge, stats)
-            files = {"Voices": A.write_score(voices, times, credits, D, beam, stats),
-                     "Piano": A.write_score([piano], times, credits, D, beam, stats)}
+            sk = self.song_key(sample, stats, len(times))
+            files = {"Voices": A.write_score(voices, times, credits, D, beam, stats, sk),
+                     "Piano": A.write_score([piano], times, credits, D, beam, stats, sk)}
             score = musicxml.merge_parts([files["Voices"], files["Piano"]])
         else:
             names = {}
@@ -428,7 +447,16 @@ class Pipeline(Engine):
                                          transpose=sample.meta.get("transpose"))
             if max_wedge:
                 A.limit_wedges(parts, max_wedge, stats)
-            score = A.write_score(parts, times, credits, D, beam, stats)
+            score = A.write_score(parts, times, credits, D, beam, stats, self.song_key(sample, stats, len(times)))
+            if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
+                LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
+        if plain := sample.meta.get("plain"):
+            # workbook `plain`: these parts get notes, ties and dots only (True = every part)
+            for root in [score, *(files or {}).values()]:
+                names = {sp.get("id"): sp.findtext("part-name") for sp in root.iterfind("part-list/score-part")}
+                for p in root.findall("part"):
+                    if plain is True or names.get(p.get("id")) in plain:
+                        musicxml.strip_marks(p)
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened
                 LOG.info(f"assemble: {note}")
@@ -441,6 +469,12 @@ class Pipeline(Engine):
                    "instruments": [i["name"] for i in instruments],
                    "parts": [p.name for p in parts]}
         return score, summary, files
+
+    def song_key(self, sample: Sample, stats: A.Stats, n: int) -> list | None:
+        """The concert key of each output bar from the song's `key` row (None: not given)."""
+        if not sample.meta.get("song_key"):
+            return None
+        return A.song_positions(bar_map(sample.meta["song_key"]), stats.letters, stats.pickup, n)
 
     def add_ocr_text(self, pages: list[layout.Page], images: list[Path], ocr_dir: Path, pdf: Path) -> None:
         """Bar numbers where Audiveris' OCR has no text: the PDF text layer on vector pages,
