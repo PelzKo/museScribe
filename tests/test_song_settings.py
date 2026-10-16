@@ -27,3 +27,10 @@ def test_apply_song_time_fixes_rest_bars_of_a_misread_time():
     A.apply_song_time([plan], bar_map("1: 4/4"), 2, stats)
     assert plan.times == [("4", "4"), ("4", "4")] and stats.times_set == 1
     assert plan.chosen[0][0].notes()[0].findtext("duration") == "8"
+
+
+def test_measure_rest_gets_the_bar_length():
+    from omrbench.pipeline import bars as B
+    bar = B.rest_bar(2, 8, 2)          # 4/4 rest bar, two staves
+    B.fit_measure_rests(bar, 6)        # written into a 3/4 bar
+    assert [e.findtext("duration") for e in bar.items] == ["6", "6", "6"]

@@ -193,6 +193,22 @@ def bar_ok(bar: Bar, length: int | None) -> bool:
     return bool(lens) and all(v == length for v in lens.values())
 
 
+def fit_measure_rests(bar: Bar, length: int) -> None:
+    """A whole-bar rest lasts the bar in any meter: the crop's duration (4 quarters in a 3/4 bar, or
+    in other divisions) would make MuseScore stretch the bar. A <backup> right after it moves along."""
+    items = bar.items
+    for i, n in enumerate(items):
+        r = n.find("rest") if n.tag == "note" else None
+        if r is None or r.get("measure") != "yes" or n.find("chord") is not None:
+            continue
+        d = n.find("duration")
+        if d is None or int(d.text or 0) == length:
+            continue
+        old, d.text = d.text, str(length)
+        if i + 1 < len(items) and items[i + 1].tag == "backup" and items[i + 1].findtext("duration") == old:
+            items[i + 1].find("duration").text = str(length)
+
+
 def onsets(bar: Bar) -> list[tuple[int, etree._Element]]:
     """(onset, element) for every note/direction, in document order."""
     out, cur, last = [], 0, 0

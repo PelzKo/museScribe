@@ -2104,6 +2104,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     state_tr = tr
             if len(a):
                 m.append(a)
+            if length:
+                B.fit_measure_rests(bar, length)
             for el in bar.items:
                 if p.staves == 1:
                     for st in el.findall("staff"):

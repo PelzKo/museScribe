@@ -3,6 +3,19 @@
 Ideas for making museScribe better, roughly in order of value. Status and results of the planned phases are in
 `PLAN.md`; this file is the backlog of things not planned yet.
 
+## Acceptance rule (every improvement, user 2026-10-15 / 16)
+
+Every change to the pipeline (and every item below) is measured before it is kept:
+
+1. Reassemble (or re-transcribe) all truth songs of Anastasia and Ghost with the default `pipeline` and bench
+   them; compare with the current reference bench id (`docs/PLAN.md` section 5) via
+   `python scripts/compare_bench.py BASE NEW`.
+2. **Accept only if** the all-song total edit penalty drops by at least 1, **and** no single part (one song, one
+   instrument) gets worse by more than half of that total drop.
+3. Otherwise reject it (keep the result in `PLAN.md` / here as "rejected, measured +N"). Accepted changes get
+   one commit each on branch `improvements`; the new bench id becomes the reference.
+4. Work through the fixes in order of expected gain and stop when the gains flatten out.
+
 ## Ground truth and evaluation
 
 1. **More truth scores of different types.** Every new score type exposed bugs that the existing truth could not:
