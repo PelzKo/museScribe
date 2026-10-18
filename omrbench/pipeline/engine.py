@@ -410,6 +410,11 @@ class Pipeline(Engine):
         symbols = [] if is_scan(sample.pdf) else CH.read(sample.pdf, pages)
         if sample.score_type != "piano_reduction":     # the truths have no chord symbols there
             A.place_chords(plans, pages, symbols, D, stats)
+        # "cont. in same style ... still fingerpicking": the written pattern goes on over the slashes
+        # (after the chord symbols, which take their beat from the slashes)
+        if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction") and \
+                SL.read_lines(sample.pdf, pages, re.compile(r".*(same style|fingerpicking)", re.I)):
+            A.continue_patterns(plans, D, stats)
         credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate, symbols)
         A.patch_octaves(plans, stats)
         if repairs:

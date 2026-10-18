@@ -721,6 +721,30 @@ def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
     return B.Bar(items, "slash", old.staves, dict(old.clefs), old.key, old.time)
 
 
+def continue_patterns(plans: list[SysPlan], D: int, stats: Stats) -> None:
+    """Slash bars after a written-out pattern ("cont. in same style ... still fingerpicking", Ghost 4
+    guitar) repeat the last written bar while the slashes last; the slash bar's chord symbols and
+    text stay (user 2026-10-18)."""
+    last: dict[int, tuple[B.Bar, int]] = {}      # track -> (pattern bar, its length)
+    for p in plans:
+        for gi, g in p.chosen.items():
+            L = p.system.logical[gi]
+            for i, bar in enumerate(g):
+                length = B.bar_length(p.times[i], D)
+                if bar.source != "slash":
+                    # a pattern has a rhythm; a held note (Ghost 4 guitar 39-40) is none
+                    if len({on for on, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None}) >= 2:
+                        last[L] = (bar, length)
+                    continue
+                pat = last.get(L)
+                if pat is None or pat[1] != length:
+                    continue
+                keep = [e for e in bar.items if e.tag in ("direction", "harmony")]
+                notes = [copy.deepcopy(e) for e in pat[0].items if e.tag not in ("direction", "harmony")]
+                g[i] = B.Bar(keep + notes, "pattern", bar.staves, dict(bar.clefs), bar.key, bar.time)
+                stats.notes.append(f"pattern bar written over the slashes of system {plans.index(p) + 1} bar {i + 1}")
+
+
 def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, stats: Stats) -> None:
     """Bars read from the slash glyphs replace the readers' bars on single-staff parts."""
     for sb in slash_bars:

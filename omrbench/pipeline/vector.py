@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 
 GLYPHS = {   # font -> {char: (kind, quarters)}
-    "EngraverFontSet": {"Û": ("slash", None), "Ó": ("rest", Fraction(2)),
+    "EngraverFontSet": {"Û": ("slash", None), "’": ("slash", None), "Ó": ("rest", Fraction(2)),
                         "∑": ("rest", Fraction(4)), "‰": ("rest", Fraction(1, 2)),
                         "Œ": ("rest", Fraction(1)), "œ": ("head", None),
                         "Ï": ("head", None), "ú": ("head", None), "w": ("head", None),
@@ -90,7 +90,9 @@ def read_page(pdf_page, page) -> list[SlashBar]:
                     g = table.get(ch["c"])
                     if g:
                         b = ch["bbox"]
-                        glyphs.append((b[0], ch["origin"][1], b[2] - b[0], *g))
+                        # "’" (Ghost 4 slashes) has its baseline a space below the head: use the box centre
+                        y = (b[1] + b[3]) / 2 if ch["c"] in CENTRED else ch["origin"][1]
+                        glyphs.append((b[0], y, b[2] - b[0], *g))
     if not any(k == "slash" for *_, k, _ in glyphs):
         return []
     hlines, vthin, stems, fills, curves = [], [], [], [], []
@@ -171,6 +173,8 @@ def read(pdf, pages: list) -> list[SlashBar]:
         return [b for i, p in enumerate(doc) if i < len(pages) and p.get_fonts()
                 and classify_page(p, i + 1).kind == "vector" for b in read_page(p, pages[i])]
 
+
+CENTRED = {"’"}
 
 REPEAT_GLYPHS = {"EngraverFontSet": {"‘": 1, "«": 2}}   # one-bar repeat (%), two-bar repeat
 
