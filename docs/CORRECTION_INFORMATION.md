@@ -72,6 +72,10 @@ Notes and pitch:
 - Full-size notes from another part's label up to "Play" are cues: removed (user, 2026-10-18).
 - A tied chord held into a chord of exactly the same pitches has a tie on every note (user, 2026-10-18).
 - Fermatas: every part has them where most parts do (user, 2026-10-18).
+- Drum books: a label of another percussion instrument (Tambourine, "tamb.") inside a kit passage names only the
+  hits it stands over; the kit goes on in Schlagzeug (user, 2026-10-18; "sticks" marks the kit in Anastasia).
+- Slash bars after a written-out pattern ("cont. in same style", fingerpicking) get the last written pattern
+  as long as the slashes last (user, 2026-10-18; Ghost 4 guitar).
 - Male voices in treble-8vb only for chorus labels and the singers in `male_voices` (Dmitry, Vlad).
 - Anastasia 4 Dmitry / Vlad: the truth is right and the PDF is an octave off. Not visible from the PDF; accepted.
 

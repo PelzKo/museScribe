@@ -27,14 +27,14 @@ and every other mark land on the wrong beat otherwise.
 | # | Improvement | Max | Expected | Effort | Needs the user |
 |---|---|---|---|---|---|
 | R1 | Double barlines + repeat signs by cross-part vote | 1178 | -500..-800 | medium | no |
-| R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | -400..-600 | small | yes: rule + show.yaml |
+| R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | done -183 | small | done |
 | R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | -400..-700 | large | no |
-| R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | -30..-700 | ? | yes: truth convention |
+| R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
 | R5 | Articulations from the vector glyphs (Ghost) | 878 | -250..-400 | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | -300..-500 | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
-| R9 | Bars in the right place and of the right length | 793 | -100..-250 | medium | no |
+| R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
 | R12 | Made-up words on keyboards and piano reductions | ~250 | -50..-100 | small | no |
@@ -97,6 +97,13 @@ notes is a cue.
 
 R12. **Made-up words (253).** Anastasia 4 Keyboard 1 (28), Klavierauszug labels, Frauen. Check them one by one
 (`results/errors/r3-f/errors.json`, "words: made up") and extend `_cue_text` / `_loose_text`.
+
+Status 2026-10-18 evening: reference `r3-k` = **10 962**. R2 done (alias `sticks`, `kit: true` in the Anastasia show.yaml,
+`build_parts`: a label of another percussion instrument inside a kit passage takes only the hits of its bar from the
+label's beat; Schlagzeug 787 -> 689, the rest is the kit reading itself, see R3). R4 done (slash glyph `’`,
+`continue_patterns`; Ghost 4 Guitar 967 -> ~260; left: hollow half / whole slashes `|` at 58–61, 74–79 need durations,
+and the %-bars 12–13 after the vamp repeat are not written out). Bar count right in 125 of 126 parts (R9 count part:
+no guessed pickup, courtesy copies, bars past the Audiveris stacks; left: Anastasia 4 Keyboard 1, last system).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

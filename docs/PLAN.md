@@ -246,6 +246,12 @@ rest bars dropped where the printed numbers show the output ahead + trim to the 
 count as the song-end anchor `r3-f` -52: **11946** (-3.8 %). Bar count right in 115 of 126 parts. **Reference from now on:
 `r3-f`** (outputs `results/<show>/runs/r3-f`, reassemble from `r3`). Next: `docs/IMPROVEMENTS.md` "Round 4", errors in
 `docs/ERRORS.md`. Rejected: chord symbols on every Ghost piano reduction (+72).
+Round 3 continued (same day): no guessed pickup bar when the workbook time row has none, homr's courtesy-copy bar after the
+last Audiveris stack dropped, extra bars past the stacks / before the anchoring number dropped `r3-h` -68 (bar count right in
+125 of 126 parts; left: Anastasia 4 Keyboard 1 212, conflicting numbers in the last system); Anastasia drum set: alias
+`sticks`, `kit: true`, labels of other percussion inside a kit passage take only their hits `r3-i` -183; Ghost 4 slash glyph
+`’` + the written pattern continued over the slashes (`same style` / `fingerpicking` parts) `r3-k` -733: **10962**
+(Anastasia 5741, Ghost 5221; -11.8 % from `r3-base`). **Reference from now on: `r3-k`.**
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
