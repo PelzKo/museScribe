@@ -321,11 +321,25 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
         a_n = max((len(v) for v in a_bars.values() if v), default=0) or None
         h_bars = {gi: crop.get((k, gi)) for gi in range(len(groups))}
         il = sy.staves[0].interline
-        if not raw and sy.stacks and 2 * il <= max(s.right for s in sy.staves) - sy.stacks[-1].right < 8 * il:
+        gap = (max(s.right for s in sy.staves) - sy.stacks[-1].right) / il if sy.stacks else 0
+        if not raw and 2 <= gap < 8:
             # homr reads the courtesy key/time signature after the last barline as a rest
             # bar of its own; Audiveris leaves that space out of its stacks
             for gi, v in h_bars.items():
                 if v and len(v) == len(sy.stacks) + 1 and v[-1].rest_only:
+                    h_bars[gi] = v[:-1]
+        tails = [v for v in h_bars.values() if v and len(v) == len(sy.stacks) + 1 >= 3]
+        # the copy carries the courtesy key / time homr read there, or repeats a rhythm; a held
+        # note repeated (tied whole notes, Ghost 13 Cello 55-56) is no copy
+        copies = [v for v in tails if _note_seq(v[-1]) and _note_seq(v[-1]) == _note_seq(v[-2]) and (any(
+            el.tag == "attributes" and (el.find("key") is not None or el.find("time") is not None)
+            for el in v[-1].items) or len({on for on, el in B.onsets(v[-1]) if el.tag == "note"
+                                           and el.find("rest") is None}) >= 2)]
+        if not raw and 2 <= gap < 16 and copies and all(any(v is c for c in copies) or v[-1].rest_only for v in tails):
+            # a wide courtesy key change (cancelling naturals + new key + time) that homr
+            # fills with a copy of the bar before (Ghost 1a piano bar 8)
+            for gi, v in h_bars.items():
+                if any(v is t for t in tails):
                     h_bars[gi] = v[:-1]
         h_ns = [len(v) for v in h_bars.values() if v]
         if raw:
@@ -1201,6 +1215,11 @@ def _clamp_vocal(plan: SysPlan) -> None:
     plan.voice_text = text
 
 
+def _note_seq(bar: B.Bar) -> list[tuple]:
+    return [(el.findtext("staff"), el.findtext("pitch/step"), el.findtext("pitch/octave"), el.findtext("duration"))
+            for el in bar.items if el.tag == "note" and el.find("rest") is None]
+
+
 def drop_courtesy_bars(plans: list[SysPlan], stats: Stats) -> None:
     """A tiny bar at the end of a system is a page-turn reminder ("3" over a short
     multi-rest, courtesy key signature), not a bar of its own."""
@@ -1441,7 +1460,7 @@ def trim_to_song_bars(plans: list[SysPlan], bars: int, stats: Stats, log=None) -
 
 
 def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None,
-               song_end: int | None = None) -> None:
+               song_end: int | None = None, pickup: bool | None = None) -> None:
     """Insert rest bars so that bar n of the output is printed bar n.
 
     Evidence: printed bar numbers, the first number of printed ranges ("15-17"), and
@@ -1454,7 +1473,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
     lettered bars [(131, "A"), ...] when known (workbook row), else only those read. Bars are
     only added where no number is printed; where the numbers show the output ahead, the extra rest
     bars go. `song_end`: the position of the song's last bar (workbook `bars`, minus a pickup bar), a
-    strong observation on the last output bar.
+    strong observation on the last output bar. `pickup`: whether the song starts with a pickup bar
+    (workbook time row "0: ..."); None = unknown, then an offset of -1 at the start is taken as one.
     """
     flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
     if not flat:
@@ -1523,7 +1543,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
     back: list[int | None] = [None] * len(obs)
     for t, o in enumerate(obs):
         # start at offset 0, or -1: a pickup bar before bar 1 (it stays the output's bar 1)
-        best, arg = o.weight - (0.0 if o.offset in (0, -1) else ALIGN_PENALTY), None
+        free = (0, -1) if pickup is None else (-1,) if pickup else (0,)
+        best, arg = o.weight - (0.0 if o.offset in free else ALIGN_PENALTY), None
         if abs(o.offset) > MAX_GAP:
             best = float("-inf")
         for u in range(t):
@@ -1556,9 +1577,9 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
                 log.warning(msg)
             for k, i in reversed(lead):
                 _drop_bar(plans, k, i)
-            return align_bars(plans, D, stats, log, letters, song_end)
+            return align_bars(plans, D, stats, log, letters, song_end, pickup)
     # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
-    base = -1 if chain and obs[chain[0]].offset == -1 else 0
+    base = -1 if pickup or (pickup is None and chain and obs[chain[0]].offset == -1) else 0
     stats.pickup, stats.letters = base == -1, sorted(extra)
     # numbers inside a step whose offsets lie between its two sides split it: the total
     # padding stays, part of it moves to where the evidence puts it (a cut mark whose
@@ -1652,16 +1673,29 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
     for o, before, pj in steps:
         d = before - o.offset
         rests = [j for j in range(pj + 1, o.j) if rest_only[j]]
+        # bars past their system's Audiveris stacks (a courtesy key read as a bar by homr)
+        beyond = [j for j in range(pj + 1, o.j) if 0 < len(plans[flat[j][0]].system.stacks) <= flat[j][1]]
         if d > 0 and o.label != "1" and len(rests) >= d:
             drops += rests[-d:]
+        elif d > 0 and o.label != "1" and len(set(rests) | set(beyond)) >= d:
+            drops += (beyond + [j for j in reversed(rests) if j not in beyond])[:d]
+        elif d > 0 and o.label != "1" and o.kind != "end":
+            # nothing to drop after the anchor: the anchor's number may only agree by chance;
+            # the last rest bars before it, back to the previous change of offset (not for the
+            # song end: extra bars there are trimmed at the end)
+            since = max((obs[t].j for t in chain if obs[t].j < pj and obs[t].offset != before), default=-1)
+            back = [j for j in range(since + 1, pj) if rest_only[j]]
+            if len(back) >= d:
+                drops += back[-d:]
+    drops = sorted(set(drops))      # two steps may pick the same bar
     if drops:
-        msg = f"bar numbers: dropped {len(drops)} extra rest bar(s) at " + ", ".join(at(j) for j in drops)
+        msg = f"bar numbers: dropped {len(drops)} extra bar(s) at " + ", ".join(at(j) for j in drops)
         stats.notes.append(msg)
         if log:
             log.warning(msg)
         for j in sorted(drops, reverse=True):
             _drop_bar(plans, *flat[j])
-        return align_bars(plans, D, stats, log, letters, song_end)
+        return align_bars(plans, D, stats, log, letters, song_end, pickup)
     inserts = []        # (global position: insert before this bar, count, why)
     for o, before, pj in steps:
         d = o.offset - before

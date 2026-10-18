@@ -416,10 +416,10 @@ class Pipeline(Engine):
             A.expand_multirests(plans, crop_bars, D, stats)
         if repairs and self.cfg.get("align_bar_numbers", True):
             # the song's last bar: workbook `bars` counts a pickup bar ("0:" in the time row) too
-            end = int(sample.meta["song_bars"]) - any(b == 0 for b, _, _ in song_time or ()) \
-                if sample.meta.get("song_bars") else None
+            pickup = any(b == 0 for b, _, _ in song_time) if song_time else None
+            end = int(sample.meta["song_bars"]) - bool(pickup) if sample.meta.get("song_bars") else None
             A.align_bars(plans, D, stats, LOG, letter_list(sample.meta["song_letters"])
-                         if sample.meta.get("song_letters") else None, end)
+                         if sample.meta.get("song_letters") else None, end, pickup)
         if repairs and sample.meta.get("song_bars"):
             A.trim_to_song_bars(plans, int(sample.meta["song_bars"]), stats, LOG)
         if song_time:

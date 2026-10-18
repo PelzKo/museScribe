@@ -49,7 +49,6 @@ not decided.
 | Ghost | 4 | Drums | 69 | ride x + accent on beats 1 and 3 (as 68) | rests | mistake |
 | Ghost | 4 | Drums | 75 | "cym." quarter triplet x x x tied into ⊗ | four x quarters, no triplet | mistake |
 | Ghost | 4 | Guitar | 1 | mp, "(fingerpicking)" | missing | mistake |
-| Ghost | 4 | Guitar | 15–38, 47–57, 60–74 | slashes + chord symbols ("cont. in same style … ad lib.") | the fingerpicking pattern G5 G4 C5 written out over every chord (also Am, Dm, F) | question (user 2026-10-18: undecided): slashes with chord symbols (Ghost 20 style) or written out? |
 | Ghost | 4 | Guitar | 15–79 | ~60 chord symbols | only 10 (58, 59, 75, 77–79); the rest are in the Klavier part | mistake |
 | Ghost | 4 | Guitar | 58–61 | Fadd9 whole, Fm whole, Gsus4 /F halves, /E /D halves (diamonds) | 58–59 Gsus4 diamond halves, 60–61 the pattern | mistake (shifted) |
 | Ghost | 4 | Guitar | 62 | f, "(light strumming/fingerpicking)" | missing | mistake |
@@ -111,7 +110,6 @@ not decided.
 | Ghost | 11a | all | 1, 6, 18 | Freely, Moderato (♩=c.108), Rall. | missing | mistake (minor) |
 | Ghost | 11a | all | 6 | no rehearsal mark | "A" | mistake |
 | Ghost | 11a | Guitar | 2–5 | "Play": hollow diamond slashes with fermatas + chord symbols (bar 1 a Cl. cue) | rests + chord symbols | question (user 2026-10-18: undecided; as Ghost 5 Guitar 36–44) |
-| Ghost | 11a | PianoReduction | 6–17 | chord symbols | 22 chord symbols | mistake (piano reductions have none) |
 | Ghost | 11a | PianoReduction | 16 | first right-hand chord C4 F4 C5 (FMaj7) | C4 G4 C5 | mistake |
 | Ghost | 11a | PianoReduction | 18–19 | dim. hairpin | missing | mistake |
 | Ghost | 11a | PianoReduction | 19 | right-hand chords G3 B3 E4 (3×) | G3 C4 E4 | mistake |
@@ -121,6 +119,7 @@ not decided.
 | Ghost | 20 | Drums | 45–46 | 45 "Fill" (four slashes), crash on beat 1 of 46 | 45 a written-out groove with the crash, 46 without | mistake (crash a bar early); how to write a slash "Fill" bar: question |
 | Ghost | 20 | Guitar | 59, 61 | last eighth C5 (written) | D (61 with accent) | mistake |
 | Ghost | 20 | Guitar | 60 | first eighth C5, as in 58 | eighth rest | mistake |
+| Ghost | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none | open: Ghost piano reductions keep chord symbols (1a, 4, 11a have them); the user adds them later (2026-10-18) |
 | Ghost | 20 | PianoReduction | 135 | upper staff F4 + F5 eighth, accent (&gt;) | F3 + F5 quarter, marcato + staccato (the lower staff is fixed) | mistake |
 
 ## 2. Conventions
@@ -137,12 +136,13 @@ not decided.
 | Anastasia | 4 | Keyboard 2, Klarinette in B 2, Flöte 2 | whole parts | dynamics, hairpins, accents, tenuto, slurs, ... | missing | `plain` rows get no marks and none are scored (user 2026-10-18; Keyboard 2 `plain` in every Anastasia sheet) |
 | Anastasia | 4 | Triangel | 94, 97 | triangle noteheads | x head (94), normal head (97) | MuseScore can't set a triangle head here (user 2026-10-18) |
 | Anastasia | 4, 4A | Xylophon (drum book) | 4: 1–27, 169–173; 4A: 1–3 | "mallets": x / ⊗ heads, rolls, "choke"; 4 bar 27 kit notes (bass drum F4 + x "choke") | a Xylophon part with pitches, incl. the kit notes of 27 | "mallets" = xylophone, everything in the mallets sections is Xylophon (user 2026-10-18); Drums rows `Xylophon` / `Xylophone`, alias `mallets` |
+| Ghost | 4 | Guitar | 15–38, 47–57, 60–74 | slashes + chord symbols ("cont. in same style … ad lib.") after a written fingerpicking pattern | the last written pattern continued over the slash bars | user 2026-10-18: the pipeline continues the last written pattern as long as the slashes last |
 | Ghost | 4, 5 | Reed, Guitar, Utility | e.g. 4 Reed 7–22, 4 Utility 39, 44, 49, 58, 5 Reed 30 | doubling labels (FLUTE / CLARINET) and patch labels (HARP, STR. ENS., ...) | one part with instrument changes ("Zu Flöte", Harfe, Streichinstrumente, ...) | doublings stay in one part in Ghost, are split per instrument in Anastasia (user 2026-10-18; show.yaml `doublings: one_part` in Ghost) |
 | Ghost | 11a | PianoReduction | 1–5 | right hand Cl. line in full size, G4 whole 4–5 ("+Util. (Strings), Vln, Vc."), left hand Gtr diamond slashes | rests | the piano plays only its own part (user 2026-10-18) |
+| Ghost | 1a, 4, 11a | PianoReduction | | chord symbols above the piano staff | chord symbols | Ghost piano reductions keep them (Anastasia's have none; user 2026-10-18); Ghost 20 still missing them (table 1) |
 | Ghost | 13, 20 | all | e.g. 20 Drums 6, 7, 14; 13 Bass 115–129; 13 Cello 27–33, 99–105 | one- and two-bar repeat signs (%), "sim." after a marked bar | the bars written out, with the articulations of the pattern bar | user 2026-10-16; pipeline writes %-bars out, copying the marks is IMPROVEMENTS #47 |
 | Ghost | 13 | Bass | | Bass, sounding 8vb | "Elektrischer Bass", written an octave above sounding | output uses `transpose: 8vb` |
 | Ghost | 20 | Guitar | 9, 10, 17, 18, 28, 54, 55, 62, 63 | hollow (half / whole) rhythm slashes | diamond noteheads on B | the diamonds stand for the hollow slashes, no harmonics (2026-10-16) |
-| Ghost | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | pipeline writes none on piano reductions |
 | Ghost | 20 | Utility | 21–49, 66–91, 115–135 | patch label "STR. ENS. (loco & 8va)" at 21, 66, 115, no 8va line | 8va line over staff 1, notes an octave up until "(loco)" | pipeline copies it (spans checked 2026-10-16) |
 | all | all | all | | a curve joining two neighbouring notes of the same pitch | sometimes a slur (Ghost 13 Cello 18, Bass 7, Ghost 1a 17, Ghost 20 15, Anastasia 4 34) | it is a tie (user 2026-10-16); `truth.load` turns such slurs into ties, the .mscz files stay as they are |
 
