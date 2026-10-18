@@ -194,7 +194,7 @@ def read_repeats(pdf_page, page) -> list[Repeat]:
         for line in block.get("lines", []):
             for span in line["spans"]:
                 text = "".join(ch["c"] for ch in span["chars"]).strip()
-                if text.isdigit() and span["chars"]:
+                if text.isdecimal() and span["chars"]:
                     numbers.append((span["bbox"][0], span["bbox"][3], int(text)))
                 table = next((t for f, t in REPEAT_GLYPHS.items() if span["font"].startswith(f)), {})
                 for ch in span["chars"]:
@@ -240,6 +240,28 @@ def read_all_repeats(pdf, pages: list) -> list[Repeat]:
     with FITZ_LOCK, fitz.open(pdf) as doc:
         return [r for i, p in enumerate(doc) if i < len(pages) and p.get_fonts()
                 and classify_page(p, i + 1).kind == "vector" for r in read_repeats(p, pages[i])]
+
+
+def read_lines(pdf, pages: list, pattern) -> list[tuple[int, float, float, str]]:
+    """(page number, centre x, top y, text) of every text-layer line of the vector pages that matches
+    `pattern` as a whole, in page coordinates (small labels like "Play" that Audiveris misses)."""
+    import pymupdf as fitz
+
+    from ..pdfkind import classify_page
+    from ..rasterize import FITZ_LOCK
+    out = []
+    with FITZ_LOCK, fitz.open(pdf) as doc:
+        for i, p in enumerate(doc):
+            if i >= len(pages) or not p.get_fonts() or classify_page(p, i + 1).kind != "vector":
+                continue
+            sx = pages[i].width / p.rect.width if p.rect.width else 1.0
+            for block in p.get_text("dict")["blocks"]:
+                for line in block.get("lines", []):
+                    text = "".join(sp["text"] for sp in line["spans"]).strip()
+                    if pattern.match(text):
+                        x0, y0, x1, _ = line["bbox"]
+                        out.append((pages[i].number, (x0 + x1) / 2 * sx, y0 * sx, text))
+    return out
 
 
 def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]]]]:

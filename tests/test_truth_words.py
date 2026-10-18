@@ -90,3 +90,42 @@ def test_slur_between_equal_pitches_becomes_tie():
     assert [t.get("type") for t in notes[2].iter("tied")] == ["stop"]
     assert [s.get("type") for s in notes[2].iter("slur")] == ["stop"]
     assert notes[3].find("notations/slur").get("type") == "start"
+
+
+def _c(steps, tie="", chord=False):
+    out = ""
+    for k, st in enumerate(steps):
+        t = f'<tied type="{tie}"/>' if tie and k == 0 else ""
+        out += (f"<note>{'<chord/>' if k or chord else ''}<pitch><step>{st}</step><octave>4</octave></pitch>"
+                f"<duration>4</duration><voice>1</voice><notations>{t}</notations></note>")
+    return out
+
+
+def test_held_chord_gets_a_tie_on_every_note():
+    from lxml import etree
+    from omrbench import musicxml
+    # C-E-G tied (on C only) to C-E-G: E and G get ties; C-E tied to C-F changes nothing
+    xml = (f'<score-partwise><part id="P1"><measure number="1">{_c("CEG", "start")}</measure>'
+           f'<measure number="2">{_c("CEG", "stop")}{_c("CE", "start")}{_c("CF")}</measure></part></score-partwise>')
+    root = etree.fromstring(xml)
+    assert musicxml.tie_held_chords(root) == 2
+    notes = root.findall(".//note")
+    assert all(n.find("notations/tied[@type='start']") is not None for n in notes[:3])
+    assert all(n.find("notations/tied[@type='stop']") is not None for n in notes[3:6])
+    assert notes[4].find("tie").get("type") == "stop"
+    assert notes[7].find("notations/tied") is None and notes[9].find("notations/tied") is None
+
+
+def test_fermata_most_parts_have_goes_onto_the_others():
+    from lxml import etree
+    from omrbench import musicxml
+    def part(fermata, rest=False):
+        f = "<notations><fermata/></notations>" if fermata else ""
+        body = "<rest/>" if rest else "<pitch><step>C</step><octave>4</octave></pitch>"
+        return etree.fromstring(f'<part><measure number="1"><attributes><divisions>1</divisions></attributes>'
+                                f'<note>{body}<duration>4</duration>{f}</note></measure></part>')
+    parts = [part(True), part(True, rest=True), part(False, rest=True)]
+    assert musicxml.share_fermatas(parts) == 1
+    assert parts[2].find(".//fermata") is not None
+    lone = [part(True), part(False), part(False)]
+    assert musicxml.share_fermatas(lone) == 0

@@ -188,6 +188,107 @@ def slurs_to_ties(root: etree._Element) -> int:
     return turned
 
 
+def _pitch_key(n: etree._Element) -> tuple:
+    p = n.find("pitch")
+    return tuple(p.findtext(k) or "0" for k in ("step", "alter", "octave")) if p is not None else ()
+
+
+def _add_tie(n: etree._Element, typ: str) -> None:
+    if n.find(f"notations/tied[@type='{typ}']") is not None:
+        return
+    nt = n.find("notations")
+    if nt is None:
+        nt = etree.SubElement(n, "notations")
+    nt.append(etree.Element("tied", type=typ))
+    anchor = (n.findall("tie") or n.findall("duration") or [None])[-1]
+    if anchor is not None:
+        anchor.addnext(etree.Element("tie", type=typ))
+
+
+def tie_held_chords(root: etree._Element) -> int:
+    """A chord tied to the next chord of exactly the same pitches (same staff and voice) gets a tie
+    on every note: a reader often ties only one, and the untied notes would be played again (user
+    2026-10-18). Returns how many ties were added."""
+    added = 0
+    for part in root.iter("part"):
+        seq: dict[tuple, list[list]] = {}       # (staff, voice) -> its chords in order
+        for n in part.iter("note"):
+            if n.find("grace") is not None:
+                continue
+            key = (n.findtext("staff") or "1", n.findtext("voice") or "1")
+            if n.find("chord") is not None and seq.get(key):
+                seq[key][-1].append(n)
+            else:
+                seq.setdefault(key, []).append([n])
+        for chords in seq.values():
+            for a, b in zip(chords, chords[1:]):
+                if len(a) < 2 or any(x.find("rest") is not None for x in a + b) \
+                        or not any(x.find("notations/tied[@type='start']") is not None for x in a):
+                    continue
+                pa = sorted(map(_pitch_key, a))
+                if pa != sorted(map(_pitch_key, b)) or len(set(pa)) != len(pa):
+                    continue
+                by_pitch = {_pitch_key(x): x for x in b}
+                for x in a:
+                    if x.find("notations/tied[@type='start']") is None:
+                        _add_tie(x, "start")
+                        _add_tie(by_pitch[_pitch_key(x)], "stop")
+                        added += 1
+    return added
+
+
+def _starts(part: etree._Element):
+    """(bar index, onset in quarters, note) for every first note of a chord and every rest."""
+    div = 1
+    for bi, m in enumerate(part.findall("measure")):
+        pos = Fraction(0)
+        for el in m:
+            if el.tag == "attributes" and el.findtext("divisions"):
+                div = int(el.findtext("divisions"))
+            elif el.tag in ("backup", "forward"):
+                d = Fraction(int(el.findtext("duration") or 0), div)
+                pos += d if el.tag == "forward" else -d
+            elif el.tag == "note" and el.find("grace") is None:
+                if el.find("chord") is not None:
+                    continue
+                yield bi, pos, el
+                pos += Fraction(int(el.findtext("duration") or 0), div)
+
+
+def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
+    """A fermata that at least half of the parts with a note or rest starting at that bar and beat
+    have goes onto the others (the readers miss many, mostly over rests; user 2026-10-18). Returns
+    how many were added. Only parts with the song's bar count `bars` (else the most common one) take
+    part: an extra or missing bar would move the fermata."""
+    counts = [len(p.findall("measure")) for p in parts]
+    common = bars or max(set(counts), key=counts.count, default=0)
+    parts = [p for p, c in zip(parts, counts) if c == common]
+    have: dict[tuple, int] = {}
+    starts = []
+    for p in parts:
+        s = {}
+        for bi, on, el in _starts(p):
+            s.setdefault((bi, on), el)
+        starts.append(s)
+        for k in {k for k, el in s.items() if el.find("notations/fermata") is not None}:
+            have[k] = have.get(k, 0) + 1
+    added = 0
+    for k, n in have.items():
+        present = [s[k] for s in starts if k in s]
+        if 2 * n < len(present) or len(present) < 2:
+            continue
+        for el in present:
+            if el.find("notations/fermata") is None:
+                nt = el.find("notations")
+                if nt is None:
+                    nt = etree.Element("notations")
+                    lyric = el.find("lyric")
+                    (lyric.addprevious if lyric is not None else el.append)(nt)
+                nt.append(etree.Element("fermata", type="upright"))
+                added += 1
+    return added
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plain`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,

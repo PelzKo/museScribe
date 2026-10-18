@@ -400,6 +400,8 @@ class Pipeline(Engine):
             V.place_marks(plans, pages, D, stats)
         if sample.meta.get("cues") == "drop":
             A.drop_cues(plans, pages, D, stats)
+            A.drop_play_cues(plans, pages, stats, None if is_scan(sample.pdf)
+                             else SL.read_lines(sample.pdf, pages, A.PLAY_OR_LABEL))
         split = self.split(sample)
         # text_onset: bar = at the start of the bar it is printed in (the convention of the
         # ground truths here); estimated = beat estimated from its x position
@@ -415,6 +417,8 @@ class Pipeline(Engine):
         if repairs and self.cfg.get("align_bar_numbers", True):
             A.align_bars(plans, D, stats, LOG, letter_list(sample.meta["song_letters"])
                          if sample.meta.get("song_letters") else None)
+        if repairs and sample.meta.get("song_bars"):
+            A.trim_to_song_bars(plans, int(sample.meta["song_bars"]), stats, LOG)
         if song_time:
             A.apply_song_time(plans, song_time, D, stats)
         if repairs and not is_scan(sample.pdf):

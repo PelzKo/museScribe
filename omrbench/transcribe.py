@@ -414,6 +414,10 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
             changed.add(job.group)
     LOG.info(f"done in {time.perf_counter() - t0:.0f}s: {done} written, {skipped} unchanged, "
              f"{failed} failed")
+    if hasattr(eng, "reassemble"):
+        for g in {job.group for job, *_ in todo}:
+            for dest in (run_dir / g, root / g)[:2 if latest else 1]:
+                share_marks(dest, order[g])
     for g in groups if latest else ():
         files = [(Path(o).stem, root / g / o) for job in order[g]
                  for o in output_names(job.name, job.meta) if (root / g / o).exists()]
@@ -422,6 +426,24 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
     LOG.info(f"latest outputs in {root}/<{'song' if root.name != 'samples' else 'sample'}>/, "
              f"this run in {run_dir}")
     return failed
+
+
+def share_marks(dest: Path, jobs: list[Job]) -> None:
+    """Song-level repairs over all of a song's parts in `dest` (pipeline outputs): fermatas most
+    parts have go onto the others; `plain` parts are left alone."""
+    files = [(dest / o, job.meta.get("plain")) for job in jobs
+             for o in output_names(job.name, job.meta) if (dest / o).exists()]
+    roots = [(f, musicxml.load(f), plain) for f, plain in files]
+    parts = []
+    for _, r, plain in roots:
+        names = {sp.get("id"): sp.findtext("part-name") for sp in r.iterfind("part-list/score-part")}
+        parts += [p for p in r.findall("part")
+                  if not (plain is True or (plain and names.get(p.get("id")) in plain))]
+    n = musicxml.share_fermatas(parts, next((j.meta.get("song_bars") for j in jobs), None))
+    if n:
+        LOG.info(f"{dest.name}: {n} fermatas copied from the other parts")
+        for f, r, _ in roots:
+            musicxml.write(r, f)
 
 
 def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -> None:
@@ -486,4 +508,7 @@ def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine:
             musicxml.write(r, dest / (name + ".part"))
             os.replace(dest / (name + ".part"), dest / name)
         LOG.info(f"{job.sid}: reassembled with {engine} in {time.perf_counter() - t0:.0f}s -> {', '.join(outs)}")
+    for g in {job.group for job in jobs}:
+        if (root / "runs" / dst_run / g).is_dir():
+            share_marks(root / "runs" / dst_run / g, [j for j in jobs if j.group == g])
     return failed + len(problems)

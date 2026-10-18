@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
-from ..musicxml import PLAY_WORDS, slurs_to_ties
+from ..musicxml import PLAY_WORDS, slurs_to_ties, tie_held_chords
 from .ocr import DYNAMIC
 from . import bars as B
 from . import chords as CH
@@ -89,6 +89,7 @@ class Stats:
     chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
     dynamics_text: int = 0         # dynamics read as text (OCR) written as <dynamics>
     slurs_to_ties: int = 0         # slurs between two equal pitches written as ties
+    chord_ties: int = 0            # ties added to the other notes of a tied, held chord
     graces_retyped: int = 0        # flagless graces given the piece's grace type
     graces_dropped: int = 0        # half/whole "graces" (misreads)
     wedges_dropped: int = 0        # hairpins longer than max_wedge_bars / unpaired
@@ -105,7 +106,7 @@ class Stats:
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
                 "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
                 "chord_marks_deduped": self.chord_marks_deduped,
-                "slurs_to_ties": self.slurs_to_ties, "dynamics_text": self.dynamics_text,
+                "slurs_to_ties": self.slurs_to_ties, "chord_ties": self.chord_ties, "dynamics_text": self.dynamics_text,
                 "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
                 "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
@@ -604,6 +605,64 @@ def drop_cues(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> 
                         plan.cues.add((gi, i))
 
 
+PLAY = re.compile(r"^\[?play\]?\.?$", re.I)
+MAX_CUE_BARS = 16
+# another part's name printed over full-size cue notes ("Cl.", "Pno.", "Cond.")
+CUE_LABEL = re.compile(r"^\(?(?:cl|clar|fl|ob|bsn|hn|tpt|tbn|pno|kbd|gtr|vln|vc|vla|util|cond|sax|"
+                       r"perc|str|voc)\.?\)?$", re.I)
+PLAY_OR_LABEL = re.compile(f"{PLAY.pattern}|{CUE_LABEL.pattern}", re.I)
+
+
+def drop_play_cues(plans: list[SysPlan], pages: list[Page], stats: Stats,
+                   lines: list[tuple[int, float, float, str]] | None = None) -> None:
+    """Full-size cue notes: from another part's label ("Cl.") up to the word "Play" the notes
+    belong to that part and become rests (user 2026-10-18). Without a "Play" within MAX_CUE_BARS
+    nothing changes. `lines`: (page, x, y, text) from the PDF text layer of vector pages, used there
+    instead of Audiveris' text (which places "Play" by its left edge, often in the bar before)."""
+    by_sys = {id(p.system): p for p in plans}
+    order = {id(p): k for k, p in enumerate(plans)}
+    running = T.running_headers(pages)
+    events: list[tuple[int, int, int, bool]] = []    # (plan, bar, group, is_play)
+    for page in pages if lines is None else ():
+        for pl in T.classify(page, False, running).words:
+            plan = by_sys.get(id(pl.system))
+            text = pl.line.text.strip()
+            if plan and plan.n and (PLAY.match(text) or CUE_LABEL.match(text)):
+                gi, _ = _group_of(pl.system, pl.staff.id)
+                events.append((order[id(plan)], _bar_at(plan, pl.line.x + 1), gi, bool(PLAY.match(text))))
+    by_page = {p.number: p for p in pages}
+    for pn, x, y, text in lines or ():
+        hit = T._staff_below(by_page[pn].systems, y) if pn in by_page else None
+        plan = by_sys.get(id(hit[0])) if hit else None
+        if plan and plan.n:
+            gi, _ = _group_of(hit[0], hit[1].id)
+            events.append((order[id(plan)], _bar_at(plan, x + 1), gi, bool(PLAY.match(text))))
+    events.sort()
+    for gi in {e[2] for e in events}:
+        start = None
+        for k, i, _, play in [e for e in events if e[2] == gi]:
+            if not play:
+                start = start or (k, i)
+                continue
+            if start is None or sum(p.n for p in plans[start[0]:k]) - start[1] + i > MAX_CUE_BARS:
+                start = None
+                continue
+            for pk in range(start[0], k + 1):
+                plan = plans[pk]
+                if gi not in plan.chosen:
+                    continue
+                lo = start[1] if pk == start[0] else 0
+                hi = i if pk == k else plan.n
+                for bi in range(lo, hi):
+                    bar = plan.chosen[gi][bi]
+                    for si in {int(el.findtext("staff", "1") or 1) for el in bar.items if el.tag == "note"}:
+                        ons = {on for on, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None
+                               and int(el.findtext("staff", "1") or 1) == si}
+                        stats.cue_notes_removed += B.cues_to_rests(bar, si, ons)
+                    plan.cues.add((gi, bi))
+            start = None
+
+
 TYPES = {Fraction(4): ("whole", 0), Fraction(3): ("half", 1), Fraction(2): ("half", 0),
          Fraction(3, 2): ("quarter", 1), Fraction(1): ("quarter", 0), Fraction(3, 4): ("eighth", 1),
          Fraction(1, 2): ("eighth", 0), Fraction(1, 4): ("16th", 0)}
@@ -933,8 +992,8 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 continue            # a boxed bar number read as letters ("111" -> "III")
             if not T.is_words(text):
                 continue
-            if (gi, i) in plan.cues and text.startswith("("):
-                continue            # "(Clar)": the label of cue notes that were removed
+            if (gi, i) in plan.cues and (text.startswith("(") or CUE_LABEL.match(text)):
+                continue            # "(Clar)", "Cl.": the label of cue notes that were removed
             name = match_instrument(text, instruments) if instruments else None
             if name and text.startswith("(") and not paren_aliases:
                 name = None         # "(Clar)" names cue notes, "(still Oboe)" changes nothing
@@ -961,7 +1020,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
             if not plan or not plan.n or 0 not in plan.chosen:
                 continue
             i = _bar_at(plan, pl.line.x + 1)
-            if value.isdigit():
+            if value.isdecimal():
                 # a bar number printed (or boxed) at the system start: evidence for the bar
                 # count; the truth scores keep letter rehearsal marks only
                 plan.printed.setdefault(i, int(value))
@@ -1363,6 +1422,23 @@ def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
         _clamp_vocal(plan)
 
 
+def trim_to_song_bars(plans: list[SysPlan], bars: int, stats: Stats, log=None) -> None:
+    """More bars than the song has (workbook `bars`): rest-only bars at the end go."""
+    flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
+    dropped = 0
+    while len(flat) > bars:
+        k, i = flat.pop()
+        if not plans[k].chosen or not all(g[i].rest_only for g in plans[k].chosen.values()):
+            break
+        _drop_bar(plans, k, i)
+        dropped += 1
+    if dropped:
+        msg = f"bars: dropped {dropped} rest bar(s) at the end (song has {bars} bars)"
+        stats.notes.append(msg)
+        if log:
+            log.warning(msg)
+
+
 def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None) -> None:
     """Insert rest bars so that bar n of the output is printed bar n.
 
@@ -1564,6 +1640,22 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
 
     rest_only = {j: all(g[i].rest_only for g in plans[k].chosen.values()) if plans[k].chosen else False
                  for j, (k, i) in enumerate(flat)}
+    # output ahead: the extra bars are most likely rest bars of an over-counted multi-rest; drop
+    # the last rest bars before the number (user 2026-10-18: bar count and lengths must match)
+    drops = []
+    for o, before, pj in steps:
+        d = before - o.offset
+        rests = [j for j in range(pj + 1, o.j) if rest_only[j]]
+        if d > 0 and o.label != "1" and len(rests) >= d:
+            drops += rests[-d:]
+    if drops:
+        msg = f"bar numbers: dropped {len(drops)} extra rest bar(s) at " + ", ".join(at(j) for j in drops)
+        stats.notes.append(msg)
+        if log:
+            log.warning(msg)
+        for j in sorted(drops, reverse=True):
+            _drop_bar(plans, *flat[j])
+        return align_bars(plans, D, stats, log, letters)
     inserts = []        # (global position: insert before this bar, count, why)
     for o, before, pj in steps:
         d = o.offset - before
@@ -2169,6 +2261,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 bl = etree.SubElement(m, "barline", location="right")
                 etree.SubElement(bl, "bar-style").text = "light-heavy"
     n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
+    k = tie_held_chords(root)
     if stats is not None:
         stats.slurs_to_ties += n
+        stats.chord_ties += k
     return root
