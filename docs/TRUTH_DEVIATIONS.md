@@ -1,101 +1,169 @@
-# Truth deviations to check
+# Truth deviations
 
-Places where a truth score seems to differ from the printed parts. Each one is either a deliberate convention
-(then the pipeline may copy it, and the entry says so) or a mistake in the truth. Check and mark each entry; add
-new ones whenever a benchmark shows something odd. Fixed entries are removed (last cleanup 2026-10-16); parts not
-corrected yet are in the workbook column `unfinished` (`docs/PLAN.md` section 5), not here.
+Places where a truth score differs from the printed parts. Each one is either still to be decided / fixed (table 1)
+or a deliberate convention that the pipeline may copy (table 2). Fixed entries are removed (last cleanup
+2026-10-18, after the user's fixes of Anastasia 1 / 4, Ghost 1a / 20); parts not corrected yet are in the workbook
+row `unfinished` (`docs/PLAN.md` section 5), not here. Both tables are sorted by project, song, part, bar.
 
 Vector PDFs (Ghost parts, Anastasia PianoReduction): `python scripts/pdf_truth_check.py <show> <song> <part>` lists
-the bars whose pitches differ from the truth (check each hit on the page). Spelling-only differences (F♯ for a printed
-G♭) are logged only as a pattern (user 2026-10-16). The user corrects the truth files.
+the bars whose pitches differ from the truth (check each hit on the page; it applies the first transposition of a
+part to the whole part, so bars after an instrument change give false hits). Spelling-only differences (F♯ for a
+printed G♭) are logged only as a pattern (user 2026-10-16). The user corrects the truth files.
 
-Status: `open` = not checked yet, `convention` = intended, keep (pipeline follows it).
+Status in table 1: `mistake` = probable truth error, `question` = a convention decision is needed, `open` = known,
+not decided.
 
-## Ghost
+## 1. Open
 
-| Song | Part | Bars | Printed | Truth | Status |
-|---|---|---|---|---|---|
-| 20 | Drums | 1, 41 | "Open H.H." | every hi-hat note is Closed Hi-Hat (G5, x head) | open (pipeline follows the truth) |
-| 20 | Utility | 3 sections | patch label "STR. ENS. (loco & 8va)", no 8va line | 8va line over staff 1, notes an octave up until "(loco)" | convention (pipeline copies it) |
-| 20 | Reed, Trumpet | whole part | 16 accent glyphs in the PDF (each) | 33 / 36 accents (more than printed; e.g. on bars the PDF does not mark) | open (2026-10-16: reading the accents exactly from the PDF glyphs made Reed 20 worse by 19, so the truth has accents the page lacks) |
-| 20 | Utility | 8va sections | "STR. ENS. (loco & 8va)" at 21, 66, 115 | 8va spans 21–49, 66–91, 115–135 | checked 2026-10-16: the spans match the labels (truth an octave above the page in exactly these bars); the ~115 notes are the pipeline's own gap |
-| 20 | Guitar | 9, 10, 17, 18, 28, 54, 55, 62, 63 | hollow (half / whole) rhythm slashes | diamond noteheads on B | explained 2026-10-16: the diamonds stand for the hollow slashes, no harmonics |
-| 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | convention (pipeline writes none on piano reductions) |
-| 13, 20 | all | e.g. 20 Drums 6, 7, 14; 13 Bass 115–129; 13 Cello 27–33, 99–105 | one- and two-bar repeat signs (%), "sim." after a marked bar | the bars written out, with the articulations of the pattern bar | convention (user 2026-10-16; pipeline writes %-bars out, copying the marks is IMPROVEMENTS #47) |
-| all | all | | a curve joining two neighbouring notes of the same pitch | sometimes a slur (Ghost 13 Cello 18, Bass 7, Ghost 1a 17, Ghost 20 15, Anastasia 4 34) | convention: it is a tie (user 2026-10-16); `truth.load` turns such slurs into ties (`musicxml.slurs_to_ties`), the .mscz files stay as they are |
-| 13 | Bass | 55 | single barline (the repeat starts at 56) | double barline | mistake (minor) |
-| 13 | Bass | | Bass, sounding 8vb | "Elektrischer Bass", written an octave above sounding | convention (output uses `transpose: 8vb`) |
-| 13 | Bass | 3 | "Sim." | word "Sim." kept | open: the truths drop "sim." / "fill" (user 2026-10-16, the pattern is written out); remove the word from the truth |
-| 13 | Cello | 27, 99, 114 | "sim." | word "sim." kept | open: remove the word from the truth (same convention) |
-| 20 | Bass | 135 | half rest, F3 eighth (accent), rests | bar empty (rest only) | open: probable mistake |
-| 20 | Guitar | 58–61 | real C5 noteheads (written): 58 / 60 single C5 eighths between the chords, 59 / 61 four C5 eighths | slash noteheads (pitch B) in their place | open: probable mistake (the pitch is lost) |
-| 20 | Utility | 11, 19 | last chord of staff 1: G3 + E4 G4, the same as the chord before | G3 C4 E4 | open: probable mistake |
-| 20 | Utility | 39 | staff 1 fourth 16th E♭5 (flat printed, the lower staff has E♭ too) | E5 natural | open: probable mistake |
-| 20 | Utility | 90 | last eighth A in both staves (no accidental, key F) | B♭ like the seven before | open: probable mistake |
-| 20 | Utility | 92–107 | "CELESTA (loco)", staff 1 at the printed pitch | an octave below the printed notes, no 8va line | open: probable mistake |
-| 20 | Utility | 99 | staff 1 second four eighths F5 G5 A♭5 B♭5, as in the other bars 92–107 | G A♭ B♭ C, a step higher (besides the octave above) | open: probable mistake |
-| 20 | PianoReduction | 26, 27, 71, 72 | last chord of the upper piano staff: lower note B♭3 (26, 71) / A♭3 (27, 72), the same as in the first chord | G3 / F3 | open: probable mistake (the repeat 71–72 copies it) |
-| 20 | PianoReduction | 111–114 | lowest bass note F1 (on the 4th ledger line; chord symbol F): last eighth of 111–113, four eighths in 114 | A1 | open: probable mistake (checked at 400 dpi) |
-| 20 | PianoReduction | 135 | upper F4 + F5 eighth (accent), lower F1 + F2 eighth | upper F3 + F5 quarter, lower A2 + A3 eighth | open: probable mistake |
-| 20 | Drums | 36 | snare (C5) on beat 2 under the hi-hat | no snare | open: probable mistake |
-| 20 | Drums | 45–46 | 45 "Fill" (four slashes), crash on beat 1 of 46 | 45 a written-out groove with the crash, 46 without crash | open: crash one bar early; how to write a slash "Fill" bar is a convention question |
-| 20 | Drums | 131–133 | snare on beat 2 on C5, the same line as beat 4 ("ride (bell)") | B4 on beat 2 | open: probable mistake |
-| 1a | Cello | 4 | second 16th C♯4, a step above the B3 | D♯4 | open: probable mistake |
-| 1a | Guitar | 10, 14, 19, 25 | third eighth B♭4 (written), E♭sus4 pattern E♭ A♭ B♭ | A♭ | open: probable mistake (the same in all four bars) |
-| 1a | Utility | 1–4 | lower staff in bass clef (B3, C♯4, E3) | lower staff in treble clef: the same positions read G♯5, A♯5, C♯5 | open: probable mistake (wrong clef) |
-| 1a | PianoReduction | 2 | upper piano staff G♯4 dotted half tied to a G♯4 eighth, F♯4 eighth | dotted half, eighth rest, F♯4 | open: probable mistake |
-| 1a | PianoReduction | 9–10 | piano staves rest; the notes are a "Gtr. (acoustic)" cue on the staff above | the cue notes in the piano right hand | mistake (user 2026-10-16): the piano rests there |
+| Project | Song | Part | Bars | Printed | Truth | Status |
+|---|---|---|---|---|---|---|
+| Anastasia | 4 | all | 101 | double barline at the end of 101 (every part) | single barline (all 38 parts; the other double barlines are fixed) | mistake |
+| Anastasia | 4 | Horn, Oboe, Piccolo, Keyboard 1, Klavierauszug, Schlagzeug, Pauken, Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); list in section 3 |
+| Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord with marcato | no mark at all | mistake |
+| Anastasia | 4 | Keyboard 2 | 26 | "RH: Trem Strings sounding 8vb" | 8va line (sounds D6–D7) | mistake: 8vb line as in 82–84 |
+| Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
+| Anastasia | 4 | Posaune | 98 | "St. Mute" (a reminder, muted since 89) | no word | mistake (minor): reminder words are written (user 2026-10-18) |
+| Anastasia | 4 | Schlagzeug | 144 | lower voice F4 beat 1, rest beat 3, F4 (accent, fz) beat 4 | F4 beat 1, rest, F4 on beat 3: the voice holds only 3 beats | mistake |
+| Ghost | 4 | all | 1 | "Moderato (♩=95)" | metronome only | mistake (minor) |
+| Ghost | 4 | all | 15, 30, 40, 48 | double barline | final barline (light-heavy) | mistake |
+| Ghost | 4 | all | 16, 31, 41, 49, 62 | rehearsal letters A–E | none | mistake (letters are kept) |
+| Ghost | 4 | all | 43 | single barline | double barline | mistake |
+| Ghost | 4 | all | 49–80 | 4/4 continues (no part prints 2/2) | 2/2 from 49 | mistake (workbook `1: 4/4` is right) |
+| Ghost | 4 | all | 61 | double barline before E | single | mistake |
+| Ghost | 4 | Bass | 1 | mp | mp twice | mistake |
+| Ghost | 4 | Bass | 15–16 | G3 tied, slide line into C3 | slur G3–C3 | question (minor): slide as slur? |
+| Ghost | 4 | Bass | 23 | mf | missing (the Drums truth has an unprinted mf at 23) | mistake |
+| Ghost | 4 | Bass | 45 | no ties | ties on both F3 | mistake |
+| Ghost | 4 | Bass | 61 | cresc. hairpin | missing | mistake |
+| Ghost | 4 | Cello | 3, 16 | "pizz.", "arco", "(solo)" | missing | mistake (minor) |
+| Ghost | 4 | Cello | 10 | r, 8th r, G3 B3 C4 (quarter) G4 | B3 missing, G3 an eighth late | mistake |
+| Ghost | 4 | Cello | 18 | &gt; hairpin after the &lt; | missing | mistake (minor) |
+| Ghost | 4 | Cello, Violin | 56–57 | C4 / E4 whole tied into 57 | no tie | mistake |
+| Ghost | 4 | Drums | 11, 16 | mp + "ride" (11), mp + "brushes lightly" (16) | missing | mistake |
+| Ghost | 4 | Drums | 17–34, 50–57, 63–67, 71–74 | %-bars: accents of the pattern bar (4th and 13th 16th) | accents vary (19, 20, 23, 25, 53 on the 14th; 22, 52, 72 one missing; 26, 28, 31, 57, 65 extra) | mistake |
+| Ghost | 4 | Drums | 21, 38, 45, 48, 50, 54, 62, 63, 66 | no ties | ties | mistake (minor) |
+| Ghost | 4 | Drums | 23 | no dynamic | mf | mistake |
+| Ghost | 4 | Drums | 39, 40 | ⊗ dotted half tied into an x eighth (39), ⊗ half (40) | ⊗ dotted quarter + rest, no tie | mistake (minor) |
+| Ghost | 4 | Drums | 62, 76, 77 | f (62), dim. hairpin (76), mp + "ride" (77) | missing | mistake |
+| Ghost | 4 | Drums | 67 | % bar | staccato on the last snare | mistake (minor) |
+| Ghost | 4 | Drums | 69 | ride x + accent on beats 1 and 3 (as 68) | rests | mistake |
+| Ghost | 4 | Drums | 75 | "cym." quarter triplet x x x tied into ⊗ | four x quarters, no triplet | mistake |
+| Ghost | 4 | Guitar | 1 | mp, "(fingerpicking)" | missing | mistake |
+| Ghost | 4 | Guitar | 15–38, 47–57, 60–74 | slashes + chord symbols ("cont. in same style … ad lib.") | the fingerpicking pattern G5 G4 C5 written out over every chord (also Am, Dm, F) | question (user 2026-10-18: undecided): slashes with chord symbols (Ghost 20 style) or written out? |
+| Ghost | 4 | Guitar | 15–79 | ~60 chord symbols | only 10 (58, 59, 75, 77–79); the rest are in the Klavier part | mistake |
+| Ghost | 4 | Guitar | 58–61 | Fadd9 whole, Fm whole, Gsus4 /F halves, /E /D halves (diamonds) | 58–59 Gsus4 diamond halves, 60–61 the pattern | mistake (shifted) |
+| Ghost | 4 | Guitar | 62 | f, "(light strumming/fingerpicking)" | missing | mistake |
+| Ghost | 4 | Guitar | 74–78 | 74 Am Gsus4 diamond halves, 75 Fadd9, 77 Gsus4 Gsus4/F, 78 /E /D | 74 pattern, 75 "F", 77–78 Gsus4 ×4 | mistake |
+| Ghost | 4 | PianoReduction | 3 | right hand 8th + 16th G3 | 16th rest | mistake |
+| Ghost | 4 | PianoReduction | 36 | right hand F4 G4 A4 chord (whole) + C4 | C4 only | mistake |
+| Ghost | 4 | PianoReduction | 41–46 | "Strings" F3 A3 C4 tenuto eighths, "Bass" F2 … | empty bars | mistake |
+| Ghost | 4 | PianoReduction | 69 | right-hand quarter chords F4+A4, F4+B4 | A4+A4, B4+B4 | mistake |
+| Ghost | 4 | PianoReduction | 78–80 | C4 D4 G4 whole, tied on from 77 | D4 D4 G4 (C4 lost) | mistake |
+| Ghost | 4 | Reed | 10 | "1st time only" | missing | mistake (minor) |
+| Ghost | 4 | Reed | 16, 30 | one dim. hairpin | 3 / 2 stacked hairpins | mistake |
+| Ghost | 4 | Reed | 28 | pp + cresc. | cresc. only | mistake |
+| Ghost | 4 | Reed | 78 | F♯4 E4 halves | a stray fingering mark on F♯4 | mistake (minor) |
+| Ghost | 4 | Reed | 79 | E4 whole (tied 78–80) | E4 32nd + rests | mistake |
+| Ghost | 4 | Trumpet | 10 | TACET; small "SAM" cue | 4 cue notes (written key C, not D) | mistake (cues are removed; workbook row `-`) |
+| Ghost | 4 | Utility | 10 | SAM cue in small notes | cue notes kept | mistake |
+| Ghost | 4 | Utility | 17 | multirest (16–19) | left hand A2 dotted half + C3 quarter | mistake |
+| Ghost | 4 | Utility | 44–46 | concert C5 D5 E5 B♭4 / A4 / A♭4 | written under the B♭ change: sounds B4 C5 D5 C5 / A4 / A4 | mistake |
+| Ghost | 4 | Utility | 49–57 | "STR. ENS. (loco & 8vb)" | 8va line, notes an octave up | mistake: by the Ghost 20 rule an 8vb line, notes an octave down |
+| Ghost | 4 | Utility | 62 | f | fz | mistake |
+| Ghost | 4 | Utility | 76–78 | C4 D4 G4 whole, tied 76–78, dim. | let-ring tie + slur at 76; 77–78 D4 doubled, C4 lost; staccato at 78 | mistake |
+| Ghost | 4 | Violin | 2, 4 | harmonic circles on G5, C6 | none | mistake (minor) |
+| Ghost | 4 | Violin | 10 | SAM cue | cue G3 16th kept | mistake |
+| Ghost | 4 | Violin | 20, 25 | "solo"; slur starts at 25 | no word; slur starts at 26 | mistake (minor) |
+| Ghost | 4 | Violin | 76 | dim. hairpin | missing | mistake |
+| Ghost | 5 | all | 13 | 2/4, 4/4 from 14 (every part; workbook right) | 4/4 from 13: bar 13 holds 4 beats (Cello, Bass, Guitar, Utility, PianoReduction, Drums 4 notes instead of 2) | mistake |
+| Ghost | 5 | all | 23, 33 | nothing | 4/4 restated at 23, 12/8 at 33 | mistake (minor) |
+| Ghost | 5 | all | 1, 3, 24 | ♪=165 at 3; ♩.=57 at 24 | ♪=165 at 1; ♩.=57 missing | mistake (minor) |
+| Ghost | 5 | all | 24, 36 | rehearsal letters A (24), B (36) | B at 27, C at 33, D at 43 | mistake |
+| Ghost | 5 | all | whole song | playing words (waterphone w/bow, col legno, arco, heavy dist., e-bow, fade out, hot-rods, soft mallets, sim.) | none | mistake: playing words are written in Ghost (user 2026-10-18) |
+| Ghost | 5 | Bass | 8, 43–44 | f; dim. hairpin | missing | mistake |
+| Ghost | 5 | Cello | 5, 8 | "col legno", "arco" | missing | mistake |
+| Ghost | 5 | Drums | 8 | f; plain F4 quarters | no f; accent + staccato on 8–22 | mistake (f); the marks: see 9–22 |
+| Ghost | 5 | Drums | 9–22 | slashes "Toms w/ ad lib. accents" | bar 8 written out | question (like Ghost 20 Drums 45) |
+| Ghost | 5 | Drums | 23 | fermata chord F4 A4 D5 | rest with fermata | mistake |
+| Ghost | 5 | Drums | 38, 40 | sub. p | p | question (minor) |
+| Ghost | 5 | Drums | 38–43 | ⊗ rolls tied 38–39, 40–41, 42–43 | no ties | mistake |
+| Ghost | 5 | Drums | 39 | ⊗ dotted quarter, then rests; toms mp | ⊗ 3.5 quarters; toms mf | mistake |
+| Ghost | 5 | Guitar | 10–22 | accent + staccato on both quarters of 10, then "sim." | marks only on the first quarter of each bar | mistake |
+| Ghost | 5 | Guitar | 36–37, 42–44 | hollow diamond slashes (G5 / E♭5), tie 43–44, dim. | rests + chord symbols; an extra E♭5 symbol at 44; no hairpin | question (user 2026-10-18: undecided): diamonds on B as in Ghost 20, or rests? |
+| Ghost | 5 | Guitar | 38 | last eighth B♭ (A G A G A G A B♭, like Violin 40) | G4 | mistake |
+| Ghost | 5 | Guitar | 38, 40 | no dynamic | ff (38), mf (40) | mistake (minor) |
+| Ghost | 5 | PianoReduction | 3, 5 | mf only at 1; 3–6 are %-bars | extra mf at 3 and 5 | mistake (minor) |
+| Ghost | 5 | PianoReduction | 3–7 | left hand E2 tied half 3–4, E2 quarters 5–7 ("Util: (Synth Bass), Bs, Dr.") | rests | mistake |
+| Ghost | 5 | PianoReduction (Männer) | 25–34 | lower choir staff (men, user 2026-10-18) in treble-8: sounds G3–G4 | "Männer" in bass clef with the written pitches G4–G5: an octave too high | mistake: treble-8vb, an octave down |
+| Ghost | 5 | PianoReduction | 27 | left hand C2 G2 E3 G3 | E2 B2 E3 G3 | mistake |
+| Ghost | 5 | PianoReduction | 29 | left hand C2 G2 C3 E3 | E2 B2 G3 G3 (a copy of 27) | mistake |
+| Ghost | 5 | PianoReduction | 34–35 | "Util: (Bn.)" r B2 G3 D4~D4 over B1+B2 | B1+B2 only | mistake (PR cues are kept) |
+| Ghost | 5 | PianoReduction | 36 | ff | missing | mistake |
+| Ghost | 5 | Reed | 13–17 | Tenor Sax F♯5 half tied to a whole (13–14), f, cresc. to ff at the end of 14; 15–17 rest | p at 13, F♯5 in 13, 14 and 15, ff at 15 | mistake (one bar too many, f printed as p) |
+| Ghost | 5 | Trumpet | 13–17 | as Reed (G♯4) | the same error | mistake |
+| Ghost | 5 | Utility | 1–3 | timpani roll E2 tied 1–2–3, ending on an E2 quarter in 3 | A2 in 1–2, no tie into 3, 3 a rest | mistake |
+| Ghost | 5 | Utility | 8 | f (staff 2) | missing | mistake |
+| Ghost | 5 | Utility | 20 | "GUNSHOT": x-head quarter with accent | rest | mistake: written like a playing word (user 2026-10-18) |
+| Ghost | 5 | Utility | 35 | D4 quarter + eighth rest | D4 dotted quarter | mistake (minor) |
+| Ghost | 5 | Utility | 35–39 | "STR. ENS. (loco & 8va)" | printed pitch, no 8va line | mistake by the Ghost 20 rule (8va line) |
+| Ghost | 5 | Violin | 5, 29, 36 | mf, mf, ff | no dynamics | mistake |
+| Ghost | 5 | Violin | 8–22 | 8–12 slashes "ad lib." after the waterphone F5 harmonic (5–7); 13–22 rests | F5 diamond tied through 8–22 | mistake (13–22); 8–12 question |
+| Ghost | 11a | all | 1, 6, 18 | Freely, Moderato (♩=c.108), Rall. | missing | mistake (minor) |
+| Ghost | 11a | all | 6 | no rehearsal mark | "A" | mistake |
+| Ghost | 11a | Guitar | 2–5 | "Play": hollow diamond slashes with fermatas + chord symbols (bar 1 a Cl. cue) | rests + chord symbols | question (user 2026-10-18: undecided; as Ghost 5 Guitar 36–44) |
+| Ghost | 11a | PianoReduction | 6–17 | chord symbols | 22 chord symbols | mistake (piano reductions have none) |
+| Ghost | 11a | PianoReduction | 16 | first right-hand chord C4 F4 C5 (FMaj7) | C4 G4 C5 | mistake |
+| Ghost | 11a | PianoReduction | 18–19 | dim. hairpin | missing | mistake |
+| Ghost | 11a | PianoReduction | 19 | right-hand chords G3 B3 E4 (3×) | G3 C4 E4 | mistake |
+| Ghost | 13 | Bass | 3 | "Sim." | word kept | mistake: the truths drop "sim." / "fill" (the pattern is written out) |
+| Ghost | 13 | Cello | 27, 99, 114 | "sim." | word kept | mistake (same) |
+| Ghost | 20 | Drums | 1, 41 | "Open H.H." | every hi-hat note Closed Hi-Hat (G5, x head) | open (pipeline follows the truth) |
+| Ghost | 20 | Drums | 45–46 | 45 "Fill" (four slashes), crash on beat 1 of 46 | 45 a written-out groove with the crash, 46 without | mistake (crash a bar early); how to write a slash "Fill" bar: question |
+| Ghost | 20 | Guitar | 59, 61 | last eighth C5 (written) | D (61 with accent) | mistake |
+| Ghost | 20 | Guitar | 60 | first eighth C5, as in 58 | eighth rest | mistake |
+| Ghost | 20 | PianoReduction | 135 | upper staff F4 + F5 eighth, accent (&gt;) | F3 + F5 quarter, marcato + staccato (the lower staff is fixed) | mistake |
 
-## Anastasia
+## 2. Conventions
 
-| Song | Part | Bars | Printed | Truth | Status |
-|---|---|---|---|---|---|
-| 4 | all | 132A–C | cut "-> 132C" | 132A and 132B don't exist: 211 bars (a cut to a lettered bar skips the earlier letters; a cut to a plain number keeps empty bars) | convention (pipeline follows it) |
-| 1, 2, 4 | brass | | "Mute", "St. Mute", "Cup Mute", "to Cup" + cup mute, "Open", "to Mute" | "gedämpft", "offen"; "to ..." and an "Open" at the start left out | convention (pipeline translates, 2026-10-15) |
-| 4 | Dmitry, Vlad | | octave as printed | an octave below the output | convention: the truth is right, the PDF is wrong (user, 2026-10-15); not visible from the PDF, error accepted |
-| 4A | Drums | 1–3 | x / ⊗ heads, rolls, "mallets": a suspended cymbal played with mallets | a "Xylophon" part with pitches | mistake (user 2026-10-17): replace the Xylophon by a cymbal in the truth; then the workbook Drums row (`Xylophon`) and the `mallets` alias in show.yaml must follow |
-| 1, 2, 4 | singers | | apostrophes `'` | typographic `‘` (we‘re, don‘t) | convention: the metric treats typographic and plain quotes as the same (user 2026-10-16) |
-| 1 | Flöte 2, Violine 2 | 5 | beat 3 E♮6 / E♮5 (natural printed), then F♯ | E♭ (D♯ in the export) | open: probable mistake (the Klavierauszug truth has E) |
-| 1 | Klarinette in B 2 | 3 | "1, 2 Clarinet": F♯5 A5 A5 B5 (written) | F♯5 E5 A5 B5 | open: probable mistake |
-| 1 | Klarinette in B 1 | 30 | first quarter E4 (written, bottom line), then (♮)B4 C♯5 E5 | G♯4 | open: probable mistake |
-| 4 | Violine 2 | 90 | third note B4 (r E♯4 B4 ♮D5 …) | G♯4 | open: probable mistake |
-| 4 | Oboe | 18 | eighths G4 F4 E♮4 F4, then G4 | fourth eighth D4 | open: probable mistake |
-| 4 | Trompete in B | 76 | last eighth B♭4 (written) | G4 | open: probable mistake |
-| 4 | Trompete in B | 174 | A♭4 F4 A♭4 D♭5 (written, key 5 flats: F natural) | F♭4 | open: probable mistake |
-| 4 | Posaune | 205 | second eighth B♭3 (flat printed) | B3 | open: probable mistake |
-| 4 | Keyboard 1 | 114 | left hand last eighth E♮2 (natural printed) | E♭2 | open: probable mistake |
-| 4 | Violoncello, Kontrabass (Posaune, Keyboard 1 likely) | 60, 98, 140 | G♭ (60) / E♭ (98, 140) | F♯ / D♯ (sounds the same) | open: spelling only; a pattern, so logged (user 2026-10-16: log spelling only when many) |
-| 4 | Klavierauszug | 87 | right hand: a dotted-half F♯4 (courtesy "(♯)") under the A4, then G♯4 A4 16ths and F♯5 | the A4 quarter, 16ths and F♯5 only: the lower dotted half is missing | open: probable mistake |
-| 4 | Klavierauszug | 103 | first right-hand chord with D♯5 (sharp printed) | D5 | open: probable mistake (the Oboe truth has D♯5 here) |
-| 4 | Klavierauszug | 105 | second right-hand chord with D♯5 (sharp printed) | D5 | open: probable mistake |
-| 4 | Klavierauszug | 148C | second chord B4 D♯5 F♯5 B5 (two sharps printed) | B4 E5 G♯5 B5 | open: probable mistake |
-| 4 | Violine 1 (and other strings) | 26 places | Tesseract finds 13 "pizz." / "arco" on the scan | 26, strictly alternating pizz. / Arco | open: check whether every Arco is printed or added by the corrector (2026-10-16) |
-| 4 | all | 32, 81, 97, 101, 114, 144, 157, 159, 177, 181 | double barline (Violin 1, Reed 3, Keyboard 2; mostly before key changes or rehearsal marks) | single barline; 97, 101, 144, 157 were in the previous truth and are gone in `_fertig` | open: probable mistake |
-| 4 | Posaune, Fagott | 29–36 | Bassoon: 29–30 grace F♯3 + G3 whole, 31–32 G2 eighth figures, 33–36 A♭3 B3 / C4 B3 / C4 G3 E4 / F♯4 D4 F4; Trombone: 31 r + four G3 eighths, 32 r G3 r A♭3 G3 A♭2 G2 r, 33–36 rests | the Bassoon line in Posaune, Fagott rests | open: probable mistake (the previous truth had the Trombone right) |
-| 4 | Fagott | 41–43 | 41 r G3 E3 C3 D3 (accent) r; 42 G2 r G2 r G2 D3 G2 D3; 43 G2 r G2 A♭3 G3 A♭2 G2 r | rests | open: probable mistake |
-| 4 | Klarinette in B 2, Flöte 2 | whole part | Klar 2: ~20 dynamics after bar 32 (33 mp … 171 mf), sfz 43 / 136, hairpins 42–43, 101, 105, 135–136, 148, 148C, 163, accents 42 / 62 / 64, tenuto 35, slurs 123 / 125, tenuto (not accent) 163; Flöte 2: f + cresc 181, p 182, sfz 185 | missing | open: probable mistake, low priority (Reed 2 is a `plain` row, marks are not scored) |
-| 4 | Xylophon | 1–27, 169–173 | "mallets": x / ⊗ heads, rolls, "choke" = suspended cymbal with mallets | a Xylophon part with pitches (G5, G♭5 169–170, G♯5 172–173) | mistake (user 2026-10-17): cymbal, not xylophone (same as 4A; songs 1 and 2 have no Xylophon notes) |
-| 4 | Keyboard 1, Keyboard 2, winds, Drums | whole parts | patch labels and playing words ("LH: Tuba", "RH: Celesta [bring out]", "Pizz. Strings [both hands]", "Solo", "lead", "(under strings)", "poco a poco cresc.", "choke", "R.S.", "pick up tamb.", "snares on / off", "+ Tamb") | none (the keyboard truths have no words at all) | open: probable mistake (user 2026-10-17: log it) |
-| 4 | Keyboard 2 | 26, 82 | "RH: Trem Strings sounding 8vb", "RH: Bassoon – sounding 8vb" | printed pitch, no 8vb line, no label | open: how to write it (Ghost 20 Utility writes the patch octave as an 8va line) |
-| 4 | Keyboard 2 | 82–84 | slurs from the grace notes | no slurs | open: probable mistake (minor) |
-| 4 | Triangel | 94, 97 | triangle noteheads | x head (94), normal head on the last eighth of 97 | open: probable mistake (one head type) |
-| 4 | all | 25, 28, 95–96, 99–100, 121–122, 186–193 | cuts "[to] 26", "[to] 29", "[to] 97", "[to] 101", … | the skipped bars are empty bars | convention (user 2026-10-17): cut bars stay empty |
-| 4 | Xylophon | 27 | drum set: bass drum F4 (accent, f) + x cymbal "choke" | the kit notes in Xylophon (F4 + F5 x) | open: probable mistake |
-| 4 | Xylophon | 32 | snare / bass drum bar ("sticks"), already in Schlagzeug and Tamburin | the same bar again in Xylophon | open: probable mistake (duplicate) |
-| 4 | Schlagzeug | 41 | bass drum F4 on beats 1, 2, 3 | beats 1 and 3 | open: probable mistake |
-| 4 | Schlagzeug | 70 | beat 1 snare + x cymbal, beat 2 snare C5 (accent), no bass drum | bass drum F4 (accent) on beat 1, beat 2 empty | open: probable mistake |
-| 4 | Schlagzeug | 72, 73, 76, 77 | bass drum F4 + foot hi-hat x on D4 ("foot hat a la piatti") | F4 only (106, 107, 164, 165, 204 have the D4 x) | open: probable mistake |
-| 4 | Tamburin, Schlagzeug | 140 | Tambourine quarter, quarter, eighth, then three snare C5 eighths | four Tambourine eighths, Schlagzeug empty | open: probable mistake |
-| 4 | Schlagzeug | 144 | bass drum F4 beat 1, rest beat 3, F4 (accent, fz) beat 4 | F4 beat 1, F4 (accent) beat 2 | open: probable mistake |
-| 4 | Schlagzeug | 196 | lower voice: quarter rest, F4 on beat 2 | F4 on beat 1 | open: probable mistake |
-| 4 | Schlagzeug, Tamburin | 199–202 | "tamb.": diamond-head rolls (199, 200, 202), hits 200 beat 3 (marcato), 201 beats 2 and 4 | x heads on F5 in Schlagzeug, Tamburin empty | open: probable mistake |
-| 4 | Keyboard 2 | 32 | first right-hand chord D4 G4 A♮4 (natural printed, as in 31) | A♭4 | open: probable mistake |
-| 4 | Keyboard 2 | 57 | left hand F2 G2 A♭2 C3 | last eighth D3 | open: probable mistake |
-| 4 | Keyboard 2 | 75 | third right-hand chord E♮4 G4 C5 (natural printed); left hand C4 B♮3 B♭3 (flat printed) | E♭4; left-hand third note B3 | open: probable mistake |
-| 4 | Keyboard 2 | 103 | first right-hand chord B4 D♯5 (as in the Klavierauszug) | D5 | open: probable mistake (same as the Klavierauszug row above) |
-| 4 | Keyboard 2 | 126–127 | right hand D4 whole note tied over both bars, &lt; &gt; | right hand rests | open: probable mistake |
-| 4 | Keyboard 2 | 138 | first right-hand chord B♭4 D5 G5 | D5 G5 B♭5 | open: probable mistake (B♭ an octave up) |
-| 4 | Keyboard 2 | 137 | last chord A4 B♮4 D5 F5, staccato | the same with a falloff | open: probable mistake (no falloff printed) |
-| 4 | Keyboard 2 | whole part | dynamics 1 f, 32 sfz, 41 mf, 43 sfz, 62 / 64 / 69 f, 71 mp, 81 mp + sfz, 102 / 115 / 149 mp, 136 sfz, 158 / 170 / 178 mf; hairpins 14, 22, 31–32, 40, 42–43, 69, 81, 135–136; accents 41; 57 staccato / tenuto / LH slur; "poco a poco cresc." 58 | missing | open: probable mistake |
-| 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable; truth rests may be wrong |
-| 4 | Klar 2, Flöte 2, Keyboard 2, percussion | e.g. Klar 2 27, 32, 43; KB2 51, 81, 177, 185, 194; Drums 27, 61, 144, 177 | marcato (^) | accent (&gt;); the string truths use strong-accent (81, 202, 206) | mistake (user 2026-10-17): marcato = strong-accent in the truth, as in the strings |
+| Project | Song | Part | Bars | Printed | Truth | Note |
+|---|---|---|---|---|---|---|
+| Anastasia | 1, 2, 4 | brass | | "Mute", "St. Mute", "Cup Mute", "to Cup" + cup mute, "Open", "to Mute" | "gedämpft", "offen"; "to ..." and an "Open" at the start left out | pipeline translates (2026-10-15) |
+| Anastasia | 1, 2, 4 | singers | | apostrophes `'` | typographic `‘` (we‘re, don‘t) | the metric treats both as the same (user 2026-10-16) |
+| Anastasia | 4 | all | 25, 28, 95–96, 99–100, 121–122, 186–193 | cuts "[to] 26", "[to] 29", "[to] 97", "[to] 101", … | the skipped bars are empty bars | user 2026-10-17 |
+| Anastasia | 4 | all | 132A–C | cut "-> 132C" | 132A and 132B don't exist: 211 bars (a cut to a lettered bar skips the earlier letters) | pipeline follows it |
+| Anastasia | 4 | Dmitry, Vlad | | octave as printed | an octave below the output | the truth is right, the PDF is wrong (user 2026-10-15); error accepted |
+| Anastasia | 4 | Keyboard 1, Keyboard 2, winds, Drums | whole parts | patch labels and playing words ("LH: Tuba", "RH: Celesta [bring out]", "Solo", "lead", "poco a poco cresc.", "choke", "pick up tamb.", "snares on / off", ...) | none | user 2026-10-18 |
+| Anastasia | 4 | Keyboard 2 | 82–84 | "RH: Bassoon – sounding 8vb" | 8vb line, no label | patch octaves as octave lines (as Ghost 20 Utility) |
+| Anastasia | 4 | Keyboard 2, Klarinette in B 2, Flöte 2 | whole parts | dynamics, hairpins, accents, tenuto, slurs, ... | missing | `plain` rows get no marks and none are scored (user 2026-10-18; Keyboard 2 `plain` in every Anastasia sheet) |
+| Anastasia | 4 | Triangel | 94, 97 | triangle noteheads | x head (94), normal head (97) | MuseScore can't set a triangle head here (user 2026-10-18) |
+| Anastasia | 4, 4A | Xylophon (drum book) | 4: 1–27, 169–173; 4A: 1–3 | "mallets": x / ⊗ heads, rolls, "choke"; 4 bar 27 kit notes (bass drum F4 + x "choke") | a Xylophon part with pitches, incl. the kit notes of 27 | "mallets" = xylophone, everything in the mallets sections is Xylophon (user 2026-10-18); Drums rows `Xylophon` / `Xylophone`, alias `mallets` |
+| Ghost | 4, 5 | Reed, Guitar, Utility | e.g. 4 Reed 7–22, 4 Utility 39, 44, 49, 58, 5 Reed 30 | doubling labels (FLUTE / CLARINET) and patch labels (HARP, STR. ENS., ...) | one part with instrument changes ("Zu Flöte", Harfe, Streichinstrumente, ...) | doublings stay in one part in Ghost, are split per instrument in Anastasia (user 2026-10-18; show.yaml `doublings: one_part` in Ghost) |
+| Ghost | 11a | PianoReduction | 1–5 | right hand Cl. line in full size, G4 whole 4–5 ("+Util. (Strings), Vln, Vc."), left hand Gtr diamond slashes | rests | the piano plays only its own part (user 2026-10-18) |
+| Ghost | 13, 20 | all | e.g. 20 Drums 6, 7, 14; 13 Bass 115–129; 13 Cello 27–33, 99–105 | one- and two-bar repeat signs (%), "sim." after a marked bar | the bars written out, with the articulations of the pattern bar | user 2026-10-16; pipeline writes %-bars out, copying the marks is IMPROVEMENTS #47 |
+| Ghost | 13 | Bass | | Bass, sounding 8vb | "Elektrischer Bass", written an octave above sounding | output uses `transpose: 8vb` |
+| Ghost | 20 | Guitar | 9, 10, 17, 18, 28, 54, 55, 62, 63 | hollow (half / whole) rhythm slashes | diamond noteheads on B | the diamonds stand for the hollow slashes, no harmonics (2026-10-16) |
+| Ghost | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none (as in all piano-reduction truths) | pipeline writes none on piano reductions |
+| Ghost | 20 | Utility | 21–49, 66–91, 115–135 | patch label "STR. ENS. (loco & 8va)" at 21, 66, 115, no 8va line | 8va line over staff 1, notes an octave up until "(loco)" | pipeline copies it (spans checked 2026-10-16) |
+| all | all | all | | a curve joining two neighbouring notes of the same pitch | sometimes a slur (Ghost 13 Cello 18, Bass 7, Ghost 1a 17, Ghost 20 15, Anastasia 4 34) | it is a tie (user 2026-10-16); `truth.load` turns such slurs into ties, the .mscz files stay as they are |
+
+## 3. Marcatos written as accents (Anastasia 4)
+
+Printed marcato (^), truth accent (&gt;): change to marcato (2026-10-18 check). Printed bar numbers; beat in the bar;
+pitches as written in the truth. Song 1 and the 4A Klavierauszug print no marcatos; song 2 and the 4A scan parts
+are not checked.
+
+- Horn: 27 b1 D5; 32 b3.5 E4 + b4 D4; 43 b3.5 E4 + b4 D4; 51 b4 D5; 70 b2 D4; 81 b4 D5; 85 b3.5 E4 + b4 D4;
+  93 b4 B4; 101 b1 A4 + b2 B4 (b3 D5 stays an accent); 136 b3.5 F4 + b4 E4; 177 b4 B4; 185 b4 D5; 200 b3 E5; 202 b3 D5.
+- Oboe: 27 b1 G5; 32 b4 B5; 43 b4 B5; 85 b4 B5; 93 b4 E5; 136 b4 C6.
+- Piccolo: 202 b3 G6.
+- Keyboard 1: 32 LH b4 G1; 43 LH b4 G1; 70 LH b2 G1; 85 RH b4 F5 + LH b4 G1; 93 RH b4 C5 + LH b4 C2;
+  136 RH b4 G5 + LH b4 A1; 185 RH b4 G4 + LH b4 G1; 196 LH b2 C2; 200 RH b3 C5 + LH b3 G1; 202 RH b3 F4 + LH b3 G1;
+  206 LH b4 C1 (marcato below). 32 and 43 RH b4 chord: no mark at all (table 1).
+- Klavierauszug: 43 LH b4 G1; 136 LH b4 A1; 196 LH b2 C2; 200 RH b3 C5 chord + LH b3 G1; 202 LH b3 G3 chord;
+  206 LH b4 C1.
+- Schlagzeug: 61 b3 C5; 81 b4 C5; 159 b3 C5.
+- Pauken: 177 b4 F2.
+- Xylophon: 27 b1 (the page has the ^ on the choke x; the truth has an accent on the F4 of the chord).
+- Plain rows (not scored, no marks by convention; listed only for completeness): Klar 2 27, 32, 43, 85, 93, 136,
+  177; Flöte 2 202; Keyboard 2 51, 81, 177, 185, 194; Fagott 31, 32, 42, 43, 70, 85, 93, 135, 136, 177, 185, 202,
+  206; Posaune 32, 43, 52, 70, 81, 85, 93, 101, 136, 177, 202, 206.

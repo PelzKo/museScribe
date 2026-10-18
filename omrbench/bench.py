@@ -81,7 +81,7 @@ def resolve(part: project_mod.Part, outputs: list[tuple[str, object]]) -> tuple[
         else:
             positional.append(entry.strip())
     if positional:
-        if len(positional) == 1 and len(part.instruments) <= 1:
+        if len(positional) == 1 and (len(part.instruments) <= 1 or part.meta.get("doubling")):
             # several output parts for one truth part (a page engine splitting a keyboard book):
             # compared together, like split instruments
             names = [n for n, _ in outputs if _norm(n) in unused]

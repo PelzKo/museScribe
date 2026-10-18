@@ -59,3 +59,12 @@ def test_sim_copies_the_pattern_articulations():
 def test_letter_list():
     from omrbench.project import letter_list
     assert letter_list("131A, 132C, 148A-C") == [(131, "A"), (132, "C"), (148, "A"), (148, "B"), (148, "C")]
+
+
+def test_doublings_one_part():
+    from omrbench.project import part_meta
+    row = {"file": "Reed", "pages": "14", "skip": "", "instruments": "Flute, Clarinet", "extra": ""}
+    show = {"instruments": {"Clarinet": {"transpose": "Bb"}}}
+    assert part_meta(row, show, {})["split_instruments"] is True
+    meta = part_meta(row, {**show, "doublings": "one_part"}, {})
+    assert meta["doubling"] is True and "split_instruments" not in meta

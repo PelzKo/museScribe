@@ -73,10 +73,12 @@ Bars:
   "sim." get the pattern bar's articulations written out too (user, 2026-10-16; Ghost 13 Cello 27–33).
 
 Marks:
-- `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Männer; Ghost: none)
+- `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Keyboard 2 (user 2026-10-18), Männer;
+  Ghost: none)
   keep notes, ties, note dots, tuplets, tremolos and playing words only. Dropped: articulations (staccato dots,
   accents, ...), dynamics, cresc. / dim. / rit., hairpins, slurs, fermatas, ornaments, tempo marks. Violin 1, Horn,
-  Reed 1, solo singers, Frauen, the piano reduction, keyboards and percussion keep everything.
+  Reed 1, solo singers, Frauen, the piano reduction, Keyboard 1 and percussion keep everything.
+- Marcato (^) is `strong-accent` in the truth, accent (>) is `accent` (user 2026-10-17).
 
 Text:
 - Playing instructions in German, as the truth writes them: Mute / St. Mute / Cup Mute -> "gedämpft", Open ->
@@ -92,8 +94,12 @@ Text:
 Parts and instruments:
 - German part names (Flöte 1 = Reed 1 Flute, Fagott = Reed 3, Pauken = Timpani, Glockenbaum = Mark Tree,
   Splash-Becken = Cymbal, Frauen = "Russian Chorus", Klavierauszug = PianoReduction Piano, ...).
-- "Mallets" in the Anastasia drum book = xylophone (truth part "Xylophon").
-- Doubling books: one part per instrument (MuseScore drops mid-part instrument changes on MusicXML import).
+- "Mallets" in the Anastasia drum book = xylophone (truth part "Xylophon"; user 2026-10-18, final: everything in the
+  mallets sections is Xylophon, including the x heads / kit notes there, e.g. Anastasia 4 bar 27).
+- Doubling books: Anastasia one part per instrument (MuseScore drops mid-part instrument changes on MusicXML
+  import); Ghost one part with instrument changes, patch labels too (show.yaml `doublings: one_part`, user 2026-10-18).
+- Ghost: playing words and sound effects ("GUNSHOT") are written; both shows: mute reminders ("St. Mute" again,
+  as "gedämpft") are written (user 2026-10-18).
 - Parts not corrected yet are listed in the workbook row `unfinished` and not scored (Anastasia 2 Klavierauszug).
 - A truth may be a single corrected part per file (Ghost #13): B2 lists the files separated by ";".
 

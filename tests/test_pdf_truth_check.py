@@ -32,5 +32,4 @@ def test_ghost_20_bass():
         pytest.skip(str(e))
     finally:
         os.chdir(cwd)
-    hits = [line for line in lines if " bar " in line]
-    assert len(hits) == 1 and "bar   135" in hits[0]   # the truth's missing last F3 (TRUTH_DEVIATIONS)
+    assert not [line for line in lines if " bar " in line]   # bar 135 fixed in the truth 2026-10-18

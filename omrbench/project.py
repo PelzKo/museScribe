@@ -18,7 +18,8 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   pages        "11-16"; empty = part not in this song
   skip         systems to leave out, "1-3" or "1,4" -> skip_systems: [1, 2, 3]
   instruments  "Clarinet, Flute": looked up in the instrument library. Several on a
-               non-drums part -> split_instruments; a single one only adds its transpose.
+               non-drums part -> split_instruments (show.yaml `doublings: one_part` -> doubling:
+               one part with instrument changes); a single one only adds its transpose.
                "Triangle (lower_staff)": keys in brackets for this song only.
   extra        raw YAML keys, "chord_names: false, lyrics: true"; "lyrics: null" leaves out a
                part default (the engine's own default applies)
@@ -155,7 +156,8 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
     elif entries:
         meta["instruments"] = [_instrument(n, library, own) for n, own in entries]
         if not drums and not extra.get("doubling"):
-            meta["split_instruments"] = True
+            # show-wide `doublings: one_part` keeps a doubling book in one part (Ghost truths)
+            meta["doubling" if show.get("doublings") == "one_part" else "split_instruments"] = True
     meta.update(extra)
     meta = {k: v for k, v in meta.items() if v is not None}  # "lyrics: null" drops a part default
     order = KEY_ORDER + [k for k in meta if k not in KEY_ORDER and k != "instruments"] + ["instruments"]
