@@ -16,6 +16,93 @@ Every change to the pipeline (and every item below) is measured before it is kep
    one commit each on branch `improvements`; the new bench id becomes the reference.
 4. Work through the fixes in order of expected gain and stop when the gains flatten out.
 
+## Round 4 (2026-10-18): ranked by expected gain
+
+Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
+20), outputs reassembled from the work dirs of run `r3` (`scripts/reassemble.py <show> --from r3 --to NEW`). Error
+counts: `docs/ERRORS.md`. Gains are estimates in edit-penalty actions; "max" = everything in that category.
+User priority (2026-10-18): bar count and bar lengths must match the workbook, because chord symbols, dynamics
+and every other mark land on the wrong beat otherwise.
+
+| # | Improvement | Max | Expected | Effort | Needs the user |
+|---|---|---|---|---|---|
+| R1 | Double barlines + repeat signs by cross-part vote | 1178 | -500..-800 | medium | no |
+| R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | -400..-600 | small | yes: rule + show.yaml |
+| R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | -400..-700 | large | no |
+| R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | -30..-700 | ? | yes: truth convention |
+| R5 | Articulations from the vector glyphs (Ghost) | 878 | -250..-400 | medium | no |
+| R6 | Anastasia 4 singers: routing + lyrics | ~1500 | -300..-500 | large | no |
+| R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
+| R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
+| R9 | Bars in the right place and of the right length | 793 | -100..-250 | medium | no |
+| R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
+| R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
+| R12 | Made-up words on keyboards and piano reductions | ~250 | -50..-100 | small | no |
+
+R1. **Double barlines and repeats by a vote across the parts.** (barlines 846, structure 332.) Every section change
+has a light-light barline in the truths, in every part (Anastasia 4: 21 per part); repeats 162 forward / 156 backward.
+Audiveris reads many of them on the scans, but taking them per part was rejected (+129, 2026-10-15) when the bar
+counts were still off. Now 115 of 126 parts have the right count: collect Audiveris' barline style per output bar
+in every part, write a double barline / repeat where at least half the parts with that bar count have one (song
+step like `transcribe.share_marks`). Vector pages: the barline type straight from the drawing (two thin strokes
+2–4 pt apart = double, dots = repeat; sheet_reader `page_dump.get_barlines`).
+
+R2. **Anastasia 4 drum set (Schlagzeug 787: no output at all; Tamburin 198).** The drum book marks the kit only with
+"sticks" (no `Drum Set` alias), and the boxed "Tambourine" at bar 32 switches the rest of the kit into the Tamburin
+part. The truth has Tamburin only for the labelled hits (bars 32, 43, 51, ...) and the kit in Schlagzeug.
+Measured in memory 2026-10-18: alias `sticks` alone -24 (Drum Set gets bars 72–75 only). Needed: (a) `Drum Set:
+{aliases: [sticks]}` in `data/anastasia/show.yaml`; (b) a rule for labels that name a kit instrument inside a kit
+passage (applies to the labelled bar / hits only, then back to the kit). Ask the user for the rule.
+
+R3. **Ghost drum kits from the vector drawing (Ghost 4 864, Ghost 5 442, Ghost 20 230 differences).** 16th hi-hat /
+snare on one beam plus the foot voice: the truth has 19 notes per bar, the output 8 (values 4x too long 115, wrong
+kit position 77). `pipeline/vector.py` already reads slash heads, stems, beams, flags and rests; extend it to the
+x / normal drum heads with their staff positions, then map them through `drumkit.yaml`.
+
+R4. **Ghost 4 guitar (971).** From bar 15 the page prints slashes with chord symbols; the truth writes the 16th
+fingerpicking pattern of bars 1–4 out over the chords (731 notes). Not on the page. Either the truth keeps slashes
+(user decision) or the pipeline realises "sim." fingerpicking over chord symbols (pattern of the last written bar,
+moved to each chord's tones; risky). Bars 12–13 (one-bar repeats after the vamp) are not written out: -32 alone.
+
+R5. **Articulations from the vector glyphs (Ghost: missing accent 353, staccato 255, made-up staccato 152).** Tried
+2026-10-16 with only Ghost 13 / 20 as truth: +13 (Ghost 20 Reed truth has accents the page lacks). Ghost 4, 5, 11a
+add many parts where homr misses them (Ghost 5 Bass / Electric Piano / Drum Kit / Cello about 50 accents + 50
+staccatos each). Re-test: marks from the glyphs (sheet_reader `glyph_map.py`) on the output note by bar + x order.
+
+R6. **Anastasia 4 singers (Männer 401, Dmitry 319, Frauen 308, Vlad 201; lyrics 643 actions).** See #49: passages
+missing, bars shifted (Männer: 131 notes inside missing bars), lyrics made up / in the wrong voice.
+
+R7. **Dynamics and hairpins on the scans (#33).** Dynamics 505, hairpins 262, almost all missing on Anastasia 4
+(Horn, Violine 1, Oboe, Keyboard 1). Plan in #33 (letter templates from the scans, FFT correlation below the staves).
+
+R8. **Ties and slurs from the vector curves (#34, #55).** Ghost ties 281 (Ghost 20 piano 67 missing), slurs 298
+(made up 102, missing 145). A curve whose ends sit on two equal pitches is a tie, else a slur.
+
+R9. **Bars in the right place and of the right length.** The count is right in 115 / 126 parts, but an extra bar
+early plus a missing bar later still costs 2 + contents (bars 560 actions: Anastasia 1 Klarinette 2 bars 4–5,
+Anastasia 4 Tamburin, Ghost 5 Frauen), 182 bars do not add up like the truth bar (barlen 233) and 51 whole-bar rests
+still have the wrong length. Ideas: (a) the 11 parts with one extra bar with notes: drop the bar the other parts of
+the song have no counterpart for (vote by bar content / rest pattern across parts); (b) the song's `time` row checked
+against every written bar: a bar that fills a different length than its time gets its rests fitted or its longest
+note cut (rule "each voice fills the bar", CORRECTION_INFORMATION 2); (c) find why `fit_measure_rests` misses 51.
+
+R10. **Chord symbols.** Ghost piano reductions 1a / 4 / 11a keep chord symbols in the truth (11 / 59 / 22), Ghost 20
+has none. Turning them on for every Ghost piano reduction: +72 (Ghost 20 +62, Ghost 4 +10), rejected. Ask the user
+whether Ghost 20's piano should have them (the PDF prints them?). Guitar: 26 chords at the wrong beat (Ghost 20),
+snap to the slash / note under the symbol (#37); with the bars now right this is cheap.
+
+R11. **Vocal cues under a singer label (#41).** Ghost 4 Drums bar 2: the "SAM:" cue line (small notes) is still in.
+Extend `drop_play_cues`: a bar whose staff carries a singer label ("SAM:", "MOLLY:") and only small or cue-sized
+notes is a cue.
+
+R12. **Made-up words (253).** Anastasia 4 Keyboard 1 (28), Klavierauszug labels, Frauen. Check them one by one
+(`results/errors/r3-f/errors.json`, "words: made up") and extend `_cue_text` / `_loose_text`.
+
+Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
+up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
+output ahead + trim to the workbook bar count (-327), workbook bar count as the song-end anchor of `align_bars`
+(#26, -52). Rejected: chord symbols on all Ghost piano reductions (+72).
+
 ## Ground truth and evaluation
 
 1. **More truth scores of different types.** Every new score type exposed bugs that the existing truth could not:
@@ -112,7 +199,8 @@ Audiveris reads some repeat barlines; carry them (and voltas) onto the output ba
 system has its end on the next system's first note; homr crops never see both. Join them in the assembly.
 40. **Real dynamics instead of text.** (2026-10-15, Ghost 13 Cello, rated medium.) Dynamics ("mp", "sub. mp") read
 as words; turn dynamic-only words into `<dynamics>` (with "sub." / "subito" as a word next to it).
-41. **Cue bars marked by a part label.** (2026-10-15, Ghost 13 Bass bar 1: a note for orientation under "Util.".)
+41. **Cue bars marked by a part label.** (Partly done 2026-10-18: full-size cues from a part label ("Cl.", "Pno.") up to
+"Play" are dropped, `assemble.drop_play_cues`; singer-label cues without "Play" are open, R11.) (2026-10-15, Ghost 13 Bass bar 1: a note for orientation under "Util.".)
 Notes under another part's label at the start are a cue; drop them like small-note cues.
 42. **Drop marks per part (`plain` parts).** (Done 2026-10-15: workbook column `plain`, `musicxml.strip_marks`, applied to
 the output and to the truth part it is scored against; reference 8369 -> 7005.) Some parts get only notes, ties, dots,
@@ -202,8 +290,8 @@ clef type, aliases, doubling and cues. Ranked by value for the effort.
 key -134 over the 6 truth songs.) A few minutes per song from the piano reduction (workbook column or
 song-level yaml: `time: {1: 4/4, 68: 2/4, 69: 4/4}`, same for `key`). Fixes #21 directly and helps keys (350 actions in
 the full sweep). The no-work version is the cross-part vote in #21, but a known answer beats a vote.
-26. **Bar count per song as a pipeline input.** (The `bars` row exists since 2026-10-15, as meta `song_bars`; not used
-by the pipeline yet.) Already collected for the bench (Anastasia bar counts); fed into the
+26. **Bar count per song as a pipeline input.** (Done 2026-10-18: `song_bars` anchors the song end in `align_bars`, rest
+bars past it are trimmed, fermata sharing uses it; together with dropping extra rest bars -379.) Already collected for the bench (Anastasia bar counts); fed into the
 bar-count vote it turns it into a check against a known total. Check first whether the pipeline reads it today.
 27. **Written range per instrument** in the `instruments` library of `show.yaml` (standard ranges, near zero work).
 Catches octave and clef misreads and wild notes from bad crops (clefs, octave, part of notes).

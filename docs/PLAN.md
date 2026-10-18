@@ -170,10 +170,13 @@ Images (all built and verified on the PC, GPU visible where used):
 | Anastasia 1 | `truth/01_Opening_Fanfare_and_Opening_Scene.mscz` | yes | |
 | Anastasia 2 | `truth/02_Prologue_Once_upon_a_december_fertig.mscz` | yes | Klavierauszug not corrected yet (`unfinished`); truth updated 2026-10-15 |
 | Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "mallets" in the drum book = xylophone: Drums row -> `Xylophon` (instrument `Xylophone`, 2026-10-15; the reader finds 1 of 5 notes) |
-| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | partial: Reed 2 / 3, Keyboard 2 and all percussion empty (rows without `truth`); soloists so far Dmitry, Vlad; 211 bars (truth updated 2026-10-15); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output: the truth is right, the PDF wrong (accepted, 1 bulk shift each) |
+| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg_fertig.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | finished 2026-10-18 (all parts); 211 bars (truth updated 2026-10-15); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output: the truth is right, the PDF wrong (accepted, 1 bulk shift each) |
 | Ghost 13 | `truth/#13 - Bass.mscz; truth/#13 - Cello.mscz` | yes (2026-10-15) | two single-part files (B2 lists both, `;`); parts named Bass / Cello from the file names; run `g13`, bench `g13-m3`: 333 |
 | Ghost 20 | `truth/#20 - I'm Outta Here_Fertig.mscz` | yes | 7377 truth notes (Anastasia 1/2/4A together: 2708) |
 | Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261013`) | TACET rows `-` |
+| Ghost 4 | `truth/#4 - Three Little Words-fertig.mscz` | yes (2026-10-18) | Trumpet TACET (row `-`; the user removed a half-marked cue from the truth); guitar truth writes the fingerpicking out over the slash bars |
+| Ghost 5 | `truth/#5 - Sam's Death and Higher Spirits.mscz` | yes (2026-10-18) | 2/4, 4/4, 12/8 |
+| Ghost 11a | `truth/#11a - Ditto.mscz` | yes (2026-10-18) | cues from "Cl." up to "Play" in most parts |
 
 Theresa's earlier song 4 corrections are deleted and no longer relevant.
 
@@ -234,6 +237,15 @@ PDFs / Anastasia piano reduction 2026-10-16, backup `.bak-20261016b`; pickup son
 Tesseract (conf >= 70) and dynamic-only text as `<dynamics>` `g5` -3: **6101** (-17.3 % from 7376). **Reference from now on:
 `g5`** (outputs `results/<show>/runs/g5`). Cheap fixes have flattened out; next (user choice): a dynamics detector for the
 scans (IMPROVEMENTS #33).
+
+**Improvements round 3 (2026-10-18, branch `improvements`)**: new truths (Anastasia 4 finished, all parts; Ghost 4, 5, 11a;
+Ghost 1a / 20 updated). All 10 truth songs transcribed fresh as run `r3` (unchanged PDFs link their older work dirs); baseline
+`r3-base` **12423**. User feedback (cue notes before "Play", missing fermatas over rests, dynamics, guitar chord symbols on the
+wrong beat = wrong bars, ties on held chords) -> chord ties, cues up to "Play", fermatas shared across parts `r3-b` -98; extra
+rest bars dropped where the printed numbers show the output ahead + trim to the workbook bar count `r3-c` -327; workbook bar
+count as the song-end anchor `r3-f` -52: **11946** (-3.8 %). Bar count right in 115 of 126 parts. **Reference from now on:
+`r3-f`** (outputs `results/<show>/runs/r3-f`, reassemble from `r3`). Next: `docs/IMPROVEMENTS.md` "Round 4", errors in
+`docs/ERRORS.md`. Rejected: chord symbols on every Ghost piano reduction (+72).
 
 Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
 dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.

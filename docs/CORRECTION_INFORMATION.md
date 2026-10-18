@@ -51,6 +51,16 @@ The rating is per kind of fix, not per occurrence. The edit penalty counts occur
 
 Bench after the fixes (`g13-m3`): Bass 88, Cello 208, system 37 = 333 actions (21 % of typing in).
 
+### Feedback on an older pipeline version (2026-10-18)
+
+| Fix | Pipeline status |
+|---|---|
+| cue notes left in, after a part label up to the word "Play" ("the piano / conductor should play") | fixed 2026-10-18 for full-size cues: from the label ("Cl.", "Pno.", "Cond.") up to "Play" the notes become rests (`drop_play_cues`; vector pages read the labels from the PDF text layer) |
+| fermatas missing, often over rests | partly: a fermata at least half the parts have goes onto the others (only parts with the song's bar count) |
+| dynamics (p, mp, f) often missing | open (IMPROVEMENTS #33 / R7) |
+| guitar chord symbols at the wrong beat | the bars must be right (user: bar count and bar lengths must match the workbook); bar count right in 115 / 126 parts since 2026-10-18; beat snapping open (R10) |
+| a chord held over two bars needs a tie on every note, else notes are played again (often only one note had a tie) | fixed 2026-10-18: a tied chord followed by exactly the same pitches gets a tie on every note (user: only when the chords match) |
+
 ## Conventions of the corrected scores
 
 What "correct" means in the truths (user decisions; deviations to check are in `docs/TRUTH_DEVIATIONS.md`).
@@ -59,6 +69,9 @@ Notes and pitch:
 - Sounding pitch under 8va (the pipeline can't read 8va lines yet); Glock / Crotales sound 15ma.
 - Full-size notes over a whole-bar rest voice are cues: deleted. Grace notes as 16ths.
 - Notes printed under another part's label ("Util.", "MOLLY:") are cues: always removed (user, 2026-10-15).
+- Full-size notes from another part's label up to "Play" are cues: removed (user, 2026-10-18).
+- A tied chord held into a chord of exactly the same pitches has a tie on every note (user, 2026-10-18).
+- Fermatas: every part has them where most parts do (user, 2026-10-18).
 - Male voices in treble-8vb only for chorus labels and the singers in `male_voices` (Dmitry, Vlad).
 - Anastasia 4 Dmitry / Vlad: the truth is right and the PDF is an octave off. Not visible from the PDF; accepted.
 
