@@ -41,6 +41,7 @@ class SysPlan:
     chosen: dict[int, list[B.Bar]] = field(default_factory=dict)      # group -> bars
     times: list[tuple[str, str] | None] = field(default_factory=list)
     labels: dict[tuple[int, int], str] = field(default_factory=dict)  # (group, bar) -> instrument
+    label_on: dict[tuple[int, int], int] = field(default_factory=dict) # (group, bar) -> onset of the label
     pending: dict[tuple[int, int], str] = field(default_factory=dict) # "to Flute": from the next played bar
     cues: set[tuple[int, int]] = field(default_factory=set)           # (group, bar) cue notes removed
     printed: dict[int, int] = field(default_factory=dict)             # bar -> printed bar number
@@ -1027,6 +1028,7 @@ def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                 plan.pending[(gi, i)] = name
             elif name:
                 plan.labels[(gi, i)] = name
+                plan.label_on[(gi, i)] = _onset_at(plan, bar, i, pl.line.x, B.bar_length(plan.times[i], D))
             elif top and is_system_text(text):
                 d.set("system-text", "yes")   # moved to the top part when writing
         for pl, value in pt.rehearsals:
@@ -1350,6 +1352,7 @@ def expand_multirests(plans: list[SysPlan], crop: dict, D: int, stats: Stats) ->
             plan.times[i:i + 1] = [plan.times[i]] * count
             plan.xs[i:i + 1] = [plan.xs[i]] * count
             plan.labels = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.labels.items()}
+            plan.label_on = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.label_on.items()}
             plan.pending = {(g_, j + (count - 1 if j > i else 0)): v for (g_, j), v in plan.pending.items()}
             plan.printed = _shift(plan.printed, i + 1, count - 1)
             plan.jumps = _shift(plan.jumps, i + 1, count - 1)
@@ -1397,6 +1400,7 @@ def _insert_rests(plan: SysPlan, i: int, count: int, D: int) -> None:
     x = plan.xs[i][0] if i < plan.n else plan.xs[-1][1]
     plan.xs[i:i] = [(x, x)] * count
     plan.labels = _shift(plan.labels, i, count, keyed_by_group=True)
+    plan.label_on = _shift(plan.label_on, i, count, keyed_by_group=True)
     plan.pending = _shift(plan.pending, i, count, keyed_by_group=True)
     plan.printed = _shift(plan.printed, i, count)
     plan.jumps = _shift(plan.jumps, i, count)
@@ -1419,7 +1423,7 @@ def _drop_bar(plans: list[SysPlan], k: int, i: int) -> None:
         del g[i]
     del plan.times[i]
     del plan.xs[i]
-    for attr in ("labels", "pending"):
+    for attr in ("labels", "label_on", "pending"):
         d = getattr(plan, attr)
         setattr(plan, attr, _shift({kk: v for kk, v in d.items() if kk[1] != i}, i + 1, -1,
                                    keyed_by_group=True))
@@ -1870,6 +1874,8 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
     most bars of that class on this track (the main instrument), else the next unused
     one; else the current one.
     A lower track that never had one starts with the `lower_staff` instrument.
+    The `kit` instrument (drum set): a label of another percussion instrument inside a kit passage
+    takes only the hits of its bar from the label on; the kit goes on (user 2026-10-18).
     """
     total = sum(p.n for p in plans)
     times: list = []
@@ -1889,6 +1895,8 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
     used: list[str] = []             # first-use order
     played: Counter = Counter()      # (track, instrument) -> bars with notes
     lower = next((x["name"] for x in instruments if x.get("lower_staff")), None)
+    kit = next((x["name"] for x in instruments if x.get("kit")), None)
+    hits: dict[tuple[int, int], tuple[str, int]] = {}    # (track, bar) -> (instrument, onset)
 
     def unused(cls: str | None = None) -> str | None:
         return next((x["name"] for x in instruments if x["name"] not in used
@@ -1908,6 +1916,11 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
                     continue
                 cls = _clef_class(bar)
                 label = p.labels.get((gi, i))
+                if label and kit and cur.get(L) == kit and label != kit and klass.get(label) == "perc":
+                    hits[(L, pos + i)] = (label, p.label_on.get((gi, i), 0))
+                    if label not in used:
+                        used.append(label)
+                    label = None
                 if label:
                     cur[L] = label
                     pend.pop(L, None)
@@ -1957,6 +1970,13 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
             continue
         for g, bar in enumerate(tracks[L]):
             if bar is not None and owner[L][g]:
+                if (L, g) in hits:
+                    name, on = hits[(L, g)]
+                    ons = {o for o, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None}
+                    own, bar = bar, copy.deepcopy(bar)
+                    B.cues_to_rests(own, 1, {o for o in ons if o < on})
+                    B.cues_to_rests(bar, 1, {o for o in ons if o >= on})
+                    by_name[name].bars[g] = own
                 by_name[owner[L][g]].bars[g] = bar
     return list(by_name.values()), times
 
