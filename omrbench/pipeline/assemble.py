@@ -1347,6 +1347,7 @@ def expand_multirests(plans: list[SysPlan], crop: dict, D: int, stats: Stats) ->
 MAX_GAP = 99            # longest multi-rest / cut taken from printed numbers
 ALIGN_PENALTY = 1.2     # a gap must be backed by more than one printed bar number ...
 JUMP_WEIGHT = 1.5       # ... or by a cut mark ("[to] 97"), which is explicit
+END_WEIGHT = 3.0        # the song's bar count (workbook) is known, not read
 LETTER_NEAR = 12        # a lettered number ("131A") needs a plain number this close (bars, value)
 
 
@@ -1439,7 +1440,8 @@ def trim_to_song_bars(plans: list[SysPlan], bars: int, stats: Stats, log=None) -
             log.warning(msg)
 
 
-def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None) -> None:
+def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: list | None = None,
+               song_end: int | None = None) -> None:
     """Insert rest bars so that bar n of the output is printed bar n.
 
     Evidence: printed bar numbers, the first number of printed ranges ("15-17"), and
@@ -1450,7 +1452,9 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
     non-decreasing step function that agrees with the most evidence; every step costs
     ALIGN_PENALTY, so one stray number never shifts the rest of the part. `letters`: the song's
     lettered bars [(131, "A"), ...] when known (workbook row), else only those read. Bars are
-    only added, never removed: evidence that the output is ahead is reported.
+    only added where no number is printed; where the numbers show the output ahead, the extra rest
+    bars go. `song_end`: the position of the song's last bar (workbook `bars`, minus a pickup bar), a
+    strong observation on the last output bar.
     """
     flat = [(k, i) for k, p in enumerate(plans) for i in range(p.n)]
     if not flat:
@@ -1503,6 +1507,8 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
         for i, (n, letter) in p.jumps.items():
             if start[k] + i < len(flat) and 0 < n <= 9999 and (k, i) not in bogus:
                 obs.append(_Obs(start[k] + i, position(n, letter), JUMP_WEIGHT, "jump", f"{n}{letter}"))
+    if song_end:
+        obs.append(_Obs(len(flat) - 1, song_end, END_WEIGHT, "end", f"{song_end} (song end)"))
     obs.sort(key=lambda o: (o.j, o.kind != "jump"))
     if not obs:
         return
@@ -1536,7 +1542,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
             chain.append(t)
             t = back[t]
         chain.reverse()
-    if chain and obs[chain[0]].offset < 0:
+    if chain and obs[chain[0]].offset < 0 and obs[chain[0]].kind != "end":
         # more bars before the first number than it allows: empty ones are no music (a
         # stack before a start repeat, a misread rest count); a pickup bar has notes
         n_extra = -obs[chain[0]].offset
@@ -1550,7 +1556,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
                 log.warning(msg)
             for k, i in reversed(lead):
                 _drop_bar(plans, k, i)
-            return align_bars(plans, D, stats, log, letters)
+            return align_bars(plans, D, stats, log, letters, song_end)
     # offset before the first anchor: 0, or -1 when bar 1 is preceded by a pickup bar
     base = -1 if chain and obs[chain[0]].offset == -1 else 0
     stats.pickup, stats.letters = base == -1, sorted(extra)
@@ -1655,7 +1661,7 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
             log.warning(msg)
         for j in sorted(drops, reverse=True):
             _drop_bar(plans, *flat[j])
-        return align_bars(plans, D, stats, log, letters)
+        return align_bars(plans, D, stats, log, letters, song_end)
     inserts = []        # (global position: insert before this bar, count, why)
     for o, before, pj in steps:
         d = o.offset - before
