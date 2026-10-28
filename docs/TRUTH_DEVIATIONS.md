@@ -17,6 +17,7 @@ not decided.
 
 | Project | Song | Part | Bars | Printed | Truth | Status |
 |---|---|---|---|---|---|---|
+| Anastasia | 1, 2, 4, 4A | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28; the user updates the truths). Ghost writes both out (table 2) |
 | Anastasia | 4 | all | 101 | double barline at the end of 101 (every part) | single barline (all 38 parts; the other double barlines are fixed) | mistake |
 | Anastasia | 4 | Horn, Oboe, Piccolo, Keyboard 1, Klavierauszug, Schlagzeug, Pauken, Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); list in section 3 |
 | Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord with marcato | no mark at all | mistake |

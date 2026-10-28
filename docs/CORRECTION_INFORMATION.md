@@ -86,8 +86,13 @@ Bars:
 - A curve joining two neighbouring notes of the same pitch is a tie, never a slur; a slur joins notes of
   different pitch (user, 2026-10-16). `truth.load` converts such slurs in the truths to ties.
 - Double barlines as printed (user, 2026-10-16; Ghost 13 truths have them).
-- Measure repeats (%) are written out (Ghost 20 Drums truth), with the articulations of the source bar; bars after
-  "sim." get the pattern bar's articulations written out too (user, 2026-10-16; Ghost 13 Cello 27–33).
+- Measure repeats (%) and "sim." are a per-show decision (expert 2026-10-28):
+  - Ghost writes %-bars out with the articulations of the source bar (Ghost 20 Drums truth, user 2026-10-16), and
+    after "sim." writes the pattern bar's articulations out over the following bars and drops the word (Ghost 13
+    Cello 27–33).
+  - Anastasia keeps the % signs (not written out) and keeps "sim." with the articulations left out, as printed.
+    The Anastasia truths are being changed to this (`docs/TRUTH_DEVIATIONS.md`).
+  The pipeline still writes both out in every show (`assemble.apply_repeats`, `bars.apply_sim`, IMPROVEMENTS R13).
 
 Marks:
 - `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Keyboard 2 (user 2026-10-18), Männer;
@@ -105,8 +110,9 @@ Text:
   A+B go to both parts.
 - Numeric rehearsal marks (boxed bar numbers) dropped; letter marks kept. (Ghost 13 truth has none since 2026-10-16: open, `docs/TRUTH_DEVIATIONS.md`.)
 - Typographic and plain quotes are the same (we‘re = we're; the metric normalises them, user 2026-10-16).
-- Piano reductions: no chord symbols; dynamics on staff 1; hairpins at most 2 bars; uncertain articulations /
-  dynamics dropped.
+- Piano reductions: no chord symbols; dynamics on staff 1; uncertain articulations / dynamics dropped. Hairpins
+  are usually short, but "at most 2 bars" is no fixed rule (expert 2026-10-28; the pipeline still drops hairpins
+  over `max_wedge_bars` = 2, IMPROVEMENTS R16).
 
 Parts and instruments:
 - German part names (Flöte 1 = Reed 1 Flute, Fagott = Reed 3, Pauken = Timpani, Glockenbaum = Mark Tree,
@@ -124,7 +130,7 @@ Parts and instruments:
 
 General rules of music notation that the pipeline (and a checker) can use to validate what it reads. Researched
 2026-10-16 from engraving references (Gould "Behind Bars", Read "Music Notation", MusicXML spec, MuseScore /
-Dorico docs); **for the user to validate**. Tags: **reliable** = a violation is almost always a reading error, safe
+Dorico docs); checked by the expert 2026-10-28 (changes marked "expert"). Tags: **reliable** = a violation is almost always a reading error, safe
 to fix automatically or score; **hint only** = raise suspicion, flag, do not change. Pitch names: C4 = middle C;
 "written" = as printed in the part. Rules marked (used) are already applied by the pipeline or the metric.
 
@@ -177,8 +183,10 @@ to fix automatically or score; **hint only** = raise suspicion, flag, do not cha
 - **Courtesy accidentals (hint only).** Often in brackets, change nothing; a note in the bar after an accidental
   usually gets one. Check: a sign that repeats what is already true must not change the computed pitch.
 - **Spelling fits the key (hint only).** Flat keys use flats for chromatic notes, sharp keys sharps; rising lines
-  often sharps, falling lines flats; double sharps / flats are rare in theatre parts.
-  Check: flag double sharps / flats and E#, B#, Cb, Fb in a simple key (likely a misread accidental).
+  often sharps, falling lines flats. Double sharps / flats do occur, but in keys that already have many
+  accidentals: in a key with 5 flats a double flat is not unlikely (expert 2026-10-28).
+  Check: flag double sharps / flats and E#, B#, Cb, Fb only in keys with few accidentals (0–3); in keys with 4+
+  of the same kind they are plausible.
 
 ### 5. Key signatures
 
@@ -241,7 +249,7 @@ to fix automatically or score; **hint only** = raise suspicion, flag, do not cha
 - **One dynamic per voice and time position (reliable).** Two at the same moment on one staff = duplicate read.
   A hairpin has a start and an end, often ending on a new dynamic. Check: remove duplicates; flag zero-length
   hairpins; a crescendo ending softer is only a hint (subito happens on purpose).
-- **Valid tokens (reliable).** pppp..ffff, mp, mf, sf, sfz, sffz, fp, sfp, rf, rfz, fz, n, plus cresc., dim.,
+- **Valid tokens (reliable).** pppp..ffff, mp, mf, sf, sfz, sffz, fp, pf (expert 2026-10-28), sfp, rf, rfz, fz, n, plus cresc., dim.,
   subito. Check: map OCR text to the closest token ("rnf" -> mf); a word that is only a dynamic is a dynamic
   (IMPROVEMENTS #40).
 
@@ -250,16 +258,20 @@ to fix automatically or score; **hint only** = raise suspicion, flag, do not cha
 - **Only on notes (reliable).** Staccato, accent, tenuto, marcato, staccatissimo attach to notes / chords, never to
   rests. Exception: fermata (rest or barline too); breath marks and caesuras sit between notes.
   Check: an articulation on a rest is a misread or belongs to the next note.
-- **Placement (hint only).** Staccato / tenuto on the notehead side; marcato and fermata usually above.
+- **Placement (hint only).** Staccato / tenuto / marcato on the notehead side (expert 2026-10-28); fermata above. Exception: two voices on one staff: the upper
+  voice's articulations and fermatas go above, the lower voice's below (expert 2026-10-28).
+  Check: with two voices, a mark below the staff belongs to the lower voice, above to the upper voice.
 
 ### 13. Clefs
 
-- **Clef by instrument (hint only).** Treble: violin, flute, oboe, clarinet, sax, trumpet, horn, guitar, glock,
-  xylophone, S/A voices, tenor (treble-8). Bass: cello, bass, bassoon, trombone, tuba, timpani, bass guitar, bass
-  voice. Alto: viola. Tenor clef: high cello / bassoon / trombone. Keyboards: grand staff. Drums: percussion clef.
+- **Clef by instrument (hint only).** Treble: violin, flute, oboe, clarinet, alto sax, tenor sax, trumpet, horn,
+  guitar, glock, xylophone, S/A voices, tenor (treble-8). Bass: cello, bass, bassoon, trombone, tuba, timpani,
+  bass guitar, baritone sax (expert 2026-10-28: in bass clef at sounding pitch, or in treble clef transposed), bass voice. A part labelled only "Saxophon" is the alto sax
+  (treble). Alto: viola. Tenor clef: high cello / bassoon / trombone. Keyboards: grand staff. Drums: percussion clef.
   Check: a clef unusual for the instrument (alto clef in a trumpet part) is probably a misread.
 - **Clef changes (hint only).** Usually at a barline or system start; mid-bar changes (small clef) are common on
-  keyboards, suspicious in wind / string parts.
+  keyboards. In wind and string parts (except cello) any clef change is very unusual, also at a barline
+  (expert 2026-10-28). Check: a clef change in a wind / string part other than cello is probably a misread.
 
 ### 14. Instrument ranges and transpositions
 
@@ -280,7 +292,7 @@ Written practical ranges; allow ~2 semitones tolerance. A note far outside is al
 | Soprano sax | Bb3–F#6 | M2 lower |
 | Alto sax | Bb3–F#6 | M6 lower |
 | Tenor sax | Bb3–F#6 | M9 lower |
-| Baritone sax | Bb3–F#6 | octave + M6 lower |
+| Baritone sax | Bb3–F#6 (treble, transposed) or in bass clef at sounding pitch (expert) | octave + M6 lower (treble); as written (bass clef) |
 | Horn in F | F#2–C6 | P5 lower |
 | Trumpet in Bb | F#3–C6 (D6) | M2 lower |
 | Flugelhorn in Bb | F#3–C6 | M2 lower |
@@ -291,17 +303,17 @@ Written practical ranges; allow ~2 semitones tolerance. A note far outside is al
 | Viola | C3–E6 | as written |
 | Cello | C2–A5 | as written |
 | Double bass | E2 (C2)–G4 | 1 octave lower |
-| Guitar | E3–B5 | 1 octave lower |
+| Guitar | E3–E6 (19–24 frets: B5–E6) | 1 octave lower |
 | Bass guitar | E2 (B1 on 5-string)–G4 | 1 octave lower |
 | Piano | A0–C8 | as written |
 | Celesta | C3 (C4)–C7 | 1 octave higher |
-| Glockenspiel | G3–C6 | 2 octaves higher |
+| Glockenspiel | G3–C6 | 2 octaves higher (right for Anastasia and Ghost, expert 2026-10-28); see 15 |
 | Xylophone | F3 (C4)–C7 | 1 octave higher |
 | Vibraphone | F3–F6 | as written |
 | Marimba | C2 (A2)–C7 | as written |
 | Timpani | D2–A3 (C2–C4) | as written |
-| Soprano voice | C4–A5 (C6) | as written |
-| Alto voice | G3–E5 | as written |
+| Soprano voice | A3 (G3)–A5 (C6) | as written |
+| Alto voice | E3 (D3)–E5 (F5) | as written |
 | Tenor voice | written C4–A5 in treble-8 | 1 octave lower than written |
 | Bass voice | E2–E4 | as written |
 
@@ -309,21 +321,28 @@ Exceptions: horn in old-notation bass clef is written an octave lower; reed book
 etc. (check range per section); keyboard / synth parts can have any range; concert-pitch (C) scores write
 transposing instruments at sounding pitch. Note: our truths are in sounding pitch under 8va lines (Conventions).
 Check: a whole passage off by exactly one octave -> missed 8va / 8vb or misread clef; a single far-off note ->
-miscounted ledger lines (ERRORS #6, IMPROVEMENTS #27, #48).
+miscounted ledger lines (ERRORS #6, IMPROVEMENTS #27, #48), or a note of the staff above / below that the reader
+took into this staff (crops overlap): check whether the neighbouring staff has that pitch at the same onset
+before moving it (expert 2026-10-28). Soprano / alto in theatre go lower than the classical ranges (belt, chest
+voice); guitar goes higher than B5 (expert 2026-10-28).
 
 ### 15. Octave lines and octave-transposing instruments
 
-- **Octave lines (reliable).** 8va = an octave higher, 8vb = lower, 15ma / 15mb = two octaves; the line ends with a
-  hook or "loco" and applies only to notes under it on its own staff. Check: no end found -> end at the last note
+- **Octave lines (reliable).** 8va = an octave higher, 8vb = lower, 15ma / 15mb and 15va / 15vb = two octaves up /
+  down (expert 2026-10-28); the line ends with a hook or "loco" and applies only to the notes it spans on its own
+  staff, whether the line is above or below them. "8va ad lib." (and similar) means the octave may be played, not
+  must; the truth writes it like a plain 8va: the notes an octave up (expert / user 2026-10-28). Check: no end found -> end at the last note
   under the line or at "loco", never at the end of the piece; a line that pushes notes out of range was misread.
-- **Octave-transposing instruments (reliable).** Piccolo, celesta, xylophone sound 1 octave up, glockenspiel 2;
+- **Octave-transposing instruments (reliable).** Piccolo, celesta, xylophone sound 1 octave up, orchestral
+  glockenspiel 2 (right for Anastasia and Ghost; other glockenspiels, e.g. Orff soprano / alto, transpose
+  differently, expert 2026-10-28);
   guitar, bass guitar, double bass, tenor voice 1 octave down (part of the instrument, not a printed line).
   Check: compare in the same convention (written or sounding), never "fix" by moving notes.
 
 ### 16. Drum and percussion parts
 
 - **No key, percussion clef (reliable).** Drum set: percussion clef, no key signature, no accidentals. Timpani:
-  bass clef. Mallets: normal clefs and keys. Check: drop keys / accidentals read on a percussion staff.
+  bass clef with the song's key signature (expert 2026-10-28). Mallets: normal clefs and keys. Check: drop keys / accidentals read on a percussion staff.
 - **Staff position = instrument (hint only, differs by publisher).** Common map: kick space 1, snare space 3,
   hi-hat x above the staff (foot: x below), ride x on the top line, crash x above, toms between. Use the part's
   own legend (ours: `drumkit.yaml` from the truths).
@@ -340,7 +359,7 @@ miscounted ledger lines (ERRORS #6, IMPROVEMENTS #27, #48).
 ### 18. Chord symbols
 
 - **Above the staff, on beats (hint only).** Usually change on beat 1 or 3 in 4/4. Grammar: root (A–G, #/b),
-  quality (m, maj7, 7, dim, aug, sus4, add9), optional slash bass (/E). Check: parse against the grammar, map OCR
+  quality (m, maj7, 7, dim, aug, sus2, sus4, add9, add11, add13, ...; expert 2026-10-28), optional slash bass (/E). Check: parse against the grammar, map OCR
   to the closest valid symbol; chord roots are transposed in transposing parts; snap the beat to the note / slash
   under it (IMPROVEMENTS #37).
 

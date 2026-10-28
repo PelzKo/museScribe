@@ -105,6 +105,64 @@ label's beat; Schlagzeug 787 -> 689, the rest is the kit reading itself, see R3)
 and the %-bars 12–13 after the vamp repeat are not written out). Bar count right in 125 of 126 parts (R9 count part:
 no guessed pickup, courtesy copies, bars past the Audiveris stacks; left: Anastasia 4 Keyboard 1, last system).
 
+## From the expert review of the music rules (2026-10-28)
+
+The expert checked `CORRECTION_INFORMATION.md` ("Music rule information" and the conventions); the rules there are
+updated. New items, gains in edit-penalty actions against `r3-k` (10 962), estimated from `docs/ERRORS.md`:
+
+| # | Improvement | Max | Expected | Effort | Needs the user |
+|---|---|---|---|---|---|
+| R13 | "sim." and %-bars per show: Anastasia keeps "sim." / % as printed | ? | -10..-60 | small | Anastasia truths being updated |
+| R14 | Clef sanity: no clef changes in wind / string parts (except cello), clef by instrument | ~40 clefs + notes under them | -20..-60 | small | no |
+| R15 | Range check with neighbour-staff test for single far-off notes | 246 + part of 192 | -30..-80 | medium | no |
+| R16 | Hairpins longer than 2 bars kept (`max_wedge_bars`) | 262 | 0..-15 (may cost) | tiny | no |
+| R17 | Two voices on one staff: marks below go to the lower voice | ~100 | -20..-50 | medium (with R5) | no |
+| R18 | Token lists: dynamics pf / rf / rfz / fz / sffz, chord kinds add11 / add13 / ... | small | 0..-10 | tiny | no |
+| R19 | Octave lines: 15va / 15vb, lines below the notes, "ad lib." | ? | 0..-30 | medium | no |
+
+R13. **"sim." and %-bars per show (expert, CORRECTION_INFORMATION K2.4).** Checked: not done. `bars.apply_sim`
+copies the pattern bar's articulations onto the following bars in every show, `bars.drop_words` drops "sim."
+everywhere, and `assemble.apply_repeats` writes %-bars out everywhere. Ghost wants exactly that; Anastasia wants
+"sim." kept with the following bars unmarked, and the % signs kept (MusicXML `<measure-repeat>`, check that the
+metric scores them). Add a show.yaml key (e.g. `repeats: write_out | keep`) and skip the three steps for `keep`.
+The user is updating the Anastasia truths (`docs/TRUTH_DEVIATIONS.md`); measure after that, before it the change
+comes out worse.
+
+R14. **Clef sanity per instrument (expert 13.1 / 13.2).** Made-up clefs in non-keyboard parts (Anastasia 1
+Klarinette 2 bar 6 `F4`, Pauken bar 9 `G2`, Ghost 11a Cello `G2` instead of `F4`, ...) shift every note after them
+until the next clef. Rule: in wind and string parts except cello, drop clef changes; the starting clef comes from
+the instrument (treble for alto / tenor sax, bass for baritone sax, bass for timpani). Keyboards keep their
+changes (119 clef errors there are a different problem). Gain: the clefs plus the wrongly pitched notes in the
+passages after them.
+
+R15. **Range check with the corrected ranges (expert 14, #27, #48).** Per instrument, notes far outside the written
+range (table in CORRECTION_INFORMATION 14, guitar to E6, theatre soprano to A3 / alto to E3) are suspect. A whole
+passage off by one octave: missed 8va / clef. A single far-off note: first check whether the staff above or below
+has that pitch at the same onset (the crop took a neighbour's note): then drop it; else flag (or use the Audiveris
+head position, #48). Targets "wrong by more than a third" (246) and part of "note made up" (192, Anastasia 4
+Keyboard 1, Klarinette 2). Also a guard for double flats / sharps: plausible only in keys with 4+ accidentals of
+that kind (expert 4.5), so never "fix" them there.
+
+R16. **Hairpins over 2 bars (expert K4.6).** `max_wedge_bars: 2` drops longer hairpins as misread pairings. The
+2-bar rule is no fixed rule. Truth hairpins are mostly 0–1 bars, so the gain is small and dropping fewer may add
+made-up hairpins: measure `max_wedge_bars: 4` and `0`, keep only if the acceptance rule passes.
+
+R17. **Marks of two voices on one staff (expert 12.2).** With two voices, articulations and fermatas of the upper
+voice sit above the staff, of the lower voice below. Assign a mark by its side of the staff (needs the mark's y:
+vector glyphs on Ghost, Audiveris on scans). Targets Ghost drum kits (hands up / feet down: accents at the wrong
+beat 35 on Ghost 4 Drum Kit, made-up staccatos on drums 56), keyboard parts with two voices, fermatas on the
+lower voice. Best done together with R5.
+
+R18. **Token lists (expert 11.3, 18.1).** `ocr.DYNAMIC` knows p..fff, mp, mf, sfz, sf, fp, sfp: add pf, rf, rfz,
+fz, sffz. `chords.KINDS` lacks add11, add13, m9, maj9, 7sus4, 7b9 / 7#9 / 7#11: a chord with such a suffix does
+not parse and is lost. Near zero effort; gain small (Ghost chords 216, most are placement).
+
+R19. **Octave lines (expert 15.1).** 15va / 15vb mean two octaves like 15ma / 15mb; a line may sit below the notes
+it covers (8vb under the staff); "8va ad lib." means optional. Today only keyboard patch labels ("loco & 8va")
+become octave sections. Read the octave-line texts (OCR / PDF text layer: "8va", "8vb", "15ma", "15va", "15vb",
+"loco") and apply them to the span; "8va ad lib." counts as 8va (the truth writes the notes an octave up, user
+2026-10-28).
+
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
 output ahead + trim to the workbook bar count (-327), workbook bar count as the song-end anchor of `align_bars`
