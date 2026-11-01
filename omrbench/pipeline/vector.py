@@ -20,18 +20,23 @@ GLYPHS = {   # font -> {char: (kind, quarters)}
                         "Œ": ("rest", Fraction(1)), "œ": ("head", None),
                         "Ï": ("head", None), "ú": ("head", None), "w": ("head", None),
                         "J": ("flag", None), "j": ("flag", None), ".": ("dot", None),
-                        ">": ("accent", None), "-": ("tenuto", None)},
+                        ">": ("accent", None), "-": ("tenuto", None), "≈": ("rest", Fraction(1, 4))},
+    # drum heads: black normal / x heads take their value from the stem; ⊗ half (X), ⊗ / normal whole
+    "MaestroPercussion": {"œ": ("drum", None), "x": ("drum", None), "X": ("drum", Fraction(2)),
+                          "Y": ("drum", Fraction(4)), "w": ("drum", Fraction(4))},
 }
 
 
 @dataclass
 class Event:
     x: float
-    kind: str                       # slash | rest
+    kind: str                       # slash | rest | drum
     dur: Fraction                   # quarters
     tie_start: bool = False
     tie_stop: bool = False
     marks: list = field(default_factory=list)   # accent | staccato | tenuto
+    voice: int = 1                  # drums: 1 = stems up, 2 = stems down
+    pos: tuple = ()                 # drums: staff positions of the chord ("C5", "F4")
 
 
 @dataclass
@@ -45,7 +50,7 @@ class SlashBar:
 
     @property
     def length(self) -> Fraction:
-        return sum((e.dur for e in self.events), Fraction(0))
+        return sum((e.dur for e in self.events if e.voice == 1), Fraction(0))
 
 
 def _staves(lines: list[tuple]) -> list[list[float]]:
@@ -76,25 +81,27 @@ def _barlines(vlines: list[tuple], top: float, bottom: float, left: float, right
     return out
 
 
-def read_page(pdf_page, page) -> list[SlashBar]:
-    """Slash bars of one vector page, in the coordinates of `page` (layout.Page)."""
-    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
-    glyphs = []                     # (x, y, w, kind, dur)
-    for block in pdf_page.get_text("rawdict")["blocks"]:
-        for line in block.get("lines", []):
-            for span in line["spans"]:
-                table = next((t for f, t in GLYPHS.items() if span["font"].startswith(f)), None)
-                if table is None:
-                    continue
-                for ch in span["chars"]:
-                    g = table.get(ch["c"])
-                    if g:
-                        b = ch["bbox"]
-                        # "’" (Ghost 4 slashes) has its baseline a space below the head: use the box centre
-                        y = (b[1] + b[3]) / 2 if ch["c"] in CENTRED else ch["origin"][1]
-                        glyphs.append((b[0], y, b[2] - b[0], *g))
-    if not any(k == "slash" for *_, k, _ in glyphs):
-        return []
+def _glyphs(pdf_page) -> list[tuple]:
+    """(x, y, w, kind, quarters) of the music-font glyphs in GLYPHS; y = the head centre / baseline."""
+    glyphs = []
+    spans = [sp for b in pdf_page.get_text("rawdict")["blocks"] for ln in b.get("lines", []) for sp in ln["spans"]]
+    full = max((sp["size"] for sp in spans if sp["font"].startswith("MaestroPercussion")), default=0)
+    for span in spans:
+        table = next((t for f, t in GLYPHS.items() if span["font"].startswith(f)), None)
+        if table is None:
+            continue
+        for ch in span["chars"]:
+            g = table.get(ch["c"])
+            if g and not (g[0] == "drum" and span["size"] < 0.8 * full):    # cue-size drum heads
+                b = ch["bbox"]
+                # "’" (Ghost 4 slashes) has its baseline a space below the head: use the box centre
+                y = (b[1] + b[3]) / 2 if ch["c"] in CENTRED else ch["origin"][1]
+                glyphs.append((b[0], y, b[2] - b[0], *g))
+    return glyphs
+
+
+def _drawings(pdf_page) -> tuple[list, list, list, list, list]:
+    """Staff lines, barline candidates, stems, filled shapes (beams) and filled curves (ties)."""
     hlines, vthin, stems, fills, curves = [], [], [], [], []
     for d in pdf_page.get_drawings():
         r = d["rect"]
@@ -111,6 +118,23 @@ def read_page(pdf_page, page) -> list[SlashBar]:
             fills.append((r.x0, r.x1, r.y0, r.y1))
             if r.height > 4 * r.width:      # a thick barline drawn as a filled box
                 vthin.append(((r.x0 + r.x1) / 2, r.y0, r.y1))
+    return hlines, vthin, stems, fills, curves
+
+
+def _stem_value(stem, end: float, fills, mine, w: float, sp: float) -> Fraction:
+    """Value of a black head from the beams / flag at its stem's free end."""
+    beams = [f for f in fills if f[0] - 0.5 <= stem[0] <= f[1] + 0.5 and end - 2.5 * sp <= f[2] <= end + sp]
+    flag = any(g[3] == "flag" and abs(g[0] - stem[0]) < w and abs(g[1] - end) < 3 * sp for g in mine)
+    return Fraction(1, 2 ** max(len(beams), 1 if flag else 0))
+
+
+def read_page(pdf_page, page) -> list[SlashBar]:
+    """Slash bars of one vector page, in the coordinates of `page` (layout.Page)."""
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    glyphs = _glyphs(pdf_page)
+    if not any(k == "slash" for *_, k, _ in glyphs):
+        return []
+    hlines, vthin, stems, fills, curves = _drawings(pdf_page)
     out = []
     for st in _staves(hlines):
         top, mid, bottom = st[0], st[2], st[4]
@@ -126,11 +150,7 @@ def read_page(pdf_page, page) -> list[SlashBar]:
             if dur is None:
                 dur = Fraction(1)
                 if stem:
-                    end = stem[2] if stem[2] > mid + sp else stem[1]
-                    beams = [f for f in fills if f[0] - 0.5 <= stem[0] <= f[1] + 0.5 and end - 2.5 * sp <= f[2] <= end + sp]
-                    flag = any(g[3] == "flag" and abs(g[0] - stem[0]) < w and abs(g[1] - end) < 3 * sp for g in mine)
-                    n = max(len(beams), 1 if flag else 0)
-                    dur = Fraction(1, 2 ** n)
+                    dur = _stem_value(stem, stem[2] if stem[2] > mid + sp else stem[1], fills, mine, w, sp)
             events_by_x[x] = Event(x, "slash", dur)
         for x, y, w, kind, dur in mine:
             if kind == "rest" and abs(y - mid) < 1.5 * sp:
@@ -163,15 +183,93 @@ def read_page(pdf_page, page) -> list[SlashBar]:
     return out
 
 
-def read(pdf, pages: list) -> list[SlashBar]:
-    """Slash bars of the vector pages of `pdf` (pages[i] is PDF page i)."""
+STEPS = "CDEFGAB"
+
+
+def read_drum_page(pdf_page, page) -> list[SlashBar]:
+    """Drum-kit bars of one vector page: heads by staff position, stems up = voice 1, down = voice 2,
+    values from beams / flags / dots, rests by height. A bar is kept only if every head has a value and
+    voice 2 (if any) is as long as voice 1."""
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    glyphs = _glyphs(pdf_page)
+    if not any(k == "drum" for *_, k, _ in glyphs):
+        return []
+    hlines, vthin, stems, fills, curves = _drawings(pdf_page)
+    out = []
+    for st in _staves(hlines):
+        top, mid, bottom = st[0], st[2], st[4]
+        sp = (bottom - top) / 4
+        left = min(x0 for x0, _, y in hlines if abs(y - top) < 0.2)
+        right = max(x1 for _, x1, y in hlines if abs(y - top) < 0.2)
+        edges = [left] + _barlines(vthin, top, bottom, left, right) + [right]
+        mine = [g for g in glyphs if top - 4 * sp <= g[1] <= bottom + 4 * sp]
+        chords: dict = {}           # stem (or the head itself) -> [heads]
+        for g in mine:
+            if g[3] != "drum":
+                continue
+            x, y, w = g[:3]
+            stem = next((s for s in stems if x - 1 <= s[0] <= x + w + 1 and s[1] - sp / 2 <= y <= s[2] + sp / 2), None)
+            chords.setdefault(stem or g, []).append(g)
+        evs = []
+        for stem, heads in chords.items():
+            x, w = min(h[0] for h in heads), heads[0][2]
+            up = stem is None or len(stem) == 5 or abs(stem[2] - heads[0][1]) < abs(stem[1] - heads[0][1])
+            dur = heads[0][4]
+            if dur is None and len(stem) == 3:
+                dur = _stem_value(stem, stem[1] if up else stem[2], fills, mine, w, sp)
+            # E4 = bottom line, one step per half space
+            steps = [30 + round((bottom - h[1]) / (sp / 2)) for h in heads]
+            ev = Event(x, "drum", dur, voice=1 if up else 2,
+                       pos=tuple(dict.fromkeys(f"{STEPS[n % 7]}{n // 7}" for n in sorted(steps))))
+            if dur is not None and any(g[3] == "dot" and h[0] + w <= g[0] <= h[0] + w + 2 * sp
+                                       and abs(g[1] - h[1]) <= 0.6 * sp for h in heads for g in mine):
+                ev.dur *= Fraction(3, 2)
+            evs.append(ev)
+        for x, y, w, kind, dur in mine:
+            if kind == "rest" and abs(y - mid) < 4 * sp:
+                rest = Event(x, "rest", dur, voice=2 if y > mid else 1)
+                if any(g[3] == "dot" and x + w <= g[0] <= x + w + 2 * sp and abs(g[1] - y) <= sp for g in mine):
+                    rest.dur *= Fraction(3, 2)
+                evs.append(rest)
+            elif kind in ("accent", "tenuto"):
+                near = [e for e in evs if e.kind == "drum" and abs(e.x - x) < sp and (e.voice == 1) == (y < mid)]
+                if near:
+                    near[0].marks.append(kind)
+        notes = sorted((e for e in evs if e.kind == "drum"), key=lambda e: e.x)
+        for x0, x1, y0, y1 in curves:   # ties: a curve from one head to the next of its voice (above = 1)
+            if not (top - 3 * sp <= y0 <= bottom + 3 * sp):
+                continue
+            v = 1 if y0 < mid else 2
+            a = next((e for e in notes if e.voice == v and abs(e.x - x0) < 2 * sp), None)
+            b = a and next((e for e in notes if e.voice == v and e.x > a.x), None)
+            if b and abs(b.x - x1) < 2 * sp:
+                a.tie_start, b.tie_stop = True, True
+        for l, r in zip(edges, edges[1:]):
+            bar = sorted((e for e in evs if l <= e.x < r), key=lambda e: (e.voice, e.x))
+            if not any(e.kind == "drum" for e in bar) or any(e.dur is None for e in bar):
+                continue
+            if len({e.voice for e in bar if e.kind == "drum"}) == 1:      # one voice: rests and all
+                for e in bar:
+                    e.voice = 1
+            lens = {v: sum(e.dur for e in bar if e.voice == v) for v in {e.voice for e in bar}}
+            if len(set(lens.values())) != 1:
+                continue
+            out.append(SlashBar(page.number, l * sx, r * sx, top * sx, bottom * sx,
+                                [Event(e.x * sx, e.kind, e.dur, e.tie_start, e.tie_stop, e.marks, e.voice, e.pos)
+                                 for e in bar]))
+    return out
+
+
+def read(pdf, pages: list, drums: bool = False) -> list[SlashBar]:
+    """Slash bars (drum-kit bars) of the vector pages of `pdf` (pages[i] is PDF page i)."""
     import pymupdf as fitz
 
     from ..pdfkind import classify_page
     from ..rasterize import FITZ_LOCK
     with FITZ_LOCK, fitz.open(pdf) as doc:
         return [b for i, p in enumerate(doc) if i < len(pages) and p.get_fonts()
-                and classify_page(p, i + 1).kind == "vector" for b in read_page(p, pages[i])]
+                and classify_page(p, i + 1).kind == "vector"
+                for b in (read_drum_page if drums else read_page)(p, pages[i])]
 
 
 CENTRED = {"’"}

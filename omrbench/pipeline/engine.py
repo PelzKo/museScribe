@@ -393,8 +393,8 @@ class Pipeline(Engine):
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
                                  weights=self.cfg.get("ensemble_weights"), song_time=song_time,
                                  vector_bars=None if is_scan(sample.pdf) else SL.read_all_systems(sample.pdf, pages))
-        if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction"):
-            A.place_slashes(plans, SL.read(sample.pdf, pages), D, stats)
+        if not is_scan(sample.pdf) and sample.score_type != "piano_reduction":
+            A.place_slashes(plans, SL.read(sample.pdf, pages, drums=sample.score_type == "drums"), D, stats)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)

@@ -90,3 +90,20 @@ def test_single_tremolos():
         etree.SubElement(orn, "tremolo", type=kind).text = "3"
     assert B.single_tremolos([bar]) == 2
     assert [t.get("type") for t in bar.items[0].iter("tremolo")] == ["single"]
+
+
+def test_slash_bar_drum_voices():
+    old = B.rest_bar(1, 8, 2)
+    sb = SL.SlashBar(1, 0, 100, 0, 20, [SL.Event(0, "drum", F(2), voice=1, pos=("C5", "G5"), marks=["accent"]),
+                                        SL.Event(50, "drum", F(2), voice=1, pos=("C5",)),
+                                        SL.Event(0, "drum", F(3), voice=2, pos=("F4",)),
+                                        SL.Event(70, "rest", F(1), voice=2)])
+    assert sb.length == 4
+    bar = A.slash_bar(sb, old, 2)
+    assert [e.tag for e in bar.items] == ["note", "note", "note", "backup", "note", "note"]
+    assert bar.items[3].findtext("duration") == "8"
+    n = bar.items[1]
+    assert n.find("chord") is not None and n.findtext("unpitched/display-step") == "G"
+    assert bar.items[0].find("notations/articulations/accent") is not None and n.find("notations") is None
+    assert bar.items[4].findtext("voice") == "2" and bar.items[4].findtext("stem") == "down"
+    assert bar.items[4].find("dot") is not None and bar.items[5].find("rest") is not None

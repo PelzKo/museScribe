@@ -28,7 +28,7 @@ and every other mark land on the wrong beat otherwise.
 |---|---|---|---|---|---|
 | R1 | Double barlines + repeat signs by cross-part vote | 1178 | done -439 (Audiveris, vote per book) | medium | no |
 | R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | done -183 | small | done |
-| R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | -400..-700 | large | no |
+| R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | done -896 | large | no |
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
 | R5 | Articulations from the vector glyphs (Ghost) | 878 | -250..-400 | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | -300..-500 | large | no |
@@ -258,6 +258,15 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   the workbook's `bars` is text, so `share_fermatas` never had voters when a song has a `bars` row (measured next).
   Left: Ghost 20 +4 in every part (a mark the truth lacks or at the wrong bar); vector barline types not read yet.
 - Fermata vote with the `bars` row as a number: accepted, `r4-k` **10 662** (-4).
+- R3 accepted, `r5-b` **9 766** (-896 against `r4-k`; Ghost 4 Drums 818 -> 86, Ghost 20 Drums 232 -> 69):
+  `vector.read_drum_page` reads the MaestroPercussion heads (black / x, ⊗ half and whole; cue-size heads skipped)
+  with their staff position, stem up = voice 1 / down = voice 2, values from beams / flags / dots (shared
+  `_stem_value` with the slash reader), rests by height, accents and ties (curve above = voice 1); a bar is kept
+  only if every head has a value and both voices have the same length. `assemble.slash_bar` writes them as
+  unpitched chords with a `<backup>`, `place_slashes` now runs on drum books too (`drumkit.apply` maps the
+  positions as before). Without ties `r5-a` -886. Left: Ghost 5 Drums +5 (bar 3 lands in bar 2: the reader bars of
+  the 2/4 system are offset; toms at D5 snap to the snare C5 because the kit comes from Ghost 20 only; slash bars
+  and tremolos in drum books not read); Ghost 4 13 ties and 29 articulations (bars not read: whole / half ⊗).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

@@ -684,41 +684,53 @@ TYPES = {Fraction(4): ("whole", 0), Fraction(3): ("half", 1), Fraction(2): ("hal
 
 
 def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
-    """The bar of a slash reading: slashes on the middle line (B4), the old bar's directions kept."""
+    """The bar of a slash reading: slashes on the middle line (B4), the old bar's directions kept.
+    Drum events (`pos`) give unpitched chords in voice 1 (stems up) / 2 (down) after a <backup>."""
     items = [e for e in old.items if e.tag in ("direction", "harmony")]
+    voice, on = 1, 0
     for ev in sb.events:
         if ev.dur not in TYPES:
             return None
+        if ev.voice != voice:
+            items.append(etree.Element("backup"))
+            etree.SubElement(items[-1], "duration").text = str(on)
+            voice, on = ev.voice, 0
+        on += int(ev.dur * D)
         typ, dots = TYPES[ev.dur]
-        n = etree.Element("note")
-        if ev.kind == "rest":
-            etree.SubElement(n, "rest")
-        else:
-            pitch = etree.SubElement(n, "pitch")
-            etree.SubElement(pitch, "step").text = "B"
-            etree.SubElement(pitch, "octave").text = "4"
-        etree.SubElement(n, "duration").text = str(int(ev.dur * D))
-        for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
-            if on:
-                etree.SubElement(n, "tie", type=kind)
-        etree.SubElement(n, "voice").text = "1"
-        etree.SubElement(n, "type").text = typ
-        for _ in range(dots):
-            etree.SubElement(n, "dot")
-        if ev.kind != "rest":
-            etree.SubElement(n, "stem").text = "down"
-            etree.SubElement(n, "notehead").text = "slash"
-            if ev.tie_start or ev.tie_stop or ev.marks:
-                nt = etree.SubElement(n, "notations")
-                for kind, on in (("stop", ev.tie_stop), ("start", ev.tie_start)):
-                    if on:
-                        etree.SubElement(nt, "tied", type=kind)
-                if ev.marks:
-                    arts = etree.SubElement(nt, "articulations")
-                    for m in dict.fromkeys(ev.marks):
-                        etree.SubElement(arts, m)
-        items.append(n)
-    return B.Bar(items, "slash", old.staves, dict(old.clefs), old.key, old.time)
+        for k, pos in enumerate(ev.pos or ("B4",)):
+            n = etree.Element("note")
+            if k:
+                etree.SubElement(n, "chord")
+            if ev.kind == "rest":
+                etree.SubElement(n, "rest")
+            else:
+                pitch = etree.SubElement(n, "unpitched" if ev.pos else "pitch")
+                etree.SubElement(pitch, "display-step" if ev.pos else "step").text = pos[0]
+                etree.SubElement(pitch, "display-octave" if ev.pos else "octave").text = pos[1:]
+            etree.SubElement(n, "duration").text = str(int(ev.dur * D))
+            for kind, on_ in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+                if on_:
+                    etree.SubElement(n, "tie", type=kind)
+            etree.SubElement(n, "voice").text = str(ev.voice)
+            etree.SubElement(n, "type").text = typ
+            for _ in range(dots):
+                etree.SubElement(n, "dot")
+            if ev.kind != "rest":
+                etree.SubElement(n, "stem").text = "up" if ev.pos and ev.voice == 1 else "down"
+                if not ev.pos:
+                    etree.SubElement(n, "notehead").text = "slash"
+                if ev.tie_start or ev.tie_stop or (ev.marks and not k):
+                    nt = etree.SubElement(n, "notations")
+                    for kind, on_ in (("stop", ev.tie_stop), ("start", ev.tie_start)):
+                        if on_:
+                            etree.SubElement(nt, "tied", type=kind)
+                    if ev.marks and not k:
+                        arts = etree.SubElement(nt, "articulations")
+                        for m in dict.fromkeys(ev.marks):
+                            etree.SubElement(arts, m)
+            items.append(n)
+    return B.Bar(items, "drums" if any(e.pos for e in sb.events) else "slash", old.staves, dict(old.clefs),
+                 old.key, old.time)
 
 
 def continue_patterns(plans: list[SysPlan], D: int, stats: Stats) -> None:
@@ -765,7 +777,8 @@ def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, s
                 plan.chosen[gi][i] = bar
                 stats.slash_bars += 1
                 on = 0
-                for ev in sb.events:      # where each beat is printed: chord symbols line up with it
+                # where each beat is printed (voice 1): chord symbols line up with it
+                for ev in (e for e in sb.events if e.voice == 1):
                     plan.beats.setdefault((gi, i), []).append((ev.x, int(on * D)))
                     on += ev.dur
             break
