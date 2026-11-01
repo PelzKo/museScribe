@@ -163,6 +163,72 @@ become octave sections. Read the octave-line texts (OCR / PDF text layer: "8va",
 "loco") and apply them to the span; "8va ad lib." counts as 8va (the truth writes the notes an octave up, user
 2026-10-28).
 
+## From the user's work in MuseScore (2026-11-01)
+
+What still costs hand work after opening the output in MuseScore. Gains in edit-penalty actions against `r3-k`
+(10 962); counts measured on the current `results/<show>/<song>/` outputs of the 10 truth songs. R22–R24 change
+nothing in the metric (it compares the printed text) but save the user work in every song.
+
+| # | Improvement | Max | Expected | Effort | Needs the user |
+|---|---|---|---|---|---|
+| R20 | Duplicate slurs / ties removed | ~470 | -300..-450 | tiny | no |
+| R21 | `plainText`: shared lyrics only in the first voice | ~150 | -100..-135 | small | yes: song 2 truth |
+| R22 | "pizz." / "arco" as playing techniques (playback) | 0 | 0 (about 40 words per song to re-enter) | tiny | no |
+| R23 | Real instruments instead of piano (playback, names) | 0 | 0 (every part to re-assign) | small | no |
+| R24 | "gedämpft" / "offen" as mute on / off (playback) | 0 | 0 | tiny | no |
+| R25 | Duplicate dynamics / words at the same spot removed | 26 | -10..-26 | tiny | no |
+
+R20. **Duplicate slurs and ties (user 2026-11-01).** Two slurs (or ties) that join exactly the same two notes: keep
+one. Measured on the outputs: 454 duplicate slurs in the truth songs (Anastasia 4 186, Ghost 20 125, Ghost 13 61,
+Ghost 4 36, Anastasia 2 21, Anastasia 1 12, Ghost 1a 10, Anastasia 4A 2, Ghost 11a 1), 18 duplicate ties; MuseScore
+keeps both, and the metric charges every extra one (its items are multisets). They mostly come from merging two
+sources (homr crop slurs + `slurs_to_ties` / chord ties copied from Audiveris). Fix: a last pass in
+`assemble.write_score` (or `musicxml.write`): pair every slur start with its stop by number, drop a pair whose start
+and stop notes equal another pair's; ties: drop a second `<tied type="start">` / `<tie>` on the same note. Same pass on
+a slur that duplicates a tie on the same two notes (the tie wins, music rule: a slur joins different pitches).
+
+R21. **`plainText` voices: shared lyrics only in the first voice (user 2026-11-01).** Workbook column `plainText`
+(PianoReduction rows of all Anastasia songs: every singer label and Frauen, Männer, Women, Men; entered 2026-11-01).
+Rule: when several `plainText` voices sing the same text in the same rhythm at the same time, only the first voice in
+score order keeps the lyrics; the others keep the notes without lyrics. Match per bar run: same onset, same duration,
+same syllable text (case- and quote-insensitive) for every lyric note of the run; partial matches keep both. Runs on
+the Voices output after the label routing (`pipeline/vocal.py`), before the combined file is written. The truth is not
+changed (user 2026-11-01): the Anastasia 4 truth already follows the rule (3 duplicate syllables of 679; the output
+has 135), the song 2 truth keeps 13 (output 12), so song 2 gets about +12 until its truth is updated. Code: read the
+column in `project.py` (HEADER, a `plain_row`-like label resolution into `meta["plain_text"]`).
+
+R22. **"pizz." / "arco" as playing techniques (user 2026-11-01).** Now they are plain staff text, so playback stays
+arco and the user deletes and re-enters each one. Tested 2026-11-01 with MuseScore 4 (`to_mscz` round trip): a
+`<direction>` with `<words>pizz.</words>` plus `<sound pizzicato="yes"/>` imports as a `PlayTechAnnotation`
+(pizzicato), "arco" with `<sound pizzicato="no"/>` as the normal technique; words without `<sound>` stay
+`StaffText`. This is also how MuseScore exports the truths. Fix: when a direction's words match `^pizz` / `^arco`, add
+the `<sound>` after its `<direction-type>` (one place: the writer, for all parts). Related: #51, #54 (missing arco).
+
+R23. **Instruments that MuseScore knows (user 2026-11-01; also #18).** The output `<score-part>` carries only a
+`<part-name>`, so MuseScore imports every part as a piano (tested: no `<score-instrument>` -> `keyboard.piano.grand`).
+Tested 2026-11-01: `<score-instrument><instrument-name>` + `<instrument-sound>` (MusicXML sound id, as in the
+truth exports, e.g. `strings.cello`) selects the instrument, but the instrument name must be unambiguous: "Bass"
+with `pluck.bass.electric` became `voice.bass`; "Electric Bass" / "Contrabass" were right. Fix: a `sound:` field per
+instrument in the `show.yaml` library (with a default table for the usual names: violin, cello, contrabass vs
+electric bass per show, flute, piccolo, oboe, clarinet in Bb, bassoon, horn, trumpet in Bb, trombone, timpani, drum
+set, glockenspiel, xylophone, piano, voices soprano / alto / tenor / bass by the singer's clef), written as
+`<score-instrument>` with MuseScore's instrument name; `<part-name>` keeps the book's name. Drum parts already write
+their kit instruments (`drumkit.py`); give them `drum.group.set`. Doubling parts with instrument changes keep the first
+instrument only (MuseScore ignores mid-part instrument changes on import); Anastasia splits them per instrument anyway.
+
+R24. **"gedämpft" / "offen" with playback (found 2026-11-01).** The truth exports carry `<sound><play><mute>on</mute>`
+(and `off` for "offen") on these words; add it the same way as R22. Brass playback then switches to the mute.
+
+R25. **Duplicate dynamics / words at the same position.** 26 bars of the outputs have the same `<direction>` twice
+(PianoReduction mostly; Ghost 4 Bass "mp twice" is a known truth case). Drop exact duplicates at the same onset and
+staff in the same last pass as R20.
+
+Done 2026-11-01 (data only, no pipeline change): workbook column `plain` renamed to `plainArticulation` in both shows
+(`project.py` reads the new name); Anastasia song 3 (no truth) has no `plainArticulation` cells any more, later
+Anastasia songs get none (user); column `plainText` added (R21, not read yet); Anastasia 4 truth: 52 accents
+corrected to marcatos (`TRUTH_DEVIATIONS.md` section 3). The truth change alone moves the reference: re-bench `r3-k`
+before measuring the next item.
+
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
 output ahead + trim to the workbook bar count (-327), workbook bar count as the song-end anchor of `align_bars`

@@ -13,7 +13,7 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
                file's part is then named after the text behind the last " - " ("#13 - Bass" -> Bass)
   A3 "unfinished"  B3 <truth part names not hand-corrected yet, "Voice 1, Drum Kit"> (optional;
                bench leaves them out until they are removed here)
-  header row: file | pages | skip | instruments | extra | truth | notes
+  header row: file | pages | skip | instruments | extra | truth | plainArticulation | plainText | notes
   file         PDF stem in pdfs/ (e.g. "Reed 1")
   pages        "11-16"; empty = part not in this song
   skip         systems to leave out, "1-3" or "1,4" -> skip_systems: [1, 2, 3]
@@ -24,11 +24,13 @@ Song sheet layout (sheets whose name starts with "_" are ignored):
   extra        raw YAML keys, "chord_names: false, lyrics: true"; "lyrics: null" leaves out a
                part default (the engine's own default applies)
   truth        part name(s) in the truth score this row is compared with (optional column)
-  plain        "x": the row's parts get notes, ties, dots, tuplets and tremolos only (no articulations,
+  plainArticulation  "x": the row's parts get notes, ties, dots, tuplets and tremolos only (no articulations,
                dynamics, hairpins, slurs, fermatas, tempo / expression text; musicxml.strip_marks),
                in the output and in the truth it is scored against. A piano reduction lists truth
                part names and / or voice labels instead ("Männer, Men"): listed labels and labels
-               mapped only to listed truth parts get it. (optional column)
+               mapped only to listed truth parts get it. (optional column; was `plain` before 2026-11-01)
+  plainText    voice labels / truth parts whose shared lyrics are printed only in the first of them
+               (not read yet: docs/IMPROVEMENTS.md R22)
   notes        ignored
 
   A4.. "time" <printed bar: time, ...> "1: 4/4, 68: 2/4, 69: 4/4" (optional; lettered bars "72A: 3/4",
@@ -50,7 +52,7 @@ from pathlib import Path
 
 import yaml
 
-HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plain", "notes"]
+HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plainarticulation", "notes"]
 KEY_ORDER = ["pages", "type", "source", "transpose", "keep_staves", "skip_systems",
              "split_instruments", "doubling"]
 SHOW_FILE = "show.yaml"
@@ -280,8 +282,8 @@ def load(folder: Path) -> Project:
             part = Part(sid, row["file"], pdfs / f"{row['file']}.pdf", meta,
                         [x.strip() for x in row["truth"].split(",") if x.strip()],
                         [n for n, _ in split_instruments_cell(row["instruments"])])
-            if row["plain"]:
-                plain_row(part, row["plain"])
+            if row["plainarticulation"]:
+                plain_row(part, row["plainarticulation"])
             song.parts.append(part)
         songs[sid] = song
     return Project(folder.name, folder, show, workbook, pdfs, songs)
@@ -294,7 +296,7 @@ def truth_names(part: Part) -> list[str]:
 
 
 def plain_row(part: Part, cell: str) -> None:
-    """`plain` cell -> meta plain (True, or the output part names it applies to) + part.plain."""
+    """`plainArticulation` cell -> meta plain (True, or the output part names it applies to) + part.plain."""
     if cell.lower() in ("x", "yes", "true", "1"):
         part.meta["plain"], part.plain = True, truth_names(part)
         return

@@ -19,8 +19,8 @@ not decided.
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4, 4A | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28; the user updates the truths). Ghost writes both out (table 2) |
 | Anastasia | 4 | all | 101 | double barline at the end of 101 (every part) | single barline (all 38 parts; the other double barlines are fixed) | mistake |
-| Anastasia | 4 | Horn, Oboe, Piccolo, Keyboard 1, Klavierauszug, Schlagzeug, Pauken, Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); list in section 3 |
-| Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord with marcato | no mark at all | mistake |
+| Anastasia | 4 | Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); the other parts of section 3 were fixed 2026-11-01 |
+| Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord and left-hand G1 (beat 4) with marcato | no mark at all | mistake |
 | Anastasia | 4 | Keyboard 2 | 26 | "RH: Trem Strings sounding 8vb" | 8va line (sounds D6–D7) | mistake: 8vb line as in 82–84 |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
 | Anastasia | 4 | Posaune | 98 | "St. Mute" (a reminder, muted since 89) | no word | mistake (minor): reminder words are written (user 2026-10-18) |
@@ -152,6 +152,12 @@ not decided.
 Printed marcato (^), truth accent (&gt;): change to marcato (2026-10-18 check). Printed bar numbers; beat in the bar;
 pitches as written in the truth. Song 1 and the 4A Klavierauszug print no marcatos; song 2 and the 4A scan parts
 are not checked.
+
+**Fixed 2026-11-01** (user-approved one-off truth edit): the 52 accents of Horn, Oboe, Piccolo, Keyboard 1, Klavierauszug,
+Schlagzeug and Pauken below are marcatos now (27 above, 25 below; Keyboard 1 / Klavierauszug 206 below). Only the
+`<subtype>` of these 52 articulations changed in the .mscx, checked line by line; backup
+`data/anastasia/truth/04_A_rumor_in_St_Petersburg_fertig.mscz.bak-20261101`. Not changed: Keyboard 1 LH 32 / 43 (the
+truth has no mark there, table 1), Xylophon 27 and the plain rows (no beat / pitch given).
 
 - Horn: 27 b1 D5; 32 b3.5 E4 + b4 D4; 43 b3.5 E4 + b4 D4; 51 b4 D5; 70 b2 D4; 81 b4 D5; 85 b3.5 E4 + b4 D4;
   93 b4 B4; 101 b1 A4 + b2 B4 (b3 D5 stays an accent); 136 b3.5 F4 + b4 E4; 177 b4 B4; 185 b4 D5; 200 b3 E5; 202 b3 D5.

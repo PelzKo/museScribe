@@ -290,7 +290,7 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
 
 
 def strip_marks(part: etree._Element) -> None:
-    """A "plain" part (workbook column `plain`): notes with their dots, ties, tuplets and tremolos
+    """A "plain" part (workbook column `plainArticulation`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,
     tempo marks and expression text go; playing words (pizz., Arco, gedämpft), rehearsal marks,
     navigation and 8va lines stay."""

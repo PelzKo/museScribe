@@ -95,8 +95,9 @@ Bars:
   The pipeline still writes both out in every show (`assemble.apply_repeats`, `bars.apply_sim`, IMPROVEMENTS R13).
 
 Marks:
-- `plain` parts (workbook column; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet, Trombone, Keyboard 2 (user 2026-10-18), Männer;
-  Ghost: none)
+- `plainArticulation` parts (workbook column, `plain` until 2026-11-01; Anastasia: Violin 2, Cello, Bass, Reed 2, Reed 3, Trumpet,
+  Trombone, Keyboard 2 (user 2026-10-18), Männer, only in the songs with a truth (1, 2, 4, 4A); later songs get none (user
+  2026-11-01); Ghost: none)
   keep notes, ties, note dots, tuplets, tremolos and playing words only. Dropped: articulations (staccato dots,
   accents, ...), dynamics, cresc. / dim. / rit., hairpins, slurs, fermatas, ornaments, tempo marks. Violin 1, Horn,
   Reed 1, solo singers, Frauen, the piano reduction, Keyboard 1 and percussion keep everything.

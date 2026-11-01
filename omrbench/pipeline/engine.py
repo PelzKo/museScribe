@@ -463,7 +463,7 @@ class Pipeline(Engine):
             if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
                 LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
         if plain := sample.meta.get("plain"):
-            # workbook `plain`: these parts get notes, ties and dots only (True = every part)
+            # workbook `plainArticulation`: these parts get notes, ties and dots only (True = every part)
             for root in [score, *(files or {}).values()]:
                 names = {sp.get("id"): sp.findtext("part-name") for sp in root.iterfind("part-list/score-part")}
                 for p in root.findall("part"):
