@@ -413,6 +413,7 @@ CATEGORIES = [
     "ties",
     "lyrics",
     "words",          # tempo / expression text (<words>)
+    "playtech",       # playing technique for playback (<sound pizzicato>, <play><mute> / <other-play>)
     "tempo",          # <metronome>
     "fermatas",       # on notes, rests and barlines
     "tuplets",        # tuplet start: actual:normal
@@ -702,10 +703,16 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
 
 
 def _sound(snd, s: Staff, mi: int, onset, skip=()) -> None:
-    """Navigation (D.S., D.C., fine, to coda, ...) carried by a <sound> element."""
+    """Navigation (D.S., D.C., fine, to coda, ...) and playing techniques carried by a <sound> element."""
     for nav in _NAV:
         if nav not in skip and snd.get(nav):
             s.events["structure"].append((mi, onset, nav))
+    if snd.get("pizzicato") in ("yes", "no"):
+        s.events["playtech"].append((mi, onset, "pizz" if snd.get("pizzicato") == "yes" else "arco"))
+    for m in snd.findall("play/mute"):
+        s.events["playtech"].append((mi, onset, "open" if (m.text or "").strip() in ("off", "") else "mute"))
+    for o in snd.findall("play/other-play"):
+        s.events["playtech"].append((mi, onset, "other:" + _norm_text(o.get("type") or o.text or "")))
 
 
 def _dyn_token(el) -> str:

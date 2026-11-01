@@ -20,6 +20,10 @@ action costs 1:
              transpose), then scored after the shift.
   octave     a section of bars one or two octaves off (Celesta after an instrument change) = 1
              action per section (select the bars, Ctrl+Up/Down), then scored after the shift.
+  playtech   playing techniques MuseScore plays back (pizz. / arco, mute / open, other-play): a playing
+             word written as plain text where the truth has the technique = 1 (user 2026-11-01).
+  instrument the part's instrument (<instrument-sound> of its first <score-instrument>) differs from the
+             truth part's = 1 (re-assign it in MuseScore); not scored when the truth part has none.
   system     rehearsal marks, tempi and system text (rit., a tempo: <words system="only-top"> in
              the truth) are entered once per score: `system_penalty` scores them per song (union of
              all output parts), not per part; output words equal to a truth system text go there too.
@@ -38,7 +42,7 @@ from . import notef1
 
 SYSTEM_CATS = ("rehearsal", "tempo", "systemtext")
 PART_CATS = ("clefs", "keys", "times", "dynamics", "hairpins", "articulations", "fermatas", "slurs",
-             "ties", "tuplets", "tremolos", "lyrics", "words", "chords", "instruments", "structure",
+             "ties", "tuplets", "tremolos", "lyrics", "words", "playtech", "chords", "instruments", "structure",
              "barlines")
 _CHANGES_ONLY = ("clefs", "keys", "times")
 BAND = 40                 # DP band around the diagonal (+ the bar count difference)
@@ -254,6 +258,13 @@ def system_words(truth_root: etree._Element) -> frozenset:
     return frozenset(t for s in extract_staves(truth_root) for _, _, t in s.events["systemtext"])
 
 
+def sound_id(part: etree._Element) -> str | None:
+    """The <instrument-sound> of a part's first <score-instrument> (MuseScore picks the instrument by it)."""
+    sp = part.getroottree().getroot().find(f"part-list/score-part[@id='{part.get('id')}']")
+    snd = sp.findtext("score-instrument/instrument-sound") if sp is not None else None
+    return snd.strip() if snd and snd.strip() else None
+
+
 def penalty(pred_parts: list[etree._Element], truth_part: etree._Element,
             sys_words: frozenset = frozenset()) -> dict:
     """Edit penalty of output part(s) against one truth part (see the module doc)."""
@@ -291,6 +302,8 @@ def penalty(pred_parts: list[etree._Element], truth_part: etree._Element,
     if shift:
         detail["shift"] += 1
     assert sum(detail.values()) <= cost, (dict(detail), cost)    # sections only ever save actions
+    if (want := sound_id(truth_part)) and sound_id(pred_parts[0]) != want:
+        detail["instrument"] += 1
     cost = sum(detail.values())
     return {"penalty": cost, "from_scratch": scratch, "ratio": cost / scratch if scratch else None,
             "bars_insert": ins, "bars_delete": dele, "bars_changed": changed,

@@ -226,8 +226,10 @@ staff in the same last pass as R20.
 Done 2026-11-01 (data only, no pipeline change): workbook column `plain` renamed to `plainArticulation` in both shows
 (`project.py` reads the new name); Anastasia song 3 (no truth) has no `plainArticulation` cells any more, later
 Anastasia songs get none (user); column `plainText` added (R21, not read yet); Anastasia 4 truth: 52 accents
-corrected to marcatos (`TRUTH_DEVIATIONS.md` section 3). The truth change alone moves the reference: re-bench `r3-k`
-before measuring the next item.
+corrected to marcatos (`TRUTH_DEVIATIONS.md` section 3). Re-benched `r3-k` outputs: `r4-t` **11 026** (+64, the truth fix
+alone). Metric (user-approved 2026-11-01): category `playtech` (every `<sound>` playing technique: pizz / arco, mute /
+open, `other-play` types, 1 action each) and `instrument` (the part's `<instrument-sound>` differs from the truth
+part's = 1; parts whose truth has none are not scored). New reference `r4-ref` **11 259** (+233).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
