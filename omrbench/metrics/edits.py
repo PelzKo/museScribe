@@ -72,6 +72,11 @@ def part_bars(parts: list[etree._Element], system_words: frozenset = frozenset()
                 if last is not None and k != last:
                     bars[b][1][("instruments", 1, 0, "ic")] += 1
                 last = k
+    if len(parts) > 1:
+        # barlines and repeats belong to the bar, not to each overlaid part (the truth has one)
+        for _, items in bars:
+            for k in [k for k in items if k[0] in ("barlines", "structure")]:
+                items[k] = 1
     _changes_only(bars)
     return bars
 
