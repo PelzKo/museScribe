@@ -274,7 +274,8 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   ("DMITRY: (cont.)" at 101, "BOTH:" 113 / 176, "DMITRY:" 164 / 199), Vlad 177 -> 134. Left: the new correct labels
   "Solo" (Männer 65-71) and "Black Marketeer #1" (Frauen 138-146) are not in the workbook `truth` cell of Anastasia 4
   (user: add `Solo=Männer, Black Marketeer #1=Frauen, Black Marketeer #3=Frauen`); `_canonical_singers` merges
-  "BLACK MARKETEER #1/#2/#3" into one (Levenshtein), not fixed yet; finale 199-211 "+DMITRY & VLAD:" and the men
+  "BLACK MARKETEER #1/#2/#3" into one (Levenshtein); keeping numbered labels apart was rejected, `r6-b` -7 with
+  one part +20 (the workbook maps only #2, so #3 / #1 bars count as missing until the cell is extended); finale 199-211 "+DMITRY & VLAD:" and the men
   (truth puts Dmitry / Vlad with the men), Frauen chords 57-64, lyrics verse 2.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
