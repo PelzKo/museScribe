@@ -129,3 +129,16 @@ def test_fermata_most_parts_have_goes_onto_the_others():
     assert parts[2].find(".//fermata") is not None
     lone = [part(True), part(False), part(False)]
     assert musicxml.share_fermatas(lone) == 0
+
+
+def test_play_techniques_give_playing_words_their_sound():
+    from lxml import etree
+    from omrbench.musicxml import play_techniques
+    words = ["pizz.", "Arco", "gedämpft", "offen", "solo"]
+    root = etree.fromstring("<score-partwise><part id='P1'><measure number='1'>" + "".join(
+        f"<direction><direction-type><words>{w}</words></direction-type></direction>" for w in words)
+        + "</measure></part></score-partwise>")
+    assert play_techniques(root) == 4
+    snd = [d.find("sound") for d in root.iter("direction")]
+    assert [snd[0].get("pizzicato"), snd[1].get("pizzicato")] == ["yes", "no"]
+    assert [snd[2].findtext("play/mute"), snd[3].findtext("play/mute"), snd[4]] == ["on", "off", None]

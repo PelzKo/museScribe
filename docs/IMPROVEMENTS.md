@@ -231,6 +231,13 @@ alone). Metric (user-approved 2026-11-01): category `playtech` (every `<sound>` 
 open, `other-play` types, 1 action each) and `instrument` (the part's `<instrument-sound>` differs from the truth
 part's = 1; parts whose truth has none are not scored). New reference `r4-ref` **11 259** (+233).
 
+Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 --to ID`,
+`omrbench bench <show> --run ID --bench-id ID`; `r4-0` reproduces `r4-ref` exactly):
+- R22 + R24 accepted, `r4-b` **11 229** (-30): `musicxml.play_techniques` at the end of `write_score` gives "pizz." /
+  "arco" `<sound pizzicato>` and "gedämpft" / "offen" `<play><mute>`; only the bare word (keyboard patch labels
+  "Pizz. Strings [both hands]" got a technique and cost +5 in a first try, `r4-a` -25). Left: most truth techniques
+  have no word in the output at all (#54); Ghost has 12 techniques in its truths.
+
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
 output ahead + trim to the workbook bar count (-327), workbook bar count as the song-end anchor of `align_bars`

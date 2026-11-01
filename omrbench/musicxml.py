@@ -289,6 +289,34 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
     return added
 
 
+# playing words MuseScore plays back (tested 2026-11-01: <sound pizzicato> and <play><mute> import as
+# playing-technique annotations, plain <words> stay staff text)
+# the word alone: "Pizz. Strings [both hands]" is a keyboard patch label, not a technique
+_TECHNIQUES = [(re.compile(r"^\W*pizz(?:icato)?\W*$", re.I), ("pizzicato", "yes")),
+               (re.compile(r"^\W*arco\W*$", re.I), ("pizzicato", "no")),
+               (re.compile(r"^\W*gedämpft\W*$", re.I), ("mute", "on")),
+               (re.compile(r"^\W*offen\W*$", re.I), ("mute", "off"))]
+
+
+def play_techniques(root: etree._Element) -> int:
+    """Give every direction whose words are a playing word its <sound> technique. Returns the count."""
+    n = 0
+    for d in root.iter("direction"):
+        text = "".join(w.text or "" for w in d.iterfind("direction-type/words")).strip()
+        for rx, (kind, value) in _TECHNIQUES:
+            if text and rx.search(text):
+                snd = d.find("sound")
+                if snd is None:
+                    snd = etree.SubElement(d, "sound")
+                if kind == "pizzicato":
+                    snd.set("pizzicato", value)
+                elif snd.find("play/mute") is None:
+                    etree.SubElement(etree.SubElement(snd, "play"), "mute").text = value
+                n += 1
+                break
+    return n
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plainArticulation`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,
