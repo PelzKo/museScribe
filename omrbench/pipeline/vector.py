@@ -344,9 +344,10 @@ def read_all_repeats(pdf, pages: list) -> list[Repeat]:
                 and classify_page(p, i + 1).kind == "vector" for r in read_repeats(p, pages[i])]
 
 
-def read_lines(pdf, pages: list, pattern) -> list[tuple[int, float, float, str]]:
-    """(page number, centre x, top y, text) of every text-layer line of the vector pages that matches
-    `pattern` as a whole, in page coordinates (small labels like "Play" that Audiveris misses)."""
+def read_lines(pdf, pages: list, pattern, left: bool = False) -> list[tuple[int, float, float, str]]:
+    """(page number, centre x (left: left x), top y, text) of every text-layer line of the vector
+    pages that matches `pattern` as a whole, in page coordinates (small labels like "Play" that
+    Audiveris misses)."""
     import pymupdf as fitz
 
     from ..pdfkind import classify_page
@@ -362,7 +363,7 @@ def read_lines(pdf, pages: list, pattern) -> list[tuple[int, float, float, str]]
                     text = "".join(sp["text"] for sp in line["spans"]).strip()
                     if pattern.match(text):
                         x0, y0, x1, _ = line["bbox"]
-                        out.append((pages[i].number, (x0 + x1) / 2 * sx, y0 * sx, text))
+                        out.append((pages[i].number, (x0 if left else (x0 + x1) / 2) * sx, y0 * sx, text))
     return out
 
 

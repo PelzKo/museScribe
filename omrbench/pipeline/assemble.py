@@ -947,21 +947,31 @@ def _label_onset(plan: SysPlan, page: Page, staff_id: int, x: float, D: int) -> 
 
 
 def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: dict, D: int,
-                      stats: Stats, meta: dict) -> None:
+                      stats: Stats, meta: dict, vector_lines=()) -> None:
     """Singer labels -> SysPlan.singers; dialogue (meta spoken_text: text) and stage
-    directions -> SysPlan.voice_text."""
+    directions -> SysPlan.voice_text. vector_lines: (page, left x, top y, text) of the PDF
+    text layer (vector pages), for the labels Audiveris missed."""
     mode = str(meta.get("spoken_text", "drop")).lower()
     if mode not in SPOKEN_TEXT:
         raise ValueError(f"spoken_text: '{mode}' (use {' or '.join(SPOKEN_TEXT)})")
     for page, pt in zip(pages, classified):
-        for pl, label in pt.singers:
-            plan = by_sys.get(id(pl.system))
+        found = [(pl.system, pl.staff, pl.line.x, label) for pl, label in pt.singers]
+        seen = [pl.line for pl, _ in pt.singers + pt.spoken]
+        systems = [s for s in page.systems if s.staves]
+        il = systems[0].staves[0].interline if systems else 0
+        for x, y, name in T.missed_labels(vector_lines, page.number, seen, il) if systems else ():
+            sy, st = T._staff_below(systems, y) or (None, None)
+            if sy is None or sy.skip:
+                continue
+            found.append((sy, st if st in sy.staves else sy.staves[0], x, name))
+        for system, staff, x, label in found:
+            plan = by_sys.get(id(system))
             if not plan or not plan.n:
                 continue
-            gi, _ = _group_of(pl.system, pl.staff.id)
-            if gi == pl.system.piano_group or gi not in plan.chosen:
+            gi, _ = _group_of(system, staff.id)
+            if gi == system.piano_group or gi not in plan.chosen:
                 continue            # no vocal staff below the label
-            i, on = _label_onset(plan, page, pl.staff.id, pl.line.x, D)
+            i, on = _label_onset(plan, page, staff.id, x, D)
             plan.singers.setdefault((gi, i), []).append((on, label))
             stats.singer_labels += 1
         texts = [(pl, t, True) for pl, t in pt.spoken] + [(pl, pl.line.text, False) for pl in pt.stage]
@@ -993,13 +1003,13 @@ def _cue_text(text: str, pl: T.Placed) -> bool:
 
 def place_text(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats,
                meta: dict, split: bool, estimate_onset: bool = False,
-               symbols: list[CH.Symbol] = ()) -> tuple[list[T.Line], list[dict]]:
+               symbols: list[CH.Symbol] = (), vector_lines=()) -> tuple[list[T.Line], list[dict]]:
     by_sys = {id(p.system): p for p in plans}
     vocal = any(p.system.piano_group is not None for p in plans)
     running = T.running_headers(pages)
     classified = [T.classify(page, vocal, running) for page in pages]
     if vocal:
-        _place_vocal_text(classified, pages, by_sys, D, stats, meta)
+        _place_vocal_text(classified, pages, by_sys, D, stats, meta, vector_lines)
     credits = [ln for pt in classified for ln in pt.credits]
     words = [pl.line.text for pt in classified for pl in pt.words]
     instruments = instruments_from(meta, credits, words) if split or meta.get("doubling") else []

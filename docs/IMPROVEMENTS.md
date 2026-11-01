@@ -31,7 +31,7 @@ and every other mark land on the wrong beat otherwise.
 | R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | done -896 | large | no |
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
 | R5 | Articulations from the vector glyphs (Ghost) | 878 | -250..-400 | medium | no |
-| R6 | Anastasia 4 singers: routing + lyrics | ~1500 | -300..-500 | large | no |
+| R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
@@ -267,6 +267,15 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   positions as before). Without ties `r5-a` -886. Left: Ghost 5 Drums +5 (bar 3 lands in bar 2: the reader bars of
   the 2/4 system are offset; toms at D5 snap to the snare C5 because the kit comes from Ghost 20 only; slash bars
   and tremolos in drum books not read); Ghost 4 13 ties and 29 articulations (bars not read: whole / half ⊗).
+- R6 (part) accepted, `r6-a` **13 178** (-557 against `r6-ref` 13 735; Anastasia 3 PianoReduction -243 / +7,
+  Anastasia 4 -241, Ghost 4 -80): on vector pages `assemble._place_vocal_text` adds the singer labels of the PDF text
+  layer that Audiveris did not read (`text.missed_labels`: "NAME:" lines via `vector.read_lines(left=True)`, none
+  within 2 / 3 interlines of an OCR label or dialogue line, no prose after the colon). Anastasia 4 Dmitry 295 -> 135
+  ("DMITRY: (cont.)" at 101, "BOTH:" 113 / 176, "DMITRY:" 164 / 199), Vlad 177 -> 134. Left: the new correct labels
+  "Solo" (Männer 65-71) and "Black Marketeer #1" (Frauen 138-146) are not in the workbook `truth` cell of Anastasia 4
+  (user: add `Solo=Männer, Black Marketeer #1=Frauen, Black Marketeer #3=Frauen`); `_canonical_singers` merges
+  "BLACK MARKETEER #1/#2/#3" into one (Levenshtein), not fixed yet; finale 199-211 "+DMITRY & VLAD:" and the men
+  (truth puts Dmitry / Vlad with the men), Frauen chords 57-64, lyrics verse 2.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

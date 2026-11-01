@@ -415,7 +415,10 @@ class Pipeline(Engine):
         if not is_scan(sample.pdf) and sample.score_type not in ("drums", "piano_reduction") and \
                 SL.read_lines(sample.pdf, pages, re.compile(r".*(same style|fingerpicking)", re.I)):
             A.continue_patterns(plans, D, stats)
-        credits, instruments = A.place_text(plans, pages, D, stats, sample.meta, split, estimate, symbols)
+        credits, instruments = A.place_text(
+            plans, pages, D, stats, sample.meta, split, estimate, symbols,
+            SL.read_lines(sample.pdf, pages, re.compile(r"[A-Z].*[:;]"), left=True)
+            if vocal and not is_scan(sample.pdf) else ())
         A.patch_octaves(plans, stats)
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)

@@ -179,6 +179,19 @@ def parse_label(text: str, bold: bool) -> tuple[str, str] | None:
     return name, rest
 
 
+def missed_labels(vector_lines, page: int, seen: list[Line], il: float) -> list[tuple[float, float, str]]:
+    """(left x, top y, name) of the PDF text-layer singer labels on `page` ("DMITRY: (cont.)")
+    that no OCR label or dialogue line in `seen` covers; a label with dialogue on its row is
+    left out."""
+    out = []
+    for pn, x, y, text in vector_lines:
+        lab = parse_label(text, False)
+        if pn == page and lab and not (lab[1] and _prose(lab[1])) and \
+                not any(abs(ln.top - y) < 2 * il and abs(ln.x - x) < 3 * il for ln in seen):
+            out.append((x, y, lab[0]))
+    return out
+
+
 def singer_name(label: str) -> str:
     """"SOLO WOMAN" -> "Solo Woman", "DMITRY+ALL" -> "Dmitry+All"."""
     return re.sub(r"[A-Za-z’']+", lambda m: m.group(0).capitalize(), label)

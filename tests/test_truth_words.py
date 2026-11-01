@@ -153,3 +153,14 @@ def test_drop_duplicate_curves_keeps_one_slur_per_note_pair():
                             + "</measure></part></score-partwise>")
     assert drop_duplicate_curves(root) == 1
     assert len(root.findall(".//slur")) == 4
+
+
+def test_text_layer_labels_only_where_the_ocr_has_none():
+    from types import SimpleNamespace
+
+    from omrbench.pipeline.text import missed_labels
+    lines = [(12, 450.0, 205.0, "DMITRY: (cont.)"), (12, 130.0, 187.0, "VLAD:"),
+             (12, 300.0, 400.0, "GLEB: We hear you, comrades, and more"), (11, 50.0, 50.0, "VLAD:"),
+             (12, 60.0, 600.0, "Cue: Applause")]
+    seen = [SimpleNamespace(x=131.0, top=190.0)]          # "VLAD:" read by the OCR
+    assert missed_labels(lines, 12, seen, 2.0) == [(450.0, 205.0, "DMITRY")]
