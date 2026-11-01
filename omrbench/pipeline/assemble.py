@@ -2340,10 +2340,22 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                     for c in el.findall("clef"):
                         state_clefs[int(c.get("number", "1"))] = B._clef(c)
                 m.append(el)
-            if g == len(p.bars) - 1:
+            if "repeat-start" in bar.barlines:
+                bl = etree.Element("barline", location="left")
+                etree.SubElement(bl, "bar-style").text = "heavy-light"
+                etree.SubElement(bl, "repeat", direction="forward")
+                m.insert(0, bl)
+            if "repeat-end" in bar.barlines:
+                bl = etree.SubElement(m, "barline", location="right")
+                etree.SubElement(bl, "bar-style").text = "light-heavy"
+                etree.SubElement(bl, "repeat", direction="backward")
+            elif g == len(p.bars) - 1:
                 # final barline, as in the truth scores (MuseScore adds none on import)
                 bl = etree.SubElement(m, "barline", location="right")
                 etree.SubElement(bl, "bar-style").text = "light-heavy"
+            elif "double" in bar.barlines:
+                bl = etree.SubElement(m, "barline", location="right")
+                etree.SubElement(bl, "bar-style").text = "light-light"
     n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
     k = tie_held_chords(root)
     play_techniques(root)        # pizz. / arco / gedämpft / offen play back in MuseScore

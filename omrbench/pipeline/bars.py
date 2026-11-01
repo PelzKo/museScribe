@@ -36,6 +36,8 @@ class Bar:
     time: tuple[str, str] | None = None    # beats, beat-type
     multirest: int = 0                     # printed <multiple-rest> count (homr)
     read_key: str | None = None            # key the reader spelled the notes in (fifths)
+    barlines: frozenset = frozenset()      # "double" / "repeat-end" (right), "repeat-start" (left) as read;
+                                           # kept per song only by a vote across the parts (share_barlines)
 
     def notes(self) -> list[etree._Element]:
         return [e for e in self.items if e.tag == "note"]
@@ -89,6 +91,7 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
         items: list[etree._Element] = []
         start = None             # (clefs, key, time) in force when the first note starts
         multirest = 0
+        marks: set[str] = set()
         seen_content = False
         for el in m:
             if el.tag == "attributes":
@@ -125,7 +128,14 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
                     items.append(a)
                     clefs.update(new_clefs)
                 continue
-            if el.tag in ("print", "barline", "sound"):
+            if el.tag == "barline":
+                rep, style = el.find("repeat"), el.findtext("bar-style") or "regular"
+                if rep is not None:
+                    marks.add("repeat-start" if rep.get("direction") == "forward" else "repeat-end")
+                elif style not in ("regular", "none", "dashed", "dotted") and el.get("location", "right") == "right":
+                    marks.add("double")     # a final barline inside the song is a misread double
+                continue
+            if el.tag in ("print", "sound"):
                 continue
             if el.tag in ("note", "backup", "forward") and not seen_content:
                 seen_content = True
@@ -140,7 +150,8 @@ def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> lis
             items.append(c)
         if start is None:
             start = (dict(clefs), key, time)
-        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest, start[1]))
+        bars.append(Bar(items, source, staves, start[0], start[1], start[2], multirest, start[1],
+                        frozenset(marks)))
     return bars
 
 
@@ -492,7 +503,8 @@ def restaff(sources: list[tuple[Bar, list[int]]]) -> Bar:
                     extras.append((cur, mapping[int(a[0].get("number"))], a))
     n = new_no
     out = Bar([], src_name, max(n, 1), clefs, key, time,
-              max((b.multirest for b, _ in sources), default=0))
+              max((b.multirest for b, _ in sources), default=0),
+              barlines=frozenset().union(*(b.barlines for b, _ in sources)))
     per_staff: dict[int, int] = {}
     pos_total = 0
     for (staff, _), evs in sorted(voices.items(), key=lambda kv: kv[0][0]):
@@ -649,7 +661,8 @@ def close_voice_gaps(bar: Bar, length: int | None) -> Bar:
             fix.add(k)
     if not fix:
         return bar
-    out = Bar([], bar.source, bar.staves, dict(bar.clefs), bar.key, bar.time, bar.multirest)
+    out = Bar([], bar.source, bar.staves, dict(bar.clefs), bar.key, bar.time, bar.multirest,
+              barlines=bar.barlines)
     pos_total = 0
     for k, evs in sorted(voices.items(), key=lambda kv: (int(kv[0][0] or 1), kv[0][1])):
         if pos_total:

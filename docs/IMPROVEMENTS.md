@@ -26,7 +26,7 @@ and every other mark land on the wrong beat otherwise.
 
 | # | Improvement | Max | Expected | Effort | Needs the user |
 |---|---|---|---|---|---|
-| R1 | Double barlines + repeat signs by cross-part vote | 1178 | -500..-800 | medium | no |
+| R1 | Double barlines + repeat signs by cross-part vote | 1178 | done -439 (Audiveris, vote per book) | medium | no |
 | R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | done -183 | small | done |
 | R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | -400..-700 | large | no |
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
@@ -247,6 +247,16 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
 - R20 accepted, `r4-g` **11 113** (-2): `musicxml.drop_duplicate_curves` after `play_techniques`. The 454 duplicate
   slurs counted on 2026-11-01 were a bug in the count (pairs keyed by `id()` of lxml proxies, which Python reuses);
   keyed by note position the outputs hold 2. The first version of the pass had the same bug and removed real slurs.
+- Metric fix: a truth part scored against overlaid output parts (singers: Men + Voice 1 + All) counted every barline /
+  repeat once per output part; now once per bar (like clef / key / time). Reference `r4-g2` **11 105** (-8).
+- R1 accepted, `r4-j` **10 666** (-439 against `r4-g2`): `bars.part_bars` keeps Audiveris' (and homr's) barline marks
+  per bar (`Bar.barlines`: double, repeat-start, repeat-end; a final barline inside the song counts as double),
+  `write_score` writes them, `transcribe.share_marks` -> `musicxml.share_barlines` votes: one vote per book (a drum
+  book or a piano reduction's singers are many parts but one page), a mark at least half of the books with the song's
+  bar count have goes into every part with that count, all other marks are removed. First try with one vote per
+  part: +2 (the 17 singer parts and 9 drum parts have no marks of their own and outvoted the rest). Found on the way:
+  the workbook's `bars` is text, so `share_fermatas` never had voters when a song has a `bars` row (measured next).
+  Left: Ghost 20 +4 in every part (a mark the truth lacks or at the wrong bar); vector barline types not read yet.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

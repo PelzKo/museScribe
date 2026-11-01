@@ -319,6 +319,67 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
     return added
 
 
+def _barline_marks(m: etree._Element, last: bool) -> set[str]:
+    out = set()
+    for bl in m.findall("barline"):
+        rep = bl.find("repeat")
+        if rep is not None:
+            out.add("repeat-start" if rep.get("direction") == "forward" else "repeat-end")
+        elif bl.findtext("bar-style") == "light-light" and not last:
+            out.add("double")
+    return out
+
+
+def share_barlines(books: list[list[etree._Element]], bars: int | None = None) -> int:
+    """Double barlines and repeat signs by a vote of the song's books (each part read them per bar
+    from Audiveris, which misses and invents some). One vote per book (a drum book or the singers of
+    a piano reduction are many parts but one page): the marks of its parts with the song's bar count
+    `bars` (else the most common count). A mark at least half of the voting books have goes into
+    every part with that count, the others are removed; parts with another bar count lose theirs
+    (their bars are shifted). Returns the marks written."""
+    parts = [p for b in books for p in b]
+    counts = [len(p.findall("measure")) for p in parts]
+    common = int(bars) if bars else max(set(counts), key=counts.count, default=0)   # workbook cells are text
+    voters = [p for p, c in zip(parts, counts) if c == common]
+    votes: dict[tuple[int, str], int] = {}
+    nbooks = 0
+    for b in books:
+        mine = set()
+        for p in [p for p in b if p in voters]:
+            ms = p.findall("measure")
+            mine |= {(i, mark) for i, m in enumerate(ms) for mark in _barline_marks(m, i == len(ms) - 1)}
+        nbooks += any(p in voters for p in b)
+        for k in mine:
+            votes[k] = votes.get(k, 0) + 1
+    keep = {k for k, n in votes.items() if 2 * n >= nbooks and nbooks >= 2}
+    written = 0
+    for p in parts:
+        ms = p.findall("measure")
+        for i, m in enumerate(ms):
+            last = i == len(ms) - 1
+            for bl in m.findall("barline"):
+                if bl.find("repeat") is not None or (bl.findtext("bar-style") == "light-light" and not last):
+                    m.remove(bl)
+            if p not in voters:
+                continue
+            want = {mark for (j, mark) in keep if j == i}
+            if "repeat-start" in want:
+                bl = etree.Element("barline", location="left")
+                etree.SubElement(bl, "bar-style").text = "heavy-light"
+                etree.SubElement(bl, "repeat", direction="forward")
+                m.insert(0, bl)
+            right = "repeat-end" if "repeat-end" in want else "double" if "double" in want and not last else None
+            if right:
+                for bl in m.findall("barline[@location='right']"):
+                    m.remove(bl)      # the final barline becomes the end repeat
+                bl = etree.SubElement(m, "barline", location="right")
+                etree.SubElement(bl, "bar-style").text = "light-heavy" if right == "repeat-end" else "light-light"
+                if right == "repeat-end":
+                    etree.SubElement(bl, "repeat", direction="backward")
+            written += len(want)
+    return written
+
+
 # playing words MuseScore plays back (tested 2026-11-01: <sound pizzicato> and <play><mute> import as
 # playing-technique annotations, plain <words> stay staff text)
 # the word alone: "Pizz. Strings [both hands]" is a keyboard patch label, not a technique

@@ -439,11 +439,18 @@ def share_marks(dest: Path, jobs: list[Job]) -> None:
         names = {sp.get("id"): sp.findtext("part-name") for sp in r.iterfind("part-list/score-part")}
         parts += [p for p in r.findall("part")
                   if not (plain is True or (plain and names.get(p.get("id")) in plain))]
-    n = musicxml.share_fermatas(parts, next((j.meta.get("song_bars") for j in jobs), None))
+    song_bars = next((j.meta.get("song_bars") for j in jobs), None)
+    n = musicxml.share_fermatas(parts, song_bars)
     if n:
         LOG.info(f"{dest.name}: {n} fermatas copied from the other parts")
-        for f, r, _ in roots:
-            musicxml.write(r, f)
+    # barlines: every part votes, `plainArticulation` ones too (the truths keep their barlines)
+    books: dict[str, list] = {}
+    for f, r, _ in roots:      # "PianoReduction - Voices" and "- Piano" are one book
+        books.setdefault(f.stem.split(" - ")[0], []).extend(r.findall("part"))
+    b = musicxml.share_barlines(list(books.values()), song_bars)
+    LOG.info(f"{dest.name}: {b} double barlines / repeat signs after the vote")
+    for f, r, _ in roots:
+        musicxml.write(r, f)
 
 
 def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -> None:
