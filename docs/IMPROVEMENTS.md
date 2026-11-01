@@ -171,7 +171,7 @@ nothing in the metric (it compares the printed text) but save the user work in e
 
 | # | Improvement | Max | Expected | Effort | Needs the user |
 |---|---|---|---|---|---|
-| R20 | Duplicate slurs / ties removed | ~470 | -300..-450 | tiny | no |
+| R20 | Duplicate slurs / ties removed | 2 + ties | done -2 (estimate was a counting bug) | tiny | no |
 | R21 | `plainText`: shared lyrics only in the first voice | ~150 | -100..-135 | small | yes: song 2 truth |
 | R22 | "pizz." / "arco" as playing techniques (playback) | 0 | 0 (about 40 words per song to re-enter) | tiny | no |
 | R23 | Real instruments instead of piano (playback, names) | 0 | 0 (every part to re-assign) | small | no |
@@ -244,6 +244,9 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   of a row unless the book has its own: Ghost Reed stays clarinet as in the truths), PianoReduction `voice_sounds`
   per singer label (mixed groups: women's voice). Unpitched percussion got the truths' ids too (not scored: their
   truth parts carry none). Left: Ghost 5 Utility (output parts "Part 0" + "Utility", 1).
+- R20 accepted, `r4-g` **11 113** (-2): `musicxml.drop_duplicate_curves` after `play_techniques`. The 454 duplicate
+  slurs counted on 2026-11-01 were a bug in the count (pairs keyed by `id()` of lxml proxies, which Python reuses);
+  keyed by note position the outputs hold 2. The first version of the pass had the same bug and removed real slurs.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
