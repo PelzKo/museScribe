@@ -160,6 +160,9 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
         if not drums and not extra.get("doubling"):
             # show-wide `doublings: one_part` keeps a doubling book in one part (Ghost truths)
             meta["doubling" if show.get("doublings") == "one_part" else "split_instruments"] = True
+    if entries and not drums and "sound" not in meta and \
+            (snd := {**(library.get(entries[0][0]) or {}), **entries[0][1]}.get("sound")):
+        meta["sound"] = snd     # the first instrument, unless the book has its own; split parts go by name
     meta.update(extra)
     meta = {k: v for k, v in meta.items() if v is not None}  # "lyrics: null" drops a part default
     order = KEY_ORDER + [k for k in meta if k not in KEY_ORDER and k != "instruments"] + ["instruments"]

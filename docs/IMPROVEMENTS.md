@@ -237,6 +237,13 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   "arco" `<sound pizzicato>` and "gedämpft" / "offen" `<play><mute>`; only the bare word (keyboard patch labels
   "Pizz. Strings [both hands]" got a technique and cost +5 in a first try, `r4-a` -25). Left: most truth techniques
   have no word in the output at all (#54); Ghost has 12 techniques in its truths.
+- R23 accepted, `r4-e` **11 115** (-114 against `r4-b`): `musicxml.set_sounds` writes a `<score-instrument>` with the
+  MusicXML sound id as both `<instrument-name>` and `<instrument-sound>` (with a name MuseScore knows, "Bass" or
+  "Voice", the part name wins and gives voice / piano; tested on all 27 ids). Ids: `show.yaml` (gitignored data)
+  `parts: <book>: {sound}` (one-part outputs), instrument library `sound` (split parts by name; the first instrument
+  of a row unless the book has its own: Ghost Reed stays clarinet as in the truths), PianoReduction `voice_sounds`
+  per singer label (mixed groups: women's voice). Unpitched percussion got the truths' ids too (not scored: their
+  truth parts carry none). Left: Ghost 5 Utility (output parts "Part 0" + "Utility", 1).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

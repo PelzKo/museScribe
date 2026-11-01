@@ -317,6 +317,26 @@ def play_techniques(root: etree._Element) -> int:
     return n
 
 
+def set_sounds(root: etree._Element, sounds: dict, single: str | None = None) -> int:
+    """Give every <score-part> without instruments a <score-instrument> with its MusicXML sound id
+    (`sounds` by part name; `single` for a score of one part), so MuseScore imports the right
+    instrument instead of a piano. The id is also the instrument name: a name MuseScore knows
+    ("Bass", "Voice") would win over the sound (tested 2026-11-01). Returns the parts set."""
+    sps = root.findall("part-list/score-part")
+    n = 0
+    for sp in sps:
+        snd = sounds.get((sp.findtext("part-name") or "").strip()) or (single if len(sps) == 1 else None)
+        if not snd or sp.find("score-instrument") is not None:
+            continue
+        si = etree.Element("score-instrument", id=f"{sp.get('id')}-I1")
+        etree.SubElement(si, "instrument-name").text = snd
+        etree.SubElement(si, "instrument-sound").text = snd
+        head = ("part-name", "part-name-display", "part-abbreviation", "part-abbreviation-display", "group")
+        sp.insert(max((i for i, c in enumerate(sp) if c.tag in head), default=-1) + 1, si)
+        n += 1
+    return n
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plainArticulation`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,
