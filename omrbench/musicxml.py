@@ -291,7 +291,7 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
     how many were added. Only parts with the song's bar count `bars` (else the most common one) take
     part: an extra or missing bar would move the fermata."""
     counts = [len(p.findall("measure")) for p in parts]
-    common = bars or max(set(counts), key=counts.count, default=0)
+    common = int(bars) if bars else max(set(counts), key=counts.count, default=0)   # workbook cells are text
     parts = [p for p, c in zip(parts, counts) if c == common]
     have: dict[tuple, int] = {}
     starts = []

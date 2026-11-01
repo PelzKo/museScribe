@@ -257,6 +257,7 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   part: +2 (the 17 singer parts and 9 drum parts have no marks of their own and outvoted the rest). Found on the way:
   the workbook's `bars` is text, so `share_fermatas` never had voters when a song has a `bars` row (measured next).
   Left: Ghost 20 +4 in every part (a mark the truth lacks or at the wrong bar); vector barline types not read yet.
+- Fermata vote with the `bars` row as a number: accepted, `r4-k` **10 662** (-4).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
