@@ -188,6 +188,36 @@ def slurs_to_ties(root: etree._Element) -> int:
     return turned
 
 
+def drop_duplicate_curves(root: etree._Element) -> int:
+    """Two slurs joining the same two notes, or a second tie start / stop on one note: keep one
+    (MuseScore keeps both; they come from merging readers, user 2026-11-01). Returns the count dropped."""
+    dropped = 0
+    for part in root.iter("part"):
+        open_: dict[str, tuple] = {}
+        pairs: set[tuple[int, int]] = set()     # note positions (id() of lxml proxies gets reused)
+        for i, n in enumerate(part.iter("note")):
+            for kind in ("tied", "tie"):
+                for typ in ("start", "stop"):
+                    for extra in n.findall(f".//{kind}[@type='{typ}']")[1:]:
+                        extra.getparent().remove(extra)
+                        dropped += kind == "tied"
+            for sl in n.findall("notations/slur"):
+                num = sl.get("number", "1")
+                if sl.get("type") == "start":
+                    open_[num] = (i, sl)
+                elif sl.get("type") == "stop" and num in open_:
+                    a, start = open_.pop(num)
+                    if (a, i) in pairs:
+                        start.getparent().remove(start)
+                        sl.getparent().remove(sl)
+                        dropped += 1
+                    else:
+                        pairs.add((a, i))
+        for nt in [x for x in part.iter("notations") if not len(x)]:
+            nt.getparent().remove(nt)
+    return dropped
+
+
 def _pitch_key(n: etree._Element) -> tuple:
     p = n.find("pitch")
     return tuple(p.findtext(k) or "0" for k in ("step", "alter", "octave")) if p is not None else ()

@@ -142,3 +142,14 @@ def test_play_techniques_give_playing_words_their_sound():
     snd = [d.find("sound") for d in root.iter("direction")]
     assert [snd[0].get("pizzicato"), snd[1].get("pizzicato")] == ["yes", "no"]
     assert [snd[2].findtext("play/mute"), snd[3].findtext("play/mute"), snd[4]] == ["on", "off", None]
+
+
+def test_drop_duplicate_curves_keeps_one_slur_per_note_pair():
+    from lxml import etree
+    from omrbench.musicxml import drop_duplicate_curves
+    root = etree.fromstring("<score-partwise><part id='P1'><measure number='1'>"
+                            + _n("C", 4, ("start", 1), ("start", 2)) + _n("D", 4, ("stop", 1), ("stop", 2))
+                            + _n("E", 4, ("start", 1)) + _n("F", 4, ("stop", 1))
+                            + "</measure></part></score-partwise>")
+    assert drop_duplicate_curves(root) == 1
+    assert len(root.findall(".//slur")) == 4
