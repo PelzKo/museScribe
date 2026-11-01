@@ -277,6 +277,13 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   "BLACK MARKETEER #1/#2/#3" into one (Levenshtein); keeping numbered labels apart was rejected, `r6-b` -7 with
   one part +20 (the workbook maps only #2, so #3 / #1 bars count as missing until the cell is extended); finale 199-211 "+DMITRY & VLAD:" and the men
   (truth puts Dmitry / Vlad with the men), Frauen chords 57-64, lyrics verse 2.
+- Workbook (2026-11-02): Anastasia 3 truth linked (singer labels by note match: Voice 1 / Voice 2 / All = Frauen +
+  Männer, All Women = Frauen; Violin 2 and Reed 2 `plainArticulation`, user; the leftover part "PianoReduction - Voices
+  – All" is not mapped). Its work dirs are in run `s3` (rb.sh: song 3 from `s3`, the rest from `r3`); `r6-ref` 13 735
+  = `r5-b` 9 766 + song 3. Anastasia 4 cell extended by `Solo=Männer, Black Marketeer #1=Frauen` (note match 6 / 22
+  octave-off and 50 / 50; #3 is not in the output): the `r6-a` outputs score `r6-a3` **13 060** (-118). Anastasia 5
+  "In My Dreams" sheet added (pages from the page headers, Reed 1 Flute + English Horn, library entry in F); its
+  time / key / bars rows come from the first transcription.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
