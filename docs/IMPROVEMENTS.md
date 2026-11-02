@@ -172,7 +172,7 @@ nothing in the metric (it compares the printed text) but save the user work in e
 | # | Improvement | Max | Expected | Effort | Needs the user |
 |---|---|---|---|---|---|
 | R20 | Duplicate slurs / ties removed | 2 + ties | done -2 (estimate was a counting bug) | tiny | no |
-| R21 | `plainText`: shared lyrics only in the first voice | ~150 | -100..-135 | small | yes: song 2 truth |
+| R21 | `plainText`: shared lyrics only in the first voice | ~150 | done: -93 (`r10-a`) | small | yes: song 2 truth |
 | R22 | "pizz." / "arco" as playing techniques (playback) | 0 | 0 (about 40 words per song to re-enter) | tiny | no |
 | R23 | Real instruments instead of piano (playback, names) | 0 | 0 (every part to re-assign) | small | no |
 | R24 | "gedämpft" / "offen" as mute on / off (playback) | 0 | 0 | tiny | no |
@@ -225,7 +225,7 @@ staff in the same last pass as R20.
 
 Done 2026-11-01 (data only, no pipeline change): workbook column `plain` renamed to `plainArticulation` in both shows
 (`project.py` reads the new name); Anastasia song 3 (no truth) has no `plainArticulation` cells any more, later
-Anastasia songs get none (user); column `plainText` added (R21, not read yet); Anastasia 4 truth: 52 accents
+Anastasia songs get none (user); column `plainText` added (R21, read since `r10-a`); Anastasia 4 truth: 52 accents
 corrected to marcatos (`TRUTH_DEVIATIONS.md` section 3). Re-benched `r3-k` outputs: `r4-t` **11 026** (+64, the truth fix
 alone). Metric (user-approved 2026-11-01): category `playtech` (every `<sound>` playing technique: pizz / arco, mute /
 open, `other-play` types, 1 action each) and `instrument` (the part's `<instrument-sound>` differs from the truth
@@ -357,6 +357,9 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   with reading Petrucci (Anastasia's vector PianoReductions, heads œ ˙ w): no change on Anastasia, left out.
   Left: why Petrucci heads change nothing on Anastasia (read_marks finds them: Anastasia 3 page 2, 156 columns) is
   not checked yet (R13).
+- R21 / `plainText` accepted, `r10-a` **12 349** (-93 against `r9-e`; Anastasia 4 PianoReduction -90, song 3 -15,
+  song 2 +12 as expected, its truth keeps the shared lyrics): `musicxml.dedup_lyrics` clears a bar's lyrics in a
+  listed voice when an earlier listed voice has the same (onset, duration, text) for every lyric note of that bar.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

@@ -52,7 +52,7 @@ from pathlib import Path
 
 import yaml
 
-HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plainarticulation", "notes"]
+HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plainarticulation", "plaintext", "notes"]
 KEY_ORDER = ["pages", "type", "source", "transpose", "keep_staves", "skip_systems",
              "split_instruments", "doubling"]
 SHOW_FILE = "show.yaml"
@@ -287,6 +287,8 @@ def load(folder: Path) -> Project:
                         [n for n, _ in split_instruments_cell(row["instruments"])])
             if row["plainarticulation"]:
                 plain_row(part, row["plainarticulation"])
+            if row["plaintext"]:
+                part.meta["plain_text"] = [x.strip() for x in row["plaintext"].split(",") if x.strip()]
             song.parts.append(part)
         songs[sid] = song
     return Project(folder.name, folder, show, workbook, pdfs, songs)

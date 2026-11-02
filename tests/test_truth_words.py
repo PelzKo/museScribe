@@ -187,3 +187,22 @@ def test_slur_stop_without_its_start_is_dropped():
                             '</notations></note></measure></part></score-partwise>')
     musicxml.drop_duplicate_curves(root)
     assert root.find(".//slur") is None and root.find(".//notations") is None
+
+
+def test_dedup_lyrics_keeps_first_voice_only():
+    from lxml import etree
+    from omrbench.musicxml import dedup_lyrics
+
+    def part(pid, words):
+        notes = "".join(f"<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>"
+                        f"<lyric><text>{w}</text></lyric></note>" for w in words)
+        return f'<part id="{pid}"><measure number="1"><attributes><divisions>1</divisions></attributes>{notes}</measure></part>'
+    root = etree.fromstring(
+        '<score-partwise><part-list>'
+        '<score-part id="P1"><part-name>Women</part-name></score-part>'
+        '<score-part id="P2"><part-name>Men</part-name></score-part>'
+        '<score-part id="P3"><part-name>Anya</part-name></score-part></part-list>'
+        + part("P1", ["la", "di"]) + part("P2", ["La", "di"]) + part("P3", ["la", "di"]) + "</score-partwise>")
+    assert dedup_lyrics(root, ["Women", "Men"]) == 1
+    counts = [len(p.findall(".//lyric")) for p in root.findall("part")]
+    assert counts == [2, 0, 2]      # Anya is not listed: keeps hers

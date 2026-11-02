@@ -315,6 +315,32 @@ def _starts(part: etree._Element):
                 pos += Fraction(int(el.findtext("duration") or 0), div)
 
 
+def dedup_lyrics(root: etree._Element, labels: list[str]) -> int:
+    """Workbook `plainText`: a bar whose lyrics (onset, duration, text of every lyric note) equal those of an
+    earlier listed part in score order loses its lyrics; partial matches keep both. Returns bars cleared."""
+    want = {_norm_text(x) for x in labels}
+    names = {sp.get("id"): _norm_text(sp.findtext("part-name") or "") for sp in root.iterfind("part-list/score-part")}
+    seen: list[dict[int, tuple]] = []
+    cleared = 0
+    for p in root.findall("part"):
+        if names.get(p.get("id")) not in want:
+            continue
+        bars: dict[int, list] = {}
+        for bi, pos, n in _starts(p):
+            if n.find("lyric") is not None:
+                text = " ".join(_norm_text(t.text or "") for t in n.iterfind("lyric/text"))
+                bars.setdefault(bi, []).append((pos, n.findtext("duration"), text, n))
+        mine = {bi: tuple(x[:3] for x in v) for bi, v in bars.items()}
+        for bi, key in mine.items():
+            if any(s.get(bi) == key for s in seen):
+                for *_, n in bars[bi]:
+                    for ly in n.findall("lyric"):
+                        n.remove(ly)
+                cleared += 1
+        seen.append(mine)
+    return cleared
+
+
 def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
     """A fermata that at least half of the parts with a note or rest starting at that bar and beat
     have goes onto the others (the readers miss many, mostly over rests; user 2026-10-18). Returns

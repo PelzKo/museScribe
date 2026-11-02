@@ -481,6 +481,11 @@ class Pipeline(Engine):
                 for p in root.findall("part"):
                     if plain is True or names.get(p.get("id")) in plain:
                         musicxml.strip_marks(p)
+        if plain_text := sample.meta.get("plain_text"):
+            # workbook `plainText`: lyrics sung together are printed in the first voice only
+            for root in [score, *(files or {}).values()]:
+                n = musicxml.dedup_lyrics(root, plain_text)
+            LOG.info(f"plainText: lyrics dropped in {n} bar(s) of later voices")
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened
                 LOG.info(f"assemble: {note}")
