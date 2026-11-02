@@ -786,6 +786,39 @@ def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, s
             break
 
 
+def place_marks(plans: list[SysPlan], mark_bars: list[SL.SlashBar], stats: Stats) -> None:
+    """Articulations read from the vector glyphs replace the readers' ones in a bar whose staff
+    has as many note onsets as the page has head columns there (onset k <-> column k)."""
+    for mb in mark_bars:
+        for plan in plans:
+            if plan.system.page != mb.page or not plan.n:
+                continue
+            st = next((st for st in plan.system.staves if abs(st.top - mb.top) < st.interline), None)
+            if st is None:
+                continue
+            gi, si = _group_of(plan.system, st.id)
+            if gi not in plan.chosen:
+                break
+            bar = plan.chosen[gi][_bar_at(plan, (mb.x0 + mb.x1) / 2)]
+            cols: dict[int, list] = {}
+            for on, n in B.onsets(bar):
+                if n.tag == "note" and n.find("rest") is None and n.find("grace") is None \
+                        and int(n.findtext("staff", "1") or 1) == si:
+                    cols.setdefault(on, []).append(n)
+            if len(cols) != len(mb.events):
+                break
+            for ev, on in zip(mb.events, sorted(cols)):
+                for n in cols[on]:
+                    for art in n.findall("notations/articulations"):
+                        art.getparent().remove(art)
+                if ev.marks:
+                    nt = cols[on][0].find("notations")
+                    if nt is None:
+                        nt = etree.SubElement(cols[on][0], "notations")
+                    etree.SubElement(nt, "articulations").extend(etree.Element(m) for m in ev.marks)
+            break
+
+
 OTTAVA_ON = re.compile(r"\(.*\b8va\)", re.I)       # "STR. ENS. (loco & 8va)": a patch an octave up
 OTTAVA_OFF = re.compile(r"\(loco\)", re.I)
 

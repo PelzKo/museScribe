@@ -395,6 +395,8 @@ class Pipeline(Engine):
                                  vector_bars=None if is_scan(sample.pdf) else SL.read_all_systems(sample.pdf, pages))
         if not is_scan(sample.pdf) and sample.score_type != "piano_reduction":
             A.place_slashes(plans, SL.read(sample.pdf, pages, drums=sample.score_type == "drums"), D, stats)
+        if not is_scan(sample.pdf) and sample.score_type != "drums":
+            A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)

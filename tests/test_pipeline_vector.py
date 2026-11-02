@@ -81,6 +81,28 @@ def test_copy_marks_from_audiveris_only_onto_unmarked_notes():
     assert [[a.tag for a in n.find("notations/articulations")] for n in crop.notes()] == [["accent"], ["staccato"]]
 
 
+def test_read_marks_from_glyphs():
+    import pymupdf
+    from types import SimpleNamespace as NS
+
+    def ch(c, x, y, w=7.2):
+        return {"c": c, "bbox": (x, y - 10, x + w, y + 10), "origin": (x, y)}
+    lines = [{"type": "s", "rect": None, "width": 0.5,
+              "items": [("l", pymupdf.Point(50, y), pymupdf.Point(450, y))]} for y in (100, 105, 110, 115, 120)]
+    lines.append({"type": "s", "rect": None, "width": 1.2,
+                  "items": [("l", pymupdf.Point(250, 100), pymupdf.Point(250, 120))]})    # barline
+    chars = [ch("œ", 100, 110), ch(">", 100, 125), ch(".", 102.4, 128, 2.4),     # accent + staccato below
+             ch("œ", 150, 110), ch(".", 160, 107.5, 2.4),                         # augmentation dot
+             ch("œ", 300, 130), ch("-", 300, 125),                                # ledger line
+             ch("œ", 350, 105), ch("ß", 350, 92, 14.4)]                           # accent + staccato (wide)
+    page = NS(rect=NS(width=500), get_drawings=lambda: lines,
+              get_text=lambda kind: {"blocks": [{"lines": [{"spans": [
+                  {"font": "EngraverFontSet", "size": 20, "chars": chars}]}]}]})
+    bars = SL.read_marks(page, NS(number=1, width=1000))
+    assert [b.x0 for b in bars] == [100, 500]
+    assert [[e.marks for e in b.events] for b in bars] == [[["accent", "staccato"], []], [[], ["accent", "staccato"]]]
+
+
 def test_cue_text_of_instrument_parts():
     from types import SimpleNamespace as NS
     pl = NS(line=NS(right=500), staff=NS(left=100))

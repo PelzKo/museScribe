@@ -260,7 +260,69 @@ def read_drum_page(pdf_page, page) -> list[SlashBar]:
     return out
 
 
-def read(pdf, pages: list, drums: bool = False) -> list[SlashBar]:
+HEADS = set("œÏúwÎ")              # EngraverFontSet note heads (black, half, whole)
+# "˘" / "ﬂ" (or "ß", else sfz: only centred on a head): accent + staccato above / below in one glyph
+MARKS = {">": ["accent"], "^": ["strong-accent"], "˘": ["accent", "staccato"], "ﬂ": ["accent", "staccato"],
+         "ß": ["accent", "staccato"], ".": ["staccato"], "-": ["tenuto"]}
+
+
+def read_marks(pdf_page, page) -> list[SlashBar]:
+    """Articulations of the notes of one vector page: per staff and bar one Event per onset (heads
+    at the same x), its `marks` from the glyphs centred on it. A "." beside a head is an augmentation
+    dot, a "-" on the staff side of a head outside the staff a ledger line; cue-size heads are skipped."""
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    spans = [sp for b in pdf_page.get_text("rawdict")["blocks"] for ln in b.get("lines", []) for sp in ln["spans"]
+             if sp["font"].startswith("EngraverFontSet")]
+    full = max((sp["size"] for sp in spans), default=0)
+    heads, marks = [], []
+    for sp in spans:
+        for ch in sp["chars"]:
+            g = (ch["bbox"][0], ch["origin"][1], ch["bbox"][2] - ch["bbox"][0], ch["c"])
+            if ch["c"] in HEADS and sp["size"] >= 0.8 * full:
+                heads.append(g)
+            elif ch["c"] in MARKS:
+                marks.append(g)
+    if not heads:
+        return []
+    hlines, vthin, *_ = _drawings(pdf_page)
+    staves = _staves(hlines)
+    if not staves:
+        return []
+    def staff_of(y):
+        return min(staves, key=lambda s: max(s[0] - y, y - s[4], 0))
+    out = []
+    for st in staves:
+        top, bottom = st[0], st[4]
+        sp = (bottom - top) / 4
+        left = min(x0 for x0, _, y in hlines if abs(y - top) < 0.2)
+        right = max(x1 for _, x1, y in hlines if abs(y - top) < 0.2)
+        edges = [left] + _barlines(vthin, top, bottom, left, right) + [right]
+        groups: list[list] = []         # heads of one onset (a chord; a second sits one head to the side)
+        for h in sorted((h for h in heads if staff_of(h[1]) is st), key=lambda h: h[0]):
+            if groups and h[0] - groups[-1][0][0] <= 1.1 * h[2]:
+                groups[-1].append(h)
+            else:
+                groups.append([h])
+        evs = [Event(g[0][0], "head", Fraction(0)) for g in groups]
+        for x, y, w, c in marks:
+            # the head right below / above: centred on it, or starting with it ("ß" also comes 2 heads wide)
+            near = min((h for h in heads if min(abs(h[0] + h[2] / 2 - x - w / 2), abs(h[0] - x)) <= 0.4 * h[2]),
+                       key=lambda h: abs(h[1] - y), default=None)
+            k = next((k for k, g in enumerate(groups) if near in g), None)
+            if k is None or not 0.6 * sp <= abs(near[1] - y) <= 4.5 * sp:
+                continue
+            if c == "-" and (near[1] < y < top - 0.2 * sp or bottom + 0.2 * sp < y < near[1]):
+                continue        # a ledger line between the head and the staff
+            evs[k].marks.extend(m for m in MARKS[c] if m not in evs[k].marks)
+        for l, r in zip(edges, edges[1:]):
+            bar = [e for e in evs if l <= e.x < r]
+            if bar:
+                out.append(SlashBar(page.number, l * sx, r * sx, top * sx, bottom * sx,
+                                    [Event(e.x * sx, e.kind, e.dur, marks=e.marks) for e in bar]))
+    return out
+
+
+def read(pdf, pages: list, drums: bool = False, marks: bool = False) -> list[SlashBar]:
     """Slash bars (drum-kit bars) of the vector pages of `pdf` (pages[i] is PDF page i)."""
     import pymupdf as fitz
 
@@ -269,7 +331,7 @@ def read(pdf, pages: list, drums: bool = False) -> list[SlashBar]:
     with FITZ_LOCK, fitz.open(pdf) as doc:
         return [b for i, p in enumerate(doc) if i < len(pages) and p.get_fonts()
                 and classify_page(p, i + 1).kind == "vector"
-                for b in (read_drum_page if drums else read_page)(p, pages[i])]
+                for b in (read_marks if marks else read_drum_page if drums else read_page)(p, pages[i])]
 
 
 CENTRED = {"’"}

@@ -30,7 +30,7 @@ and every other mark land on the wrong beat otherwise.
 | R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | done -183 | small | done |
 | R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | done -896 | large | no |
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
-| R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done on scans -56 (`r7-c`); Ghost glyphs -250..-400 | medium | no |
+| R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
@@ -293,6 +293,18 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   worse Anastasia 3 Bass +27, Keyboard 2 +17, Trumpet / Trombone +4: the page prints the marks, the truth lacks them
   (TRUTH_DEVIATIONS). Left: Anastasia 3 made-up marks are mostly those sparse truths (Bass, Trombone, Trumpet,
   Keyboard 2: about 530 of 870 articulation differences); Ghost glyph marks (R5 proper) not done.
+- R5 / Ghost glyph marks accepted, `r7-d` **12 897** (-107 against `r7-c`, no part worse; Ghost 13 Cello -17,
+  20 Utility -12, 20 PianoReduction -9): `vector.read_marks` reads the EngraverFontSet heads (œ Ï ú w Î, cue size
+  skipped) per staff and bar, one column per x, and the marks centred on a head (or starting with it): ">" accent,
+  "^" marcato, "." staccato (a dot beside the head is an augmentation dot), "-" tenuto (between the head and the
+  staff outside it: a ledger line), "˘" / "ﬂ" / "ß" accent + staccato above / below (ß is sfz elsewhere: only
+  centred on a head). A mark goes to the head nearest to it vertically, not by the nearest staff (marks below a
+  low bass note sit closer to the next staff). `assemble.place_marks` replaces the readers' marks where the staff's
+  note onsets in the chosen bar equal the head columns. Not marks: "≥" / "≤" down- / up-bow, "u" fermata below,
+  "Å" 16th rest, "¾" tremolo. Left: Ghost 5 Bass / Cello / PianoReduction / Utility (about 300): the truths write
+  the marks out after "sim." across the 2/4 -> 4/4 change, but Audiveris does not read that "sim." (PDF text
+  layer, italic) and `bars.apply_sim` stops where the rhythm changes; Ghost 5 Bass bars 1-7 misaligned; drum kits;
+  two voices on one staff (R17, marks go to the first note of the onset).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
