@@ -32,7 +32,7 @@ and every other mark land on the wrong beat otherwise.
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
 | R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`), "sim." -64 (`r7-e`) / -8 (`r7-f`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
-| R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`); detector open | large | no |
+| R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
@@ -320,6 +320,10 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   directions already at the front (`vocal` adds start then stop). Output hairpins 153 -> 221 over Anastasia; most
   of the new ones are made up / at the wrong beat where Audiveris misreads, so the gain is small. Left: about 300
   hairpins and 330 dynamics Audiveris never sees on the scans (detector, #33).
+- R7 / OCR dynamics at confidence 50 accepted, `r8-b` **12 804** (-13 against `r8-a`; Anastasia 3 Violin 1 -6, worst
+  +1): `ocr.supplement` keeps a word that is exactly a dynamic token from Tesseract confidence 50 (was 70). The
+  cached OCR of Anastasia 3 / 4 has about 90 more such tokens at 50-69 (mf 44, p 21, f 19), most are already
+  covered by an Audiveris text or filtered by height. Confidence 40: `r8-c` -11 (two more made-up ones).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

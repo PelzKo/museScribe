@@ -348,7 +348,7 @@ def supplement(page: Page, words: list[dict]) -> int:
     old = list(page.texts)
     for wd in words:
         t = _EDGE.sub("", wd["text"].strip())
-        dyn = DYNAMIC.fullmatch(t) and wd["conf"] >= 70
+        dyn = DYNAMIC.fullmatch(t) and wd["conf"] >= 50
         if not dyn and (not t or not KEEP.match(t) or not re.search(r"\d|to", t, re.I)):
             continue
         x, y, w, h = wd["x"], wd["y"], wd["w"], wd["h"]
