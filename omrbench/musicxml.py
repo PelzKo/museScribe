@@ -219,6 +219,8 @@ def drop_duplicate_curves(root: etree._Element) -> int:
                         dropped += 1
                     else:
                         pairs.add((a, i))
+                elif sl.get("type") == "stop":      # its start was dropped
+                    sl.getparent().remove(sl)
         for nt in [x for x in part.iter("notations") if not len(x)]:
             nt.getparent().remove(nt)
     return dropped

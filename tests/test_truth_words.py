@@ -177,3 +177,13 @@ def test_text_layer_labels_only_where_the_ocr_has_none():
              (12, 60.0, 600.0, "Cue: Applause")]
     seen = [SimpleNamespace(x=131.0, top=190.0)]          # "VLAD:" read by the OCR
     assert missed_labels(lines, 12, seen, 2.0) == [(450.0, 205.0, "DMITRY")]
+
+
+def test_slur_stop_without_its_start_is_dropped():
+    from lxml import etree
+    from omrbench import musicxml
+    root = etree.fromstring('<score-partwise><part id="P1"><measure number="1"><note><pitch><step>C</step>'
+                            '<octave>4</octave></pitch><duration>4</duration><notations><slur type="stop"/>'
+                            '</notations></note></measure></part></score-partwise>')
+    musicxml.drop_duplicate_curves(root)
+    assert root.find(".//slur") is None and root.find(".//notations") is None

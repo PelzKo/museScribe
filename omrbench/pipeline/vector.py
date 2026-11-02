@@ -39,6 +39,7 @@ class Event:
     pos: tuple = ()                 # drums: staff positions of the chord ("C5", "F4")
     heads: int = 0                  # read_marks: heads in the column
     ties: list = field(default_factory=list)    # read_marks: tied heads, index from the top
+    curved: bool = False            # read_marks: a tie / slur curve starts at the column
 
 
 @dataclass
@@ -306,6 +307,10 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
             else:
                 groups.append([h])
         evs = [Event(g[0][0], "head", Fraction(0), heads=len(g)) for g in groups]
+        for x0, x1, y0, y1 in curves:
+            k = next((k for k, g in enumerate(groups) if g[0][0] - sp <= x0 <= g[0][0] + g[0][2] + 1.5 * sp), None)
+            if k is not None and x1 - x0 > 2 * sp and staff_of((y0 + y1) / 2) is st:     # not a brace
+                evs[k].curved = True
         for k, h in _ties(curves, groups, st, staff_of, right):
             evs[k].ties.append(sorted(groups[k], key=lambda g: g[1]).index(h))
         for x, y, w, c in marks:
@@ -322,7 +327,8 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
             bar = [e for e in evs if l <= e.x < r]
             if bar:
                 out.append(SlashBar(page.number, l * sx, r * sx, top * sx, bottom * sx,
-                                    [Event(e.x * sx, e.kind, e.dur, marks=e.marks, heads=e.heads, ties=e.ties)
+                                    [Event(e.x * sx, e.kind, e.dur, marks=e.marks, heads=e.heads, ties=e.ties,
+                                           curved=e.curved)
                                      for e in bar]))
     return out
 

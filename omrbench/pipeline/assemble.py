@@ -817,6 +817,10 @@ def place_marks(plans: list[SysPlan], mark_bars: list[SL.SlashBar], stats: Stats
                     if nt is None:
                         nt = etree.SubElement(cols[on][0], "notations")
                     etree.SubElement(nt, "articulations").extend(etree.Element(m) for m in ev.marks)
+                if not ev.curved:       # no curve starts at the column: a slur start there is made up
+                    for n in cols[on]:
+                        for sl in n.findall("notations/slur[@type='start']"):
+                            sl.getparent().remove(sl)
                 if ev.ties and len(cols[on]) == ev.heads:   # tie curves: head k from the top = k-th highest note
                     high = sorted(cols[on], key=_staff_step, reverse=True)
                     for k in ev.ties:
