@@ -324,6 +324,11 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   +1): `ocr.supplement` keeps a word that is exactly a dynamic token from Tesseract confidence 50 (was 70). The
   cached OCR of Anastasia 3 / 4 has about 90 more such tokens at 50-69 (mf 44, p 21, f 19), most are already
   covered by an Audiveris text or filtered by height. Confidence 40: `r8-c` -11 (two more made-up ones).
+- R16 / `max_wedge_bars` 4 (with the hairpin order fixed) rejected, `r8-d` measured +2 against `r8-b` (Anastasia 3
+  PianoReduction +3): Audiveris' longer pairings on the scans are mostly misreads; 2 stays. State after `r8-b`
+  (Anastasia): hairpins missing 273, made up 60, wrong beat 20; dynamics missing 327, made up 254 (Anastasia 3
+  Cello 31 / Kontrabass 22 / Keyboard 2 20 against truths with 10 / 11 / 17 dynamics: check whether those truths
+  are sparse). The detector (#33) is still the only way to the missing ones.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
