@@ -206,19 +206,32 @@ def bar_ok(bar: Bar, length: int | None) -> bool:
 
 
 def fit_measure_rests(bar: Bar, length: int) -> None:
-    """A whole-bar rest lasts the bar in any meter: the crop's duration (4 quarters in a 3/4 bar, or
-    in other divisions) would make MuseScore stretch the bar. A <backup> right after it moves along."""
+    """A voice of rests only is a whole-bar rest and lasts the bar in any meter: the crop's durations
+    (a whole rest of 4 quarters in a 3/4 bar, 3 + 2 quarters of rests) would make MuseScore stretch the
+    bar. Its rests become one measure rest; the <backup> after it moves along (later onsets stay)."""
     items = bar.items
-    for i, n in enumerate(items):
-        r = n.find("rest") if n.tag == "note" else None
-        if r is None or r.get("measure") != "yes" or n.find("chord") is not None:
+    moves = ("note", "backup", "forward")
+    voices: dict[tuple[str, str], list[etree._Element]] = {}
+    for n in items:
+        if n.tag == "note" and n.find("grace") is None:
+            voices.setdefault((n.findtext("staff", "1"), n.findtext("voice", "1")), []).append(n)
+    for notes in voices.values():
+        if any(n.find("rest") is None or n.find("chord") is not None or n.find("duration") is None for n in notes):
             continue
-        d = n.find("duration")
-        if d is None or int(d.text or 0) == length:
+        idx = [items.index(n) for n in notes]       # now: an earlier voice may have removed rests
+        total = sum(int(n.findtext("duration", "0") or 0) for n in notes)
+        if total == length or any(items[k].tag in moves for k in range(idx[0], idx[-1]) if k not in idx):
             continue
-        old, d.text = d.text, str(length)
-        if i + 1 < len(items) and items[i + 1].tag == "backup" and items[i + 1].findtext("duration") == old:
-            items[i + 1].find("duration").text = str(length)
+        nxt = next((items[k] for k in range(idx[-1] + 1, len(items)) if items[k].tag in moves), None)
+        if nxt is not None:
+            back = int(nxt.findtext("duration", "0") or 0) + length - total
+            if nxt.tag != "backup" or back < 0:
+                continue
+            nxt.find("duration").text = str(back)
+        notes[0].find("duration").text = str(length)
+        notes[0].find("rest").set("measure", "yes")
+        for n in notes[1:]:
+            items.remove(n)
 
 
 SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)

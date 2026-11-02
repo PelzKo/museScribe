@@ -36,6 +36,23 @@ def test_measure_rest_gets_the_bar_length():
     assert [e.findtext("duration") for e in bar.items] == ["6", "6", "6"]
 
 
+def test_rest_only_voice_becomes_a_measure_rest():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+    x = [etree.fromstring(s) for s in (
+        "<note><pitch><step>C</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice></note>",
+        "<backup><duration>3</duration></backup>",
+        "<note><rest/><duration>12</duration><voice>2</voice></note>",          # whole rest in 3/4
+        "<backup><duration>9</duration></backup>",
+        "<note><pitch><step>D</step><octave>5</octave></pitch><duration>6</duration><voice>1</voice></note>",
+        "<note><rest/><duration>6</duration><voice>3</voice></note>",           # 2 + 2 quarters of rests
+        "<note><rest/><duration>6</duration><voice>3</voice></note>")]
+    bar = B.Bar(x, "crop")
+    B.fit_measure_rests(bar, 9)
+    assert [e.findtext("duration") for e in bar.items] == ["3", "3", "9", "6", "6", "9"]
+    assert bar.items[2].find("rest").get("measure") == "yes"
+
+
 def test_sim_copies_the_pattern_articulations():
     from lxml import etree
     from omrbench.pipeline import bars as B

@@ -34,7 +34,7 @@ and every other mark land on the wrong beat otherwise.
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`), sim. slurs -9 (`r9-b`), made-up slurs -15 (`r9-d`), half heads -39 (`r9-e`) | medium | no |
-| R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
+| R9 | Bars in the right place and of the right length | 793 | part: rest-only voices -125 (`r11-a2`) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
 | R12 | Made-up words on keyboards and piano reductions | ~250 | -50..-100 | small | no |
@@ -360,6 +360,13 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
 - R21 / `plainText` accepted, `r10-a` **12 349** (-93 against `r9-e`; Anastasia 4 PianoReduction -90, song 3 -15,
   song 2 +12 as expected, its truth keeps the shared lyrics): `musicxml.dedup_lyrics` clears a bar's lyrics in a
   listed voice when an earlier listed voice has the same (onset, duration, text) for every lyric note of that bar.
+- R9 / rest-only voices accepted, `r11-a2` **12 224** (-125 against `r10-a`; Anastasia 3 Keyboard 1 -24, Keyboard 2
+  -17, worst Anastasia 1 Keyboard 1 +2): in `r10-a` 351 bars had a length other than the truth bar (`barlen`: 177
+  short, 110 long, 64 rest-only); `bars` (537) is mostly a made-up bar against an empty truth bar charged as
+  delete + insert (2) instead of its notes, not a misplaced bar. `bars.fit_measure_rests` only fitted rests marked
+  `measure="yes"`; now every voice of rests only (homr's whole rest of 4 quarters in a 3/4 bar, 3 + 2 quarters of
+  rests) becomes one measure rest of the song's bar length, the `<backup>` after it moves by the difference so later
+  onsets stay. A first run crashed on Anastasia 3 Keyboard 1 (indices of interleaved voices after a removal).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
