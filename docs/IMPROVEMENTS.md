@@ -376,7 +376,14 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   Keyboard 1 -5): `bars.cut_long_bar` (after `pad_short_bar`, every bar) takes the overshoot of a bar longer than the
   song's bar length off the voice segment that ends last (after its last `<backup>`): from its last rest long enough,
   else from its longest note (chord notes alike, `<type>` / `<dot>` dropped so MuseScore takes the duration); the
-  `<backup>` after it moves along. Left after `r11-b`: 86 wrong-length bars (73 long, 7 short, 6 rest-only).
+  `<backup>` after it moves along. Left after `r11-c`: `barlen` 54 (41 long, 7 short, 6 rest-only), each a
+  malformed bar: two staves' voices without a `<backup>` between them (Anastasia 3 Keyboard 2 bars 14 / 68 / 145),
+  voices split by `<forward>`s (Anastasia 4 Keyboard 1 bar 14), a 48-quarter rest in Anastasia 1 Flute bar 26;
+  fixing them belongs where the `<backup>` is lost, about 1 each. `bars` 491: mostly a made-up bar against an
+  empty truth bar (delete + insert = 2, Ghost 4 PianoReduction bars 2-10, Anastasia 4 Tamburin) or the singer
+  routing of Anastasia 3 Männer / Frauen (R6); true offsets are small (Ghost 13 Cello 16: a rest of 8 bars read as
+  1 and 7 extra empty bars later, Ghost 5 Violin / Frauen about 10 each). Idea (a) was not tried: every part has
+  the workbook bar count but Anastasia 4 Keyboard 1 (212 / 211) and Anastasia 3 PianoReduction (246 / 245).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
