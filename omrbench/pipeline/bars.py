@@ -246,10 +246,26 @@ def apply_sim(bars: list[Bar]) -> int:
         pat = bars[src]
         if not _marked(pat):
             continue
+        # every note of the pattern alike (one value, one set of marks): goes on over bars of only
+        # that value, whatever their count (Ghost 5 Bass: 2/4 -> 4/4 under one "sim.")
+        played = [x for x in pat.notes() if x.find("grace") is None and x.find("rest") is None]
+        sig = {(x.findtext("duration"), etree.tostring(x.find("notations/articulations"))
+                if x.find("notations/articulations") is not None else b"") for x in played if x.find("chord") is None}
         for h in range(src + 1, len(bars)):
             b = bars[h]
-            if b is None or _rhythm(b) != _rhythm(pat) or _marked(b):
+            if b is None or _marked(b):
                 break
+            if _rhythm(b) != _rhythm(pat):
+                mine = [x for x in b.notes() if x.find("grace") is None and x.find("chord") is None]
+                dur, marks = next(iter(sig)) if len(sig) == 1 else (None, b"")
+                if not marks or not mine or any(x.find("rest") is not None or x.findtext("duration") != dur
+                                                for x in mine):
+                    break
+                for n in mine:
+                    nt = n.find("notations")
+                    (nt if nt is not None else etree.SubElement(n, "notations")).append(etree.fromstring(marks))
+                changed += 1
+                continue
             for a, n in zip([x for x in pat.notes() if x.find("grace") is None],
                             [x for x in b.notes() if x.find("grace") is None]):
                 art = a.find("notations/articulations")

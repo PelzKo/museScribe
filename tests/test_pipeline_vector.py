@@ -150,3 +150,13 @@ def test_place_sim_from_text_layer_into_the_bar_above():
     A.place_sim([plan], [(1, 150, 150, "sim."), (1, 150, 400, "sim.")])     # the second is no staff's
     assert [len(b.items) for b in plan.chosen[0]] == [1, 2]
     assert plan.chosen[0][1].items[0].findtext("direction-type/words") == "sim."
+
+
+def test_apply_sim_uniform_pattern_goes_on_over_longer_bars():
+    from lxml import etree
+    pat = _bar(notes=("E2", "E2"))
+    for n in pat.notes():
+        etree.SubElement(etree.SubElement(n, "notations"), "articulations").append(etree.Element("accent"))
+    bars = [pat, _bar("sim.", notes=("E2", "E2")), _bar(notes=("E2",) * 4), _bar(notes=())]
+    assert B.apply_sim(bars) == 2
+    assert all(n.find("notations/articulations/accent") is not None for b in bars[1:3] for n in b.notes())
