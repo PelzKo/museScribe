@@ -32,7 +32,7 @@ and every other mark land on the wrong beat otherwise.
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
 | R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`), "sim." -64 (`r7-e`) / -8 (`r7-f`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
-| R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
+| R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`); detector open | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
@@ -313,6 +313,13 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   note of the pattern bar has the same value and the same marks, `bars.apply_sim` goes on over following bars that
   hold only notes of that value, whatever their count (2/4 -> 4/4 under one "sim."). Left: Ghost 5 Bass (bars 1-7
   of the output misaligned: an empty bar breaks the run), Ghost 5 PianoReduction / Guitar / Drums.
+- R7 / hairpin order accepted, `r8-a` **12 817** (-8 against `r7-f`; Anastasia 4 Violin 1 -10, worst Anastasia 3
+  Cello +3): `bars.add_direction` put every direction first in the bar, so copying a bar's Audiveris directions onto
+  a homr bar reversed them; a hairpin inside one bar then had its stop before its start and `limit_wedges` dropped
+  both as unpaired (Anastasia 4 Violin 1: Audiveris 21 hairpins of 0-1 bars, output 8). Now it inserts after the
+  directions already at the front (`vocal` adds start then stop). Output hairpins 153 -> 221 over Anastasia; most
+  of the new ones are made up / at the wrong beat where Audiveris misreads, so the gain is small. Left: about 300
+  hairpins and 330 dynamics Audiveris never sees on the scans (detector, #33).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

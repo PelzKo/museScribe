@@ -281,8 +281,6 @@ def place_marks(plans, pages: list[Page], D: int, stats) -> None:
             if (i1, on1) <= (i0, on0):
                 stats.marks_unplaced += 1
                 continue
-            # add_direction puts it first in the bar: the stop first, so that in a bar
-            # with both the start comes before it
-            B.add_direction(plan.chosen[gi][i1], _wedge_el("stop", placement), on1, staff_no)
             B.add_direction(plan.chosen[gi][i0], _wedge_el(kind, placement), on0, staff_no)
+            B.add_direction(plan.chosen[gi][i1], _wedge_el("stop", placement), on1, staff_no)
             stats.wedges += 1

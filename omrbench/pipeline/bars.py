@@ -418,7 +418,8 @@ def rest_bar(staves: int, length: int | None, D: int) -> Bar:
 
 def add_direction(bar: Bar, direction: etree._Element, onset: int,
                   staff: int | None) -> etree._Element:
-    """Insert a direction at `onset` (divisions from bar start) via <offset>."""
+    """Insert a direction at `onset` (divisions from bar start) via <offset>, after the
+    directions at the front of the bar."""
     d = copy.deepcopy(direction)
     for old in d.findall("offset"):
         d.remove(old)
@@ -435,7 +436,12 @@ def add_direction(bar: Bar, direction: etree._Element, onset: int,
         st.text = str(staff)
         idx = max(i for i, c in enumerate(d) if c.tag in ("direction-type", "offset")) + 1
         d.insert(idx, st)
-    bar.items.insert(0, d)
+    # after the directions already at the front: copies keep their order (a hairpin
+    # start before its stop in the same bar, else limit_wedges drops both)
+    i = 0
+    while i < len(bar.items) and bar.items[i].tag == "direction":
+        i += 1
+    bar.items.insert(i, d)
     return d
 
 

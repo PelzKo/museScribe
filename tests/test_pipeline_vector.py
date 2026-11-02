@@ -42,8 +42,19 @@ def test_patch_octaves_from_loco_8va_until_loco():
     A.patch_octaves([plan], A.Stats())
     octs = [b.notes()[0].findtext("pitch/octave") for b in plan.chosen[0]]
     assert octs == ["4", "5", "5", "4"]
-    assert plan.chosen[0][1].items[0].find("direction-type/octave-shift").get("type") == "down"
-    assert plan.chosen[0][3].items[0].find("direction-type/octave-shift").get("type") == "stop"
+    shift = [[o.get("type") for d in b.items for o in d.findall("direction-type/octave-shift")] for b in plan.chosen[0]]
+    assert shift[1] == ["down"] and shift[3] == ["stop"]
+
+
+def test_add_direction_keeps_order_so_hairpins_pair():
+    from lxml import etree
+    bar = _bar(notes=("C4",))
+    for kind, on in (("crescendo", 0), ("stop", 2)):
+        d = etree.Element("direction")
+        etree.SubElement(etree.SubElement(d, "direction-type"), "wedge", type=kind)
+        B.add_direction(bar, d, on, None)
+    kinds = [w.get("type") for d in bar.items for w in d.findall("direction-type/wedge")]
+    assert kinds == ["crescendo", "stop"]
 
 
 def test_repeat_copies_the_bar_before_by_printed_number():
