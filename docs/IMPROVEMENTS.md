@@ -33,7 +33,7 @@ and every other mark land on the wrong beat otherwise.
 | R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`), "sim." -64 (`r7-e`) / -8 (`r7-f`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
-| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`) | medium | no |
+| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`) | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
@@ -333,6 +333,13 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   Reed 1 -25, Trumpet -24, worst Anastasia 3 PianoReduction +1): homr writes a slur and a tie on the same two notes of
   one pitch (the scans print one curve); `musicxml.slurs_to_ties` skipped such a slur, now it drops it (the tie stays).
   Left: Anastasia 3 made-up slurs (432 in `r8-b`, many on grace notes homr reads as 16ths: Violin 1 bar 26).
+- R8 / ties from the vector curves accepted, `r9-a` **12 505** (-53 against `r9-a2`; Ghost 20 PianoReduction -43,
+  worst Ghost 13 Bass +2): `vector.read_marks` also pairs the flat filled curves (`_ties`) of a staff with the head
+  columns: a curve from a head to a head at the same height in the next column, or off the system end from the last
+  column (#39), is a tie; `assemble.place_marks` puts the tie start on the k-th highest note of that onset (only when
+  the onset has as many notes as the column heads), `musicxml.close_ties` gives every tie start its stop on the
+  same pitch in the next chord (also over system breaks). Ghost 20 ties 145 -> 100. Left: Finale slurs (curves
+  between different heads) not read yet; Anastasia's vector PianoReductions use Petrucci (heads œ ˙ w), not read.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

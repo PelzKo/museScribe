@@ -171,3 +171,16 @@ def test_apply_sim_uniform_pattern_goes_on_over_longer_bars():
     bars = [pat, _bar("sim.", notes=("E2", "E2")), _bar(notes=("E2",) * 4), _bar(notes=())]
     assert B.apply_sim(bars) == 2
     assert all(n.find("notations/articulations/accent") is not None for b in bars[1:3] for n in b.notes())
+
+
+def test_tie_curves_pair_a_head_with_the_same_height_in_the_next_column():
+    from omrbench.pipeline.vector import _ties
+    st = [100, 105, 110, 115, 120]                         # staff lines, space 5
+    a, b = (10, 112.5, 5, "œ"), (10, 102.5, 5, "œ")        # a chord: two heads
+    c = (40, 112.5, 5, "œ")                                # next column: only the lower one
+    groups = [[a, b], [c], [(70, 110, 5, "œ")]]
+    curves = [(16, 39, 114, 117),                          # a -> c: a tie
+              (16, 39, 98, 101),                           # b -> nothing at its height: no tie
+              (76, 199, 106, 109)]                         # last column off the system end
+    found = list(_ties(curves, groups, st, lambda y: st, right=200))
+    assert found == [(0, a), (2, groups[2][0])]

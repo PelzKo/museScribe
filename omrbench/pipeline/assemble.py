@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
-from ..musicxml import PLAY_WORDS, drop_duplicate_curves, play_techniques, slurs_to_ties, tie_held_chords
+from ..musicxml import PLAY_WORDS, _add_tie, close_ties, drop_duplicate_curves, play_techniques, slurs_to_ties, tie_held_chords
 from .ocr import DYNAMIC
 from . import bars as B
 from . import chords as CH
@@ -71,6 +71,7 @@ class Stats:
     octave_bars: int = 0
     repeat_bars: int = 0
     ties_copied: int = 0
+    ties_curves: int = 0           # tie starts added from the vector curves
     words_dropped: int = 0
     times_set: int = 0
     pickup: bool = False
@@ -107,7 +108,7 @@ class Stats:
                 "spoken": self.spoken, "beamed": self.beamed, "dynamics": self.dynamics,
                 "wedges": self.wedges, "marks_unplaced": self.marks_unplaced,
                 "chord_marks_deduped": self.chord_marks_deduped,
-                "slurs_to_ties": self.slurs_to_ties, "chord_ties": self.chord_ties, "dynamics_text": self.dynamics_text,
+                "slurs_to_ties": self.slurs_to_ties, "ties_curves": self.ties_curves, "chord_ties": self.chord_ties, "dynamics_text": self.dynamics_text,
                 "graces_retyped": self.graces_retyped, "graces_dropped": self.graces_dropped,
                 "wedges_dropped": self.wedges_dropped,
                 "notes": self.notes}
@@ -816,7 +817,16 @@ def place_marks(plans: list[SysPlan], mark_bars: list[SL.SlashBar], stats: Stats
                     if nt is None:
                         nt = etree.SubElement(cols[on][0], "notations")
                     etree.SubElement(nt, "articulations").extend(etree.Element(m) for m in ev.marks)
+                if ev.ties and len(cols[on]) == ev.heads:   # tie curves: head k from the top = k-th highest note
+                    high = sorted(cols[on], key=_staff_step, reverse=True)
+                    for k in ev.ties:
+                        stats.ties_curves += high[k].find("notations/tied[@type='start']") is None
+                        _add_tie(high[k], "start")
             break
+
+
+def _staff_step(n) -> int:
+    return int(n.findtext("pitch/octave") or 4) * 7 + "CDEFGAB".index((n.findtext("pitch/step") or "C").strip())
 
 
 def place_sim(plans: list[SysPlan], lines: list[tuple]) -> None:
@@ -2438,6 +2448,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 etree.SubElement(bl, "bar-style").text = "light-light"
     n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
     k = tie_held_chords(root)
+    close_ties(root)             # a tie start whose stop the reader lost (system breaks, vector curves)
     play_techniques(root)        # pizz. / arco / gedämpft / offen play back in MuseScore
     drop_duplicate_curves(root)  # the same slur / tie twice (merged readers)
     if stats is not None:

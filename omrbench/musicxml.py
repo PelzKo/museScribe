@@ -247,16 +247,7 @@ def tie_held_chords(root: etree._Element) -> int:
     2026-10-18). Returns how many ties were added."""
     added = 0
     for part in root.iter("part"):
-        seq: dict[tuple, list[list]] = {}       # (staff, voice) -> its chords in order
-        for n in part.iter("note"):
-            if n.find("grace") is not None:
-                continue
-            key = (n.findtext("staff") or "1", n.findtext("voice") or "1")
-            if n.find("chord") is not None and seq.get(key):
-                seq[key][-1].append(n)
-            else:
-                seq.setdefault(key, []).append([n])
-        for chords in seq.values():
+        for chords in _chords(part).values():
             for a, b in zip(chords, chords[1:]):
                 if len(a) < 2 or any(x.find("rest") is not None for x in a + b) \
                         or not any(x.find("notations/tied[@type='start']") is not None for x in a):
@@ -269,6 +260,37 @@ def tie_held_chords(root: etree._Element) -> int:
                     if x.find("notations/tied[@type='start']") is None:
                         _add_tie(x, "start")
                         _add_tie(by_pitch[_pitch_key(x)], "stop")
+                        added += 1
+    return added
+
+
+def _chords(part: etree._Element) -> dict[tuple, list[list]]:
+    """(staff, voice) -> its chords (lists of notes, rests included) in order, graces left out."""
+    seq: dict[tuple, list[list]] = {}
+    for n in part.iter("note"):
+        if n.find("grace") is not None:
+            continue
+        key = (n.findtext("staff") or "1", n.findtext("voice") or "1")
+        if n.find("chord") is not None and seq.get(key):
+            seq[key][-1].append(n)
+        else:
+            seq.setdefault(key, []).append([n])
+    return seq
+
+
+def close_ties(root: etree._Element) -> int:
+    """A tie start gets its stop on the note of the same pitch in the next chord of its staff and
+    voice (lost over a system break, or a start added from the vector curves). Returns the count."""
+    added = 0
+    for part in root.iter("part"):
+        for chords in _chords(part).values():
+            for a, b in zip(chords, chords[1:]):
+                for x in a:
+                    if x.find("notations/tied[@type='start']") is None or x.find("pitch") is None:
+                        continue
+                    y = next((y for y in b if _pitch_key(y) == _pitch_key(x)), None)
+                    if y is not None and y.find("notations/tied[@type='stop']") is None:
+                        _add_tie(y, "stop")
                         added += 1
     return added
 

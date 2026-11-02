@@ -37,6 +37,8 @@ class Event:
     marks: list = field(default_factory=list)   # accent | staccato | tenuto
     voice: int = 1                  # drums: 1 = stems up, 2 = stems down
     pos: tuple = ()                 # drums: staff positions of the chord ("C5", "F4")
+    heads: int = 0                  # read_marks: heads in the column
+    ties: list = field(default_factory=list)    # read_marks: tied heads, index from the top
 
 
 @dataclass
@@ -284,7 +286,7 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
                 marks.append(g)
     if not heads:
         return []
-    hlines, vthin, *_ = _drawings(pdf_page)
+    hlines, vthin, _, _, curves = _drawings(pdf_page)
     staves = _staves(hlines)
     if not staves:
         return []
@@ -303,7 +305,9 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
                 groups[-1].append(h)
             else:
                 groups.append([h])
-        evs = [Event(g[0][0], "head", Fraction(0)) for g in groups]
+        evs = [Event(g[0][0], "head", Fraction(0), heads=len(g)) for g in groups]
+        for k, h in _ties(curves, groups, st, staff_of, right):
+            evs[k].ties.append(sorted(groups[k], key=lambda g: g[1]).index(h))
         for x, y, w, c in marks:
             # the head right below / above: centred on it, or starting with it ("ß" also comes 2 heads wide)
             near = min((h for h in heads if min(abs(h[0] + h[2] / 2 - x - w / 2), abs(h[0] - x)) <= 0.4 * h[2]),
@@ -318,8 +322,29 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
             bar = [e for e in evs if l <= e.x < r]
             if bar:
                 out.append(SlashBar(page.number, l * sx, r * sx, top * sx, bottom * sx,
-                                    [Event(e.x * sx, e.kind, e.dur, marks=e.marks) for e in bar]))
+                                    [Event(e.x * sx, e.kind, e.dur, marks=e.marks, heads=e.heads, ties=e.ties)
+                                     for e in bar]))
     return out
+
+
+def _ties(curves, groups: list[list], st, staff_of, right: float):
+    """(column, head) of the tie curves of one staff: a flat curve from a head to the head at the
+    same height in the next column, or off the system end from the last column (#39)."""
+    sp = (st[4] - st[0]) / 4
+    for x0, x1, y0, y1 in curves:
+        yc = (y0 + y1) / 2
+        if y1 - y0 > 2 * sp or staff_of(yc) is not st:
+            continue
+        k = max((k for k, g in enumerate(groups) if g[0][0] + g[0][2] <= x0 + sp), default=None)
+        if k is None or abs(groups[k][0][0] + groups[k][0][2] - x0) > 2 * sp:
+            continue
+        near = [h for h in groups[k] if abs(h[1] - yc) <= 1.5 * sp]
+        if k + 1 < len(groups) and abs(groups[k + 1][0][0] - x1) <= 2 * sp:
+            near = [h for h in near if any(abs(h[1] - g[1]) < 0.3 for g in groups[k + 1])]
+        elif not (k == len(groups) - 1 and x1 >= right - 2 * sp):
+            continue
+        if near:
+            yield k, min(near, key=lambda h: abs(h[1] - yc))
 
 
 def read(pdf, pages: list, drums: bool = False, marks: bool = False) -> list[SlashBar]:
