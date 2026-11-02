@@ -355,7 +355,8 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   part worse): `vector.HEADS` lacked the EngraverFontSet half head "˙" (138 on the Ghost 20 pages), so bars with a
   half note had one head column too few and `place_marks` skipped them (marks, ties, slur check). Measured together
   with reading Petrucci (Anastasia's vector PianoReductions, heads œ ˙ w): no change on Anastasia, left out.
-  Left: Anastasia's vector PianoReductions do not reach `place_marks` (R13).
+  Left: why Petrucci heads change nothing on Anastasia (read_marks finds them: Anastasia 3 page 2, 156 columns) is
+  not checked yet (R13).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
