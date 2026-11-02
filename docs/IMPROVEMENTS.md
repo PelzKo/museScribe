@@ -87,7 +87,11 @@ against every written bar: a bar that fills a different length than its time get
 note cut (rule "each voice fills the bar", CORRECTION_INFORMATION 2); (c) find why `fit_measure_rests` misses 51.
 
 R10. **Chord symbols.** Ghost piano reductions 1a / 4 / 11a keep chord symbols in the truth (11 / 59 / 22), Ghost 20
-has none. Turning them on for every Ghost piano reduction: +72 (Ghost 20 +62, Ghost 4 +10), rejected. Ask the user
+has none. Checked 2026-11-02: the Ghost 20 PianoReduction PDF prints a chord symbol under almost every bar from
+bar 9 to 134 (pages 257-274, text layer "B♭/F", "E♭/B♭", "A♭m7", ...); the user remembers them only around bar 70.
+The output has 16 bars with chords (30, 31, 39, 40, 75-87, 119-122, 131), the truth piano none (the truth guitar
+has 105). Open: does the Ghost 20 truth piano get the chords (then +R10 helps, about -100), or stays the truth
+without them (then the 16 output bars cost 16 and `chord_names` should be off for this book). Turning them on for every Ghost piano reduction: +72 (Ghost 20 +62, Ghost 4 +10), rejected. Ask the user
 whether Ghost 20's piano should have them (the PDF prints them?). Guitar: 26 chords at the wrong beat (Ghost 20),
 snap to the slash / note under the symbol (#37); with the bars now right this is cheap.
 
@@ -177,6 +181,7 @@ nothing in the metric (it compares the printed text) but save the user work in e
 | R23 | Real instruments instead of piano (playback, names) | 0 | 0 (every part to re-assign) | small | no |
 | R24 | "gedämpft" / "offen" as mute on / off (playback) | 0 | 0 | tiny | no |
 | R25 | Duplicate dynamics / words at the same spot removed | 26 | -10..-26 | tiny | no |
+| R26 | `plainArticulation` = only the marks another part already has are dropped | metric: ~2 465 hidden | song 3 Violin 2 / Reed 2: about -550 of +663 (against scoring them in full) | medium | yes: flags of songs 1/2/4/4A, metric change |
 
 R20. **Duplicate slurs and ties (user 2026-11-01).** Two slurs (or ties) that join exactly the same two notes: keep
 one. Measured on the outputs: 454 duplicate slurs in the truth songs (Anastasia 4 186, Ghost 20 125, Ghost 13 61,
@@ -223,6 +228,34 @@ R25. **Duplicate dynamics / words at the same position.** 26 bars of the outputs
 (PianoReduction mostly; Ghost 4 Bass "mp twice" is a known truth case). Drop exact duplicates at the same onset and
 staff in the same last pass as R20.
 
+R26. **`plainArticulation` = shared marks dropped, unique marks kept (user 2026-11-02).** The flag does not mean "no
+marks". The arranger (or truth writer) leaves out a mark that another instrument already has at the same time, and
+keeps every mark only this part has. It works like `plainText`, but per mark. Measured 2026-11-02 on outputs rebuilt
+without the flag (`x-noplain`, scratch run, `project.plain_row` patched out; no code change):
+- **Only song 3 really drops marks.** Violine 2 (504 notes) keeps 10 of the ~350 marks the PDF has, Klarinette 2 keeps
+  24 of ~340, Flöte 2 none. In songs 1, 2, 4 and 4A the flagged truth parts keep almost everything (song 4 Violine 2
+  keeps 462 of the output's 519 marks, Violoncello 433 of 529), so their flags no longer match the truths.
+- **The rule fits song 3.** A mark is "shared" if another truth part has the same mark (category, token) on the same
+  bar and onset. Violine 2: shared marks 4 kept / ~330 dropped, unique ones 1 kept / 17 dropped. Klarinette 2: shared
+  18 kept / ~305 dropped, unique 5 kept / 11 dropped. Most unique marks the truth drops may be misreads (no other part
+  has them). A per-bar view says the same: in bars where Klarinette 2 has its own material (no other part with the
+  same pitches or rhythm) it keeps 8 of 9 marks; in doubled bars it keeps 14 of 328.
+- **The metric hides this now.** The flag strips marks in output and truth, so the parts score no mark costs at all.
+  Bench with the flag off: Anastasia +2 465 (song 3 Violin 2 +345, Reed 2 +318; song 4 Trumpet +289, Trombone +246,
+  Violin 2 +186, Cello +176, Keyboard 2 +172, Reed 3 +123, Bass +119, Reed 2 +117; 4A Violin 2 +37).
+Plan:
+1. Metric: score the truth part as it is (no stripping); the output is judged on what it prints.
+2. Pipeline, song level (`transcribe.share_marks`, which already sees every part of a song): in a flagged part drop a
+   dynamic, hairpin, articulation, slur or fermata when a part without the flag has the same one on the same bar and
+   onset (slurs / hairpins: same start and stop onset); keep the rest. Expressive words the same way. Compare by
+   concert onset, not pitch, so transposing parts match.
+3. Which parts carry the flag: song 3 Violine 2 / Klarinette 2 / Flöte 2 by the data; songs 1, 2, 4, 4A flags to be
+   removed or kept by the user (the data says their truths are complete).
+Expected: song 3 Violin 2 / Reed 2 recover most of their +663 against the "flag off" scoring (they keep ~5 % of marks
+and the rule drops ~95 % of the shared ones); the other flagged parts are scored in full (their marks are mostly read
+right already). The new reference rises by about the hidden cost, so this is measured as a metric change first, then
+the pipeline change against the new reference.
+
 Done 2026-11-01 (data only, no pipeline change): workbook column `plain` renamed to `plainArticulation` in both shows
 (`project.py` reads the new name); Anastasia song 3 (no truth) has no `plainArticulation` cells any more, later
 Anastasia songs get none (user); column `plainText` added (R21, read since `r10-a`); Anastasia 4 truth: 52 accents
@@ -230,6 +263,97 @@ corrected to marcatos (`TRUTH_DEVIATIONS.md` section 3). Re-benched `r3-k` outpu
 alone). Metric (user-approved 2026-11-01): category `playtech` (every `<sound>` playing technique: pizz / arco, mute /
 open, `other-play` types, 1 action each) and `instrument` (the part's `<instrument-sound>` differs from the truth
 part's = 1; parts whose truth has none are not scored). New reference `r4-ref` **11 259** (+233).
+
+## From the Anastasia truth review (2026-11-02)
+
+All Anastasia truths (songs 1, 2, 3, 4, 4A) against the reference outputs `r12-a` (Anastasia **8 134**, all shows
+11 998). Every scored part re-aligned bar by bar like `metrics/edits.py`, the left-over output-only / truth-only items
+counted per category, token and bar (scratch script, no code change), the big patterns checked on the PDF pages.
+Where the Anastasia cost sits: notes 2 583, articulations 1 547, dynamics 618, words 444, barlines 424, slurs 392,
+lyrics 358, bars 347, hairpins 345, ties 256, tremolos 221, playtech 112, structure (repeats) 111. Song 3's sparse
+truth parts (Bass, Trombone, Trumpet, Keyboard 2) and the known singer routing (R6), dynamics / hairpins (R7) are
+left out below. Gains in edit-penalty actions against `r12-a`.
+
+| # | Improvement | Max | Expected | Effort | Needs the user |
+|---|---|---|---|---|---|
+| R27 | Barline / repeat vote: missed repeat starts, marks at system ends, cuts | 535 | -120..-250 | medium | yes: 5 truth bars (about 115 actions) |
+| R28 | Anastasia 4 drum kit lost to Tamburin after "tamb." / "pick up tamb." | ~140 | -100..-130 | small | no |
+| R29 | Drum slash bars after "etc." written out (scans) | ~170 | -60..-120 | medium | no |
+| R30 | Instrument-switch labels of split books dropped as words | ~60 | -35..-50 | small | no |
+| R31 | Marcato (^) read as accent (>) on the scans | 70 | -20..-35 | medium | no |
+| R32 | Semitone errors in the bar before a key change | 66 | -10..-30 | small (check first) | no |
+| R33 | "(BASS SOLO:)" over a treble staff: male voice, octave down | ~15 | -1..-5 (one octave fix per passage in MuseScore) | small | yes: which octave |
+
+R27. **Barline and repeat vote (barlines 424 + structure 111).** Almost all of it is about 20 song-level decisions of
+`musicxml.share_barlines`, each one repeated in every part (20–28 actions each):
+- Repeat starts are missed: Audiveris reads backward repeats (Anastasia 4: 2–3 per book) far more often than forward
+  ones (0–2). Anastasia 4 bar 1 (vamp 1–2, the end repeat at 2 is in the output) misses its start in all 28 parts;
+  4 bars 158–159 (printed 153–154, "Safety") miss both (56); song 2 bar 73 (printed 72A, a one-bar repeat) has the
+  start but not the end (20). Plan: pair the kept marks: a kept repeat end without a start since the song start or
+  the previous end gets the start with the most votes in between (any count), else bar 1; a kept start without an
+  end gets the end with the most votes before the next start (else the same bar). About -76..-104.
+- Double barlines missed in every part: Anastasia 4 bars 38, 138, 160, 164, 182, 186 (168), song 1 bar 5 (22).
+  Song 1 bar 5 and Anastasia 4 160 / 164 (printed 155 / 159) end a system on the page; the others not checked. Next
+  step: log the votes per mark (books with the song's bar count that have it / all voting books) to see whether a
+  lower threshold (1/3) or a system-end bonus finds them without adding marks the truth lacks.
+- Cuts: Anastasia 1 Violin 1 prints the double barline after 11 and then "[to] 14"; the truth (bars 12–13 kept as
+  bars) puts it on 13, the bar before the jump target, and so do the other books (44 = 22 parts × 2). Rule: a double
+  barline right before a "[to] N" cut goes to bar N-1 (CORRECTION_INFORMATION: skipped bars stay as empty bars).
+- Parts whose bar count differs from the song's (Anastasia 3 Violin 1, PianoReduction: 246 / 245) lose every mark
+  (about 22); fixing the extra bar (R9 (a)) gives them back.
+- Truth candidates (`docs/TRUTH_DEVIATIONS.md`, user): the page prints a double barline the truth lacks in Anastasia
+  1 bar 3 (before the key change at 4; 22 parts), song 2 bars 29 and 65 (65 before the key change at 66; 19 parts
+  each), song 3 bar 229 (before "Slower" 230; 20 parts) and probably song 3 bar 66 (key change at 67, page not
+  checked; 16 parts). The output has them; about 115 actions are truth gaps.
+
+R28. **Anastasia 4 kit routed into Tamburin.** Schlagzeug has 48 truth bars with notes where the output kit has none
+(290 actions). Bars 179–186 and 199–211 (printed 174–181 / 194–206, drum book page 18: "tamb." at 178, "pick up
+tamb." at 197) are written kit bars, and the Tamburin output carries them instead (8–11 notes per bar against a
+truth with 0–4). The R2 rule (a percussion label inside a kit passage takes only the hits of its bar) does not catch
+these labels: check `build_parts` for "pick up tamb." (a TRUTH_DEVIATIONS convention word, no label of its own in
+the truth) and a "tamb." label at the start of a system / after the two-staff system 174–177 (Timpani + kit).
+Schlagzeug notes there ~116, Tamburin extra bars and marks ~20.
+
+R29. **Drum slash bars after "etc." (scans).** The Anastasia 4 drum book prints one groove bar, then "etc." and
+slash bars (page 13: 33 groove, 34–38 slashes, "stop"; page 14: 44 groove, 45, 46, 48, 52–54 slashes). The truth
+writes the groove out (6–9 notes per bar), the output has empty bars. 10 bars checked (~70 actions); the other empty
+kit bars without R28 (80–85, 98, 105, 113, 115, 162–163, 31, 44, 50: ~100) are not checked on the page (31, 44 and
+50 are written notes the reader missed). Plan: like `continue_patterns` (Ghost 4 guitar, R4): a bar under an "etc."
+/ "sim." word with no notes read, up to the next written bar or "stop", gets the last written bar of that staff
+copied. Scans have no slash reader (#7), so the trigger is the word plus an empty bar (no rest glyph either).
+Anastasia keeps "sim." / % as printed (R13), but these truths write the slash bars out.
+
+R30. **Instrument labels of split books as words.** After a book is split by instrument, the switch label stays as a
+word in the part: "timpani" 8 (Pauken), "tamb." / "tamb" 14, "bell tree" 5, "triangle" 5, "glock" 4, "glock - soft
+mallets" 2, "crotales" 2, "castanets" 3, "flute" 3, "clarinet" 2, "to oboe" 2, about 50; the truths have none.
+Drop a word that names an instrument (or alias, or "to <instrument>") of the book's library once it has served the
+split. Same pass: "= 160 (in 3)" written as part text in 8 parts of song 3 (the system tempo already has it).
+
+R31. **Marcato read as accent.** 44 output accents sit where the truth has a marcato (Anastasia 4 Horn 18, Keyboard 1
+12, Oboe 6; the truth was corrected to marcatos 2026-11-01), 26 accents where it has a tenuto. Audiveris reads 4
+marcatos in the Horn book (46 accents), homr none. Check the mark's shape on the crop (^ is taller than wide and
+open at the bottom, > is wider than tall and open to the left) before writing an accent.
+
+R32. **Semitone errors near key changes.** 309 notes are off by one or two semitones (same onset and duration);
+52 of them in the bar before a key change and 14 in the change bar (Anastasia 4 Keyboard 1 bars 31–32: 28, the
+right hand a semitone off in both directions). Not checked on the page: either the courtesy key signature at a
+system end is read as the bar's key, or `respell_key` uses the new key one bar early. Look at Anastasia 4 Keyboard 1
+31–32 first; the rest of the 309 is spread thin (Klarinette 2 35, Violine 2 29, Violine 1 21).
+
+R33. **"(BASS SOLO:)" over a treble staff.** Anastasia 4 bars 65–71, PianoReduction page 43: the label "(BASS
+SOLO:)" stands over a plain treble-clef staff. The label parser makes a voice "Solo" (workbook: Solo=Männer) at the
+written pitch (bar 66 starts C5). The truth has it in Männer (treble-8vb clef) at C3, two octaves below the output;
+rhythm and pitch classes match 22 / 22. "BASS" in the label is not used to mark a male voice (8vb). The metric
+already folds this into one octave section (+4 notes, 7 lyrics, 2 instrument changes in these bars), so the gain is
+small, but the user moves the passage by hand. Plan: a singer label with BASS / BARITONE / TENOR (or a mapped male
+group) writes treble-clef notes into a treble-8vb clef one octave down. Whether the truth's second octave is right
+(a bass sounding C3 from a printed C5) is a user question.
+
+Notes on older items from this review: #36 single tremolos: now 214 missing (output 9): Anastasia 3 Violin 2 39,
+Violin 1 30, Drums 24, Keyboard 2 23, Anastasia 4 Drums 20, Cello 16, Violin 1 13 (half / dotted-half notes with
+three strokes on the stem). #54 "arco" / "pizz.": since `playtech` is scored a missing word costs 2 (word +
+technique): truth-only "arco" 42 / "pizz." 33 words plus 40 / 33 techniques, about 150 actions (Anastasia 4 Violin 1
+44, Cello 40, Violin 2 30); the Tesseract words measured -2 before `playtech` existed, re-measure.
 
 Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 --to ID`,
 `omrbench bench <show> --run ID --bench-id ID`; `r4-0` reproduces `r4-ref` exactly):
@@ -480,7 +604,7 @@ would read them all.
 vocal systems the staves are barred apart and the Anastasia piano reduction got +3500 actions. Group the staves of a system
 (braces, shared barlines) first.
 36. **Single tremolos homr misses.** (2026-10-15) After turning homr's start / stop pairs into single tremolos (-140), about
-100 single tremolos are still not read at all (Anastasia strings).
+100 single tremolos are still not read at all (Anastasia strings). (2026-11-02: 214 missing in `r12-a`, see the Anastasia truth review.)
 37. **Chord symbols on normal-note bars.** (2026-10-15) Over slash bars the beat comes from the slash under the symbol; over
 normal notes it is still the eighth-grid estimate from x. Use the Audiveris chord (notehead) x positions of the bar.
 38. **Repeat signs and voltas.** (2026-10-15, Ghost 13 corrections: "repeat signs missing throughout", rated medium.)
@@ -567,7 +691,7 @@ in only 14 bars where the pipeline is not. Not an engine candidate now. Where it
 Anastasia 4 -394 with the row. Each part read only some of the letters, so the key / time rows and the bars drifted 1-4 bars.)
 Needs the row in the workbook (user).
 54. **"arco" / "pizz." on scans.** Tesseract reads 13 of the 26 in Anastasia 4 Violin 1; adding them was -2 (rejected). The
-truth alternates pizz. / arco strictly (music rule): a missing "arco" between two "pizz." is certain, but its bar is not.
+truth alternates pizz. / arco strictly (music rule): a missing "arco" between two "pizz." is certain, but its bar is not. (2026-11-02: with `playtech` a missing word costs 2, about 150 actions; re-measure, see the Anastasia truth review.)
 55. **Ties from the vector curves** (#34 again, 2026-10-16): Audiveris' ties are copied (72 on the Ghost 20 piano, plus edge
 notes by pitch -6), 108 are still missing there. Pair each tie curve with the notehead columns at both ends.
 
