@@ -33,7 +33,7 @@ and every other mark land on the wrong beat otherwise.
 | R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`), "sim." -64 (`r7-e`) / -8 (`r7-f`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
-| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`) | medium | no |
+| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`), sim. slurs -9 (`r9-b`) | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
@@ -340,6 +340,10 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   the onset has as many notes as the column heads), `musicxml.close_ties` gives every tie start its stop on the
   same pitch in the next chord (also over system breaks). Ghost 20 ties 145 -> 100. Left: Finale slurs (curves
   between different heads) not read yet; Anastasia's vector PianoReductions use Petrucci (heads œ ˙ w), not read.
+- R8 / slurs after "sim." accepted, `r9-b` **12 496** (-9 against `r9-a`, Ghost 4 Guitar): `bars.apply_sim` also
+  copies the pattern bar's slurs when each of them ends inside it (fingerpicking pattern: one slur per bar in the
+  truth), onto bars without a slur of their own. Left: Ghost 4 Guitar bars 12-13 read as a rest bar and an empty
+  bar (notes, not slurs) end the run, about 50 slurs.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

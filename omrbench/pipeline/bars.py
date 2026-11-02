@@ -228,13 +228,19 @@ def _marked(bar: Bar) -> list[etree._Element]:
     return [n for n in bar.notes() if n.find("notations/articulations") is not None]
 
 
+def _own_slurs(bar: Bar) -> bool:
+    """The bar has slurs and each of them ends in it."""
+    t = [s.get("type") for n in bar.notes() for s in n.findall("notations/slur")]
+    return bool(t) and t.count("start") == t.count("stop")
+
+
 def _rhythm(bar: Bar) -> list[tuple]:
     return [(n.find("rest") is not None, n.find("chord") is not None, n.findtext("duration"))
             for n in bar.notes() if n.find("grace") is None]
 
 
 def apply_sim(bars: list[Bar]) -> int:
-    """After "sim." the pattern bar's articulations go onto the following bars with the same
+    """After "sim." the pattern bar's articulations (and slurs inside it) go onto the following bars with the same
     rhythm and no marks of their own (the truths write them out, user 2026-10-16). Pattern = the
     bar before the "sim." bar, or the "sim." bar itself when it is marked. Returns bars changed."""
     changed = 0
@@ -244,7 +250,8 @@ def apply_sim(bars: list[Bar]) -> int:
             continue
         src = g if _marked(bar) or g == 0 else g - 1
         pat = bars[src]
-        if not _marked(pat):
+        slurs = _own_slurs(pat)
+        if not _marked(pat) and not slurs:
             continue
         # every note of the pattern alike (one value, one set of marks): goes on over bars of only
         # that value, whatever their count (Ghost 5 Bass: 2/4 -> 4/4 under one "sim.")
@@ -266,15 +273,16 @@ def apply_sim(bars: list[Bar]) -> int:
                     (nt if nt is not None else etree.SubElement(n, "notations")).append(etree.fromstring(marks))
                 changed += 1
                 continue
+            own = slurs and not _own_slurs(b) and not any(n.find("notations/slur") is not None for n in b.notes())
             for a, n in zip([x for x in pat.notes() if x.find("grace") is None],
                             [x for x in b.notes() if x.find("grace") is None]):
-                art = a.find("notations/articulations")
-                if art is None or n.find("rest") is not None:
+                marks = a.findall("notations/articulations") + (a.findall("notations/slur") if own else [])
+                if not marks or n.find("rest") is not None:
                     continue
                 nt = n.find("notations")
                 if nt is None:
                     nt = etree.SubElement(n, "notations")
-                nt.append(copy.deepcopy(art))
+                nt.extend(copy.deepcopy(m) for m in marks)
             changed += 1
     return changed
 

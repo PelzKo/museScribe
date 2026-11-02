@@ -56,6 +56,25 @@ def test_sim_copies_the_pattern_articulations():
     assert all(len(B._marked(b)) == 2 for b in bars)
 
 
+def test_sim_copies_a_slur_inside_the_pattern_bar():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def bar(slur, word=None):
+        items = [etree.fromstring(f"<direction><direction-type><words>{word}</words></direction-type></direction>")] \
+            if word else []
+        for t in ("start", "stop"):
+            n = etree.fromstring("<note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration></note>")
+            if slur:
+                etree.SubElement(etree.SubElement(n, "notations"), "slur", type=t)
+            items.append(n)
+        return B.Bar(items, "crop")
+
+    bars = [bar(True), bar(False, "sim."), bar(False)]
+    assert B.apply_sim(bars) == 2
+    assert [s.get("type") for s in bars[2].items[0].iter("slur")] == ["start"]
+
+
 def test_letter_list():
     from omrbench.project import letter_list
     assert letter_list("131A, 132C, 148A-C") == [(131, "A"), (132, "C"), (148, "A"), (148, "B"), (148, "C")]
