@@ -71,6 +71,16 @@ def test_copy_ties_from_audiveris_by_onset_and_pitch():
     assert crop.notes()[1].find("tie") is None
 
 
+def test_copy_marks_from_audiveris_only_onto_unmarked_notes():
+    from lxml import etree
+    aud, crop = _bar(notes=("C4", "D4")), _bar(notes=("C4", "D4"))
+    for n, marks in zip(aud.notes(), (["accent", "staccato"], ["tenuto"])):
+        etree.SubElement(etree.SubElement(n, "notations"), "articulations").extend(etree.Element(m) for m in marks)
+    etree.SubElement(etree.SubElement(crop.notes()[1], "notations"), "articulations").append(etree.Element("staccato"))
+    assert B.copy_marks(crop, aud) == 1
+    assert [[a.tag for a in n.find("notations/articulations")] for n in crop.notes()] == [["accent"], ["staccato"]]
+
+
 def test_cue_text_of_instrument_parts():
     from types import SimpleNamespace as NS
     pl = NS(line=NS(right=500), staff=NS(left=100))

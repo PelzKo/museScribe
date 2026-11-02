@@ -301,6 +301,28 @@ def _note_key(on: int, n: etree._Element) -> tuple | None:
     return (on, n.findtext("staff") or "1", p.findtext("step"), p.findtext("alter") or "0", p.findtext("octave"))
 
 
+MARKS_COPIED = ("accent", "strong-accent", "tenuto")   # Audiveris staccatos: dots it makes up
+
+
+def copy_marks(bar: Bar, src: Bar) -> int:
+    """Articulations of `src` (Audiveris' reading of the same bar) onto the notes of `bar` with the
+    same onset, staff and pitch that have none (homr misses marks below the staff). Returns notes marked."""
+    arts = {k: n.find("notations/articulations") for on, n in onsets(src)
+            if n.tag == "note" and (k := _note_key(on, n)) and n.find("notations/articulations") is not None}
+    added = 0
+    for on, n in onsets(bar):
+        if n.tag != "note" or n.find("notations/articulations") is not None \
+                or (a := arts.get(_note_key(on, n))) is None:
+            continue
+        a = copy.deepcopy(a)
+        for m in [m for m in a if m.tag not in MARKS_COPIED]:
+            a.remove(m)
+        if len(a):
+            (n.find("notations") if n.find("notations") is not None else etree.SubElement(n, "notations")).append(a)
+            added += 1
+    return added
+
+
 def copy_ties(bar: Bar, src: Bar) -> int:
     """Ties of `src` (Audiveris' reading of the same bar) onto the notes of `bar` with the same
     onset, staff and pitch (homr writes no ties). Returns the ties added."""

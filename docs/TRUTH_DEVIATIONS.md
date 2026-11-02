@@ -18,6 +18,8 @@ not decided.
 | Project | Song | Part | Bars | Printed | Truth | Status |
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4, 4A | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28; the user updates the truths). Ghost writes both out (table 2) |
+| Anastasia | 3 | Kontrabass | 39–46, 47–62, 88–95 | accents (39–46, 88–95 under the notes), a tenuto on every note 47–62 | no marks (the part has 38 marks, the page several hundred) | question: plainArticulation like songs 1 / 2 / 4, or to fill in? |
+| Anastasia | 3 | Posaune | 47–53, 63–65 | staccatos 47–53, tenutos 63–65 | no marks | question: as Kontrabass (Trompete, Keyboard 2 look alike, not checked bar by bar) |
 | Anastasia | 4 | all | 101 | double barline at the end of 101 (every part) | single barline (all 38 parts; the other double barlines are fixed) | mistake |
 | Anastasia | 4 | Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); the other parts of section 3 were fixed 2026-11-01 |
 | Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord and left-hand G1 (beat 4) with marcato | no mark at all | mistake |

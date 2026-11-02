@@ -30,7 +30,7 @@ and every other mark land on the wrong beat otherwise.
 | R2 | Anastasia drum set: "sticks" alias + labelled hits only | 975 | done -183 | small | done |
 | R3 | Ghost drum kits: rhythm from the vector glyphs | 1487 | done -896 | large | no |
 | R4 | Ghost 4 guitar fingerpicking over the slash bars | 967 | done -733 | medium | done |
-| R5 | Articulations from the vector glyphs (Ghost) | 878 | -250..-400 | medium | no |
+| R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done on scans -56 (`r7-c`); Ghost glyphs -250..-400 | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | -200..-350 | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | -150..-300 | medium | no |
@@ -284,6 +284,15 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   octave-off and 50 / 50; #3 is not in the output): the `r6-a` outputs score `r6-a3` **13 060** (-118). Anastasia 5
   "In My Dreams" sheet added (pages from the page headers, Reed 1 Flute + English Horn, library entry in F); its
   time / key / bars rows come from the first transcription.
+- R5 / Audiveris marks on scans accepted, `r7-c` **13 004** (-56 against `r6-a3`): homr misses articulations below
+  the staff (Anastasia 3 Cello 8-13: accents under stem-up notes), Audiveris has them. On scanned pages
+  `bars.copy_marks` (next to `copy_ties` in `assemble.build_plans`) puts Audiveris' accent / marcato / tenuto onto
+  homr notes with the same onset, staff and pitch that carry no mark. Variants: all kinds on every page `r7-a` -4
+  (Audiveris staccatos are made-up dots: Keyboard 1 / PianoReduction +13 each), no staccato `r7-b` -45 but FAIL
+  (vector PianoReductions +10 / +4: there Audiveris makes marks up). Gains Cello -35, Keyboard 1 -27, Reed 3 -19;
+  worse Anastasia 3 Bass +27, Keyboard 2 +17, Trumpet / Trombone +4: the page prints the marks, the truth lacks them
+  (TRUTH_DEVIATIONS). Left: Anastasia 3 made-up marks are mostly those sparse truths (Bass, Trombone, Trumpet,
+  Keyboard 2: about 530 of 870 articulation differences); Ghost glyph marks (R5 proper) not done.
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

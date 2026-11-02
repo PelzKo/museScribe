@@ -530,6 +530,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                                 B.add_direction(bar, el, on, int(st) if st and st.isdigit() else None)
                         if len(src) == n:
                             stats.ties_copied += B.copy_ties(bar, src[i])
+                            if vector_bars is None:     # scans: homr misses marks below the staff
+                                B.copy_marks(bar, src[i])
                 chosen.append(bar)
             plan.chosen[gi] = chosen
         plans.append(plan)
