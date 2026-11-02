@@ -234,6 +234,39 @@ def fit_measure_rests(bar: Bar, length: int) -> None:
             items.remove(n)
 
 
+def pad_short_bar(bar: Bar, length: int) -> None:
+    """A bar whose voices all end before the bar length gets a rest after the note that ends last
+    (the reader missed a rest; MuseScore breaks a short bar). The <backup> after it moves along."""
+    items, cur, end, last = bar.items, 0, 0, None
+    for i, el in enumerate(items):
+        d = int(el.findtext("duration", "0") or 0)
+        if el.tag == "backup":
+            cur -= d
+        elif el.tag == "forward":
+            cur += d
+            end, last = (cur, None) if cur > end else (end, last)
+        elif el.tag == "note" and el.find("chord") is None and el.find("grace") is None:
+            cur += d
+            if cur >= end:
+                end, last = cur, i
+    if last is None or not 0 < end < length:
+        return
+    while last + 1 < len(items) and items[last + 1].tag == "note" and items[last + 1].find("chord") is not None:
+        last += 1                                  # after the whole chord
+    nxt = next((e for e in items[last + 1:] if e.tag in ("note", "backup", "forward")), None)
+    if nxt is not None and nxt.tag != "backup":
+        return
+    if nxt is not None:
+        nxt.find("duration").text = str(int(nxt.findtext("duration", "0") or 0) + length - end)
+    src, rest = items[last], etree.Element("note")
+    etree.SubElement(rest, "rest")
+    etree.SubElement(rest, "duration").text = str(length - end)
+    for tag in ("voice", "staff"):
+        if src.find(tag) is not None:
+            etree.SubElement(rest, tag).text = src.findtext(tag)
+    items.insert(last + 1, rest)
+
+
 SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)
 
 

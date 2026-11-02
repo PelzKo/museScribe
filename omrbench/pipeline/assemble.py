@@ -2420,6 +2420,8 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 m.append(a)
             if length:
                 B.fit_measure_rests(bar, length)
+                if 0 < g < len(times) - 1:         # first / last bar: a pickup and its complement stay short
+                    B.pad_short_bar(bar, length)
             if bar.source == "crop" and bar.read_key is not None and key is not None and not perc \
                     and bar.read_key != key and abs(int(bar.read_key) - int(key)) < 7:
                 # (7 or more apart = an enharmonic spelling of the key, e.g. Db vs C#: not a misread)

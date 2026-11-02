@@ -104,3 +104,18 @@ def test_doublings_one_part():
     assert part_meta(row, show, {})["split_instruments"] is True
     meta = part_meta(row, {**show, "doublings": "one_part"}, {})
     assert meta["doubling"] is True and "split_instruments" not in meta
+
+
+def test_short_bar_gets_a_rest_after_its_last_chord():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+    x = [etree.fromstring(s) for s in (
+        "<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice></note>",
+        "<note><chord/><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice></note>",
+        "<backup><duration>4</duration></backup>",
+        "<note><pitch><step>C</step><octave>3</octave></pitch><duration>2</duration><voice>2</voice></note>")]
+    bar = B.Bar(x, "crop")
+    B.pad_short_bar(bar, 8)                     # 2 of 4 quarters filled
+    assert [(e.tag, e.findtext("duration")) for e in bar.items] == [
+        ("note", "4"), ("note", "4"), ("note", "4"), ("backup", "8"), ("note", "2")]
+    assert bar.items[2].find("rest") is not None and bar.items[2].findtext("voice") == "1"
