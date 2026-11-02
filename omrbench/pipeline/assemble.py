@@ -2020,11 +2020,14 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
         return next((x["name"] for x in instruments if x["name"] not in used
                      and (cls is None or klass.get(x["name"], cls) == cls)), None)
 
+    # one staff group in every system: one track, whatever Audiveris' logical part says (a boxed
+    # rehearsal number read as a part name split Anastasia 5 Bass bars 83-86 into a second part)
+    single = all(len(p.system.groups()) == 1 for p in plans)
     for p in plans:
         for gi, g in enumerate(p.system.groups()):
             if gi not in p.chosen:
                 continue
-            L = p.system.logical[gi]
+            L = 1 if single else p.system.logical[gi]
             tracks.setdefault(L, [None] * total)
             owner.setdefault(L, [None] * total)
             staves[L] = max(staves.get(L, 1), len(g))

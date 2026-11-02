@@ -384,6 +384,9 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   routing of Anastasia 3 Männer / Frauen (R6); true offsets are small (Ghost 13 Cello 16: a rest of 8 bars read as
   1 and 7 extra empty bars later, Ghost 5 Violin / Frauen about 10 each). Idea (a) was not tried: every part has
   the workbook bar count but Anastasia 4 Keyboard 1 (212 / 211) and Anastasia 3 PianoReduction (246 / 245).
+- One track for one-staff books, `r12-a` **11 998** (no change on the benched songs): `build_parts` puts every
+  bar on one track when each system has a single staff group. Anastasia 5 Bass: Audiveris read the boxed rehearsal
+  number 83 as a part name and made bars 83-86 a second part (found while transcribing song 5).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
