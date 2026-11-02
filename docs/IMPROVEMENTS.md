@@ -33,7 +33,7 @@ and every other mark land on the wrong beat otherwise.
 | R5 | Articulations from the vector glyphs (Ghost); scans: Audiveris marks onto homr notes | 878 | done: scans -56 (`r7-c`), Ghost glyphs -107 (`r7-d`), "sim." -64 (`r7-e`) / -8 (`r7-f`) | medium | no |
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
-| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`), sim. slurs -9 (`r9-b`), made-up slurs -15 (`r9-d`) | medium | no |
+| R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`), sim. slurs -9 (`r9-b`), made-up slurs -15 (`r9-d`), half heads -39 (`r9-e`) | medium | no |
 | R9 | Bars in the right place and of the right length | 793 | -100..-250 (count: done) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
@@ -351,6 +351,11 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   `musicxml.drop_duplicate_curves` then drops the slur stops left without a start. First try with curves under 5
   spaces high only: `r9-c` +8 (Ghost 4 Guitar +11: a one-bar slur is 11 spaces high). Left: adding the missing
   slurs from the curves (Ghost missing about 140, 75 of them Ghost 4 Guitar notes, see above).
+- R8 / half heads "˙" accepted, `r9-e` **12 442** (-39 against `r9-d`; Ghost 20 Utility -13, Ghost 1a Guitar -5, no
+  part worse): `vector.HEADS` lacked the EngraverFontSet half head "˙" (138 on the Ghost 20 pages), so bars with a
+  half note had one head column too few and `place_marks` skipped them (marks, ties, slur check). Measured together
+  with reading Petrucci (Anastasia's vector PianoReductions, heads œ ˙ w): no change on Anastasia, left out.
+  Left: Anastasia's vector PianoReductions do not reach `place_marks` (R13).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the

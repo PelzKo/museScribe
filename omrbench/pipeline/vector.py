@@ -263,7 +263,7 @@ def read_drum_page(pdf_page, page) -> list[SlashBar]:
     return out
 
 
-HEADS = set("œÏúwÎ")              # EngraverFontSet note heads (black, half, whole)
+HEADS = set("œÏúwÎ˙")             # EngraverFontSet note heads (black, half: Ï ú ˙, whole)
 # "˘" / "ﬂ" (or "ß", else sfz: only centred on a head): accent + staccato above / below in one glyph
 MARKS = {">": ["accent"], "^": ["strong-accent"], "˘": ["accent", "staccato"], "ﬂ": ["accent", "staccato"],
          "ß": ["accent", "staccato"], ".": ["staccato"], "-": ["tenuto"]}
