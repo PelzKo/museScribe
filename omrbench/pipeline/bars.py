@@ -267,6 +267,51 @@ def pad_short_bar(bar: Bar, length: int) -> None:
     items.insert(last + 1, rest)
 
 
+def cut_long_bar(bar: Bar, length: int) -> None:
+    """A bar longer than the bar length: the voice segment (after its last <backup>) that ends last
+    loses the overshoot from its last rest long enough, else from its longest note (a misread value;
+    chord notes alike, <type> / <dot> dropped so MuseScore takes the duration)."""
+    items, cur, end, last = bar.items, 0, 0, None
+    for i, el in enumerate(items):
+        d = int(el.findtext("duration", "0") or 0)
+        if el.tag == "backup":
+            cur -= d
+        elif el.tag == "forward" or (el.tag == "note" and el.find("chord") is None and el.find("grace") is None):
+            cur += d
+            if cur >= end:
+                end, last = cur, i if el.tag == "note" else None
+    over = end - length
+    if last is None or length <= 0 or over <= 0:
+        return
+    first = last
+    while first > 0 and items[first - 1].tag != "backup":
+        first -= 1
+    seg = [i for i in range(first, last + 1) if items[i].tag == "note" and items[i].find("chord") is None
+           and items[i].find("grace") is None]
+    dur = {i: int(items[i].findtext("duration", "0") or 0) for i in seg}
+    if any(items[i].tag == "forward" for i in range(first, last + 1)):
+        return
+    rests = [i for i in seg if items[i].find("rest") is not None and dur[i] > over]
+    k = rests[-1] if rests else max(reversed(seg), key=lambda i: dur[i])
+    if dur[k] <= over:
+        return
+    while last + 1 < len(items) and items[last + 1].tag == "note" and items[last + 1].find("chord") is not None:
+        last += 1
+    nxt = next((e for e in items[last + 1:] if e.tag in ("note", "backup", "forward")), None)
+    if nxt is not None:
+        back = int(nxt.findtext("duration", "0") or 0) - over
+        if nxt.tag != "backup" or back < 0:
+            return
+        nxt.find("duration").text = str(back)
+    j = k
+    while j < len(items) and (j == k or (items[j].tag == "note" and items[j].find("chord") is not None)):
+        if (d := items[j].find("duration")) is not None:
+            d.text = str(dur[k] - over)
+        for t in items[j].findall("type") + items[j].findall("dot"):
+            items[j].remove(t)
+        j += 1
+
+
 SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)
 
 

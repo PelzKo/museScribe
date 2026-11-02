@@ -119,3 +119,19 @@ def test_short_bar_gets_a_rest_after_its_last_chord():
     assert [(e.tag, e.findtext("duration")) for e in bar.items] == [
         ("note", "4"), ("note", "4"), ("note", "4"), ("backup", "8"), ("note", "2")]
     assert bar.items[2].find("rest") is not None and bar.items[2].findtext("voice") == "1"
+
+
+def test_long_bar_loses_the_overshoot_from_its_longest_note():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+    x = [etree.fromstring(s) for s in (
+        "<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice></note>",
+        "<note><pitch><step>D</step><octave>5</octave></pitch><duration>8</duration><voice>1</voice>"
+        "<type>whole</type></note>",
+        "<note><chord/><pitch><step>F</step><octave>5</octave></pitch><duration>8</duration><voice>1</voice></note>",
+        "<backup><duration>10</duration></backup>",
+        "<note><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration><voice>2</voice></note>")]
+    bar = B.Bar(x, "crop")
+    B.cut_long_bar(bar, 8)                      # 5 quarters in a 4/4 bar
+    assert [e.findtext("duration") for e in bar.items] == ["2", "6", "6", "8", "8"]
+    assert bar.items[1].find("type") is None

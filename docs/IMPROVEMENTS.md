@@ -34,7 +34,7 @@ and every other mark land on the wrong beat otherwise.
 | R6 | Anastasia 4 singers: routing + lyrics | ~1500 | part done -557 (labels from the text layer) | large | no |
 | R7 | Dynamics + hairpins detector on the scans (#33) | 767 | part: hairpin order -8 (`r8-a`), OCR conf 50 -13 (`r8-b`); detector open | large | no |
 | R8 | Ties + slurs from the vector curves (#55) | 579 | part: slur beside a tie -246 (`r9-a2`), vector ties -53 (`r9-a`), sim. slurs -9 (`r9-b`), made-up slurs -15 (`r9-d`), half heads -39 (`r9-e`) | medium | no |
-| R9 | Bars in the right place and of the right length | 793 | part: rest-only voices -125 (`r11-a2`), short bars padded -164 (`r11-b`) | medium | no |
+| R9 | Bars in the right place and of the right length | 793 | part: rest-only voices -125 (`r11-a2`), short bars padded -164 (`r11-b`), long bars cut -62 (`r11-c`) | medium | no |
 | R10 | Chord symbols: Ghost piano reductions per song, beat snapping (#37) | 216 | -30..-120 | small | yes: Ghost 20 piano |
 | R11 | Vocal cues under a singer label ("SAM:") (#41) | ~40 | -20..-40 | small | no |
 | R12 | Made-up words on keyboards and piano reductions | ~250 | -50..-100 | small | no |
@@ -372,6 +372,11 @@ Round 5 results (reassembled from `r3`: `scripts/reassemble.py <show> --from r3 
   `fit_measure_rests`, not on the first and last bar: pickup) adds a rest after the note (chord) that ends last
   when every voice ends before the song's bar length; the `<backup>` after it moves along. Notes keep their onsets,
   so only the bar length changes.
+- R9 / long bars cut accepted, `r11-c` **11 998** (-62 against `r11-b`, no part worse; Ghost 20 Guitar -9, Anastasia 3
+  Keyboard 1 -5): `bars.cut_long_bar` (after `pad_short_bar`, every bar) takes the overshoot of a bar longer than the
+  song's bar length off the voice segment that ends last (after its last `<backup>`): from its last rest long enough,
+  else from its longest note (chord notes alike, `<type>` / `<dot>` dropped so MuseScore takes the duration); the
+  `<backup>` after it moves along. Left after `r11-b`: 86 wrong-length bars (73 long, 7 short, 6 rest-only).
 
 Done in round 3 (2026-10-18, `r3-base` 12 423 -> `r3-f` 11 946, commits `c385426`, `2ad9819`): chord ties (-69), cues
 up to "Play" (#41 partly, -29), fermatas shared across parts, extra rest bars dropped where the numbers show the
