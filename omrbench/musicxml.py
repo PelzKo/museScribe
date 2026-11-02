@@ -174,8 +174,14 @@ def slurs_to_ties(root: etree._Element) -> int:
                 stop = n.find(f"notations/slur[@type='stop'][@number='{s.get('number', '1')}']")
                 if stop is None and s.get("number") is None:
                     stop = n.find("notations/slur[@type='stop']")
-                if stop is None or a.find("notations/tied[@type='start']") is not None:
+                if stop is None:
                     continue
+                if a.find("notations/tied[@type='start']") is not None:     # the tie is there already
+                    for sl in (s, stop):
+                        sl.getparent().remove(sl)
+                    _add_tie(n, "stop")
+                    turned += 1
+                    break
                 for el, typ, sl in ((a, "start", s), (n, "stop", stop)):
                     nt = sl.getparent()
                     nt.replace(sl, etree.Element("tied", type=typ))

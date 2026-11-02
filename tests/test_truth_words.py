@@ -92,6 +92,19 @@ def test_slur_between_equal_pitches_becomes_tie():
     assert notes[3].find("notations/slur").get("type") == "start"
 
 
+def test_slur_beside_a_tie_on_the_same_notes_is_dropped():
+    from lxml import etree
+    from omrbench import musicxml
+    n = ('<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice>'
+         '<notations>{}</notations></note>')
+    root = etree.fromstring(f'<score-partwise><part id="P1"><measure number="1">'
+                            f'{n.format('<tied type="start"/><slur type="start"/>')}{n.format('<slur type="stop"/>')}'
+                            f'</measure></part></score-partwise>')
+    assert musicxml.slurs_to_ties(root) == 1
+    a, b = root.findall(".//note")
+    assert not root.findall(".//slur") and b.find("notations/tied").get("type") == "stop"
+
+
 def _c(steps, tie="", chord=False):
     out = ""
     for k, st in enumerate(steps):
