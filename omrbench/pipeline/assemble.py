@@ -819,6 +819,28 @@ def place_marks(plans: list[SysPlan], mark_bars: list[SL.SlashBar], stats: Stats
             break
 
 
+def place_sim(plans: list[SysPlan], lines: list[tuple]) -> None:
+    """ "sim." of the PDF text layer (Audiveris misses the small italic word) as a direction at the
+    start of the bar it is printed in, for `bars.apply_sim`; the staff right above it."""
+    for page, x, y, text in lines:
+        for plan in plans:
+            if plan.system.page != page or not plan.n:
+                continue
+            st = min((s for s in plan.system.staves if s.top - 2 * s.interline <= y <= s.bottom + 4 * s.interline),
+                     key=lambda s: abs(y - s.bottom), default=None)
+            if st is None:
+                continue
+            gi, si = _group_of(plan.system, st.id)
+            if gi in plan.chosen:
+                bar = plan.chosen[gi][_bar_at(plan, x)]
+                if not any(B.SIM.match((w.text or "").strip()) for d in bar.items if d.tag == "direction"
+                           for w in d.iter("words")):
+                    d = etree.Element("direction", placement="below")
+                    etree.SubElement(etree.SubElement(d, "direction-type"), "words").text = text
+                    B.add_direction(bar, d, 0, si)
+            break
+
+
 OTTAVA_ON = re.compile(r"\(.*\b8va\)", re.I)       # "STR. ENS. (loco & 8va)": a patch an octave up
 OTTAVA_OFF = re.compile(r"\(loco\)", re.I)
 

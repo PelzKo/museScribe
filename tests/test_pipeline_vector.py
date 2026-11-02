@@ -139,3 +139,14 @@ def test_slash_bar_drum_voices():
     assert bar.items[0].find("notations/articulations/accent") is not None and n.find("notations") is None
     assert bar.items[4].findtext("voice") == "2" and bar.items[4].findtext("stem") == "down"
     assert bar.items[4].find("dot") is not None and bar.items[5].find("rest") is not None
+
+
+def test_place_sim_from_text_layer_into_the_bar_above():
+    from types import SimpleNamespace as NS
+    st = NS(id=1, top=100, bottom=140, interline=10, part=1)
+    plan = A.SysPlan(NS(page=1, staves=[st], groups=lambda: [[st]]), 0, n=2)
+    plan.xs = [(0, 100), (100, 200)]
+    plan.chosen = {0: [_bar(), _bar()]}
+    A.place_sim([plan], [(1, 150, 150, "sim."), (1, 150, 400, "sim.")])     # the second is no staff's
+    assert [len(b.items) for b in plan.chosen[0]] == [1, 2]
+    assert plan.chosen[0][1].items[0].findtext("direction-type/words") == "sim."

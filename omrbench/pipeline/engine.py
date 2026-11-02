@@ -397,6 +397,7 @@ class Pipeline(Engine):
             A.place_slashes(plans, SL.read(sample.pdf, pages, drums=sample.score_type == "drums"), D, stats)
         if not is_scan(sample.pdf) and sample.score_type != "drums":
             A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
+            A.place_sim(plans, SL.read_lines(sample.pdf, pages, B.SIM))
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
