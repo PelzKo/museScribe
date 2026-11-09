@@ -23,7 +23,11 @@ The user's feedback after opening the outputs in MuseScore, plus two tasks the u
 Items that do not change the metric (U1, U2, U10, U11) are accepted when the total does not get worse and the
 check named in the item passes. Reference: `r13-ref`, every song reassembled with the code of 2026-11-09 after the
 workbook changes of the same day (song 5 truth linked, `plainArticulation` flags of songs 1 / 2 / 4 / 4A removed,
-Anastasia Klavierauszug piano no longer scored: `Piano=-` in every PianoReduction `truth` cell).
+Anastasia Klavierauszug piano no longer scored: `Piano=-` in every PianoReduction `truth` cell). `r13-ref` = **13 863**
+(Anastasia 9 999: 1 430, 2 380, 3 2 942, 4 5 084, 4A 138, 5 1 025; Ghost 3 864). The outputs of `r13-ref` were copied into
+`results/anastasia/<song>/` with a new combined.mscz (2026-11-09), so the user reviews today's code. There the
+unpitched percussion parts (Cymbal, Triangle, Bell Tree, Tambourine, Wood Block, Castanets, the song 4 mallet
+Xylophon) still import as `percussion-synthesizer`; Timpani, Glock, Crotales, Drum Set are right (U1).
 Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug left out).
 
 | # | Improvement | Max | Expected | Effort | Needs the user |
