@@ -10,6 +10,16 @@ the bars whose pitches differ from the truth (check each hit on the page; it app
 part to the whole part, so bars after an instrument change give false hits). Spelling-only differences (F♯ for a
 printed G♭) are logged only as a pattern (user 2026-10-16). The user corrects the truth files.
 
+Anastasia 3 and 5 (checked 2026-11-06): the scanned parts were checked only where the output has notes that the truth
+lacks (all of these were OMR errors); their marks were not checked. The Anastasia Klavierauszug piano is not checked,
+generated or scored any more (user 2026-11-09): its rows were removed; the vocal staves still count.
+
+Checked 2026-11-09 against the user's corrected truths: rows fixed since then were removed (Anastasia 3 Empress 108–110,
+Frauen 186 / 210, Kontrabass marks, Männer 186 / 202 / 204 / 210; Anastasia 4 bar 101 double barline, Keyboard 1
+32 / 43 marcatos, Keyboard 2 bar 26 octave line, Posaune 98 "gedämpft"; Anastasia 5 Keyboard 1 104; the double
+barlines of song 1 bar 3, song 2 bars 29 / 65, song 3 bars 66 / 229). The section 2 row on song 4 `plain` parts went
+too: the `plainArticulation` flags of songs 1, 2, 4, 4A are removed (user 2026-11-09), their truths carry the marks.
+
 Status in table 1: `mistake` = probable truth error, `question` = a convention decision is needed, `open` = known,
 not decided.
 
@@ -18,15 +28,12 @@ not decided.
 | Project | Song | Part | Bars | Printed | Truth | Status |
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4, 4A | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28; the user updates the truths). Ghost writes both out (table 2) |
-| Anastasia | 3 | Kontrabass | 39–46, 47–62, 88–95 | accents (39–46, 88–95 under the notes), a tenuto on every note 47–62 | no marks (the part has 38 marks, the page several hundred) | question: plainArticulation like songs 1 / 2 / 4, or to fill in? |
-| Anastasia | 3 | Posaune | 47–53, 63–65 | staccatos 47–53, tenutos 63–65 | no marks | question: as Kontrabass (Trompete, Keyboard 2 look alike, not checked bar by bar) |
-| Anastasia | 4 | all | 101 | double barline at the end of 101 (every part) | single barline (all 38 parts; the other double barlines are fixed) | mistake |
+| Anastasia | 3 | PianoReduction - Voices – All | whole song | — | an extra empty part, named after a pipeline output file | mistake (minor) |
+| Anastasia | 3 | Posaune | 63 | tenutos (63–65) | 47–53 staccatos and 64–65 tenutos added; 63 still without marks | mistake (minor), not checked on the page |
 | Anastasia | 4 | Xylophon (+ plain rows) | see section 3 | marcato (^) | accent (&gt;) | mistake (marcato = strong-accent); the other parts of section 3 were fixed 2026-11-01 |
-| Anastasia | 4 | Keyboard 1 | 32, 43 | right-hand beat-4 chord and left-hand G1 (beat 4) with marcato | no mark at all | mistake |
-| Anastasia | 4 | Keyboard 2 | 26 | "RH: Trem Strings sounding 8vb" | 8va line (sounds D6–D7) | mistake: 8vb line as in 82–84 |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
-| Anastasia | 4 | Posaune | 98 | "St. Mute" (a reminder, muted since 89) | no word | mistake (minor): reminder words are written (user 2026-10-18) |
 | Anastasia | 4 | Schlagzeug | 144 | lower voice F4 beat 1, rest beat 3, F4 (accent, fz) beat 4 | F4 beat 1, rest, F4 on beat 3: the voice holds only 3 beats | mistake |
+| Anastasia | 4 | Männer | 65–71 | "(BASS SOLO:)" over a plain treble staff, bar 66 starts C5 ("Although the Tsar did not survive, one daughter may be still alive") | in Männer (treble-8vb) at C3 sounding: two octaves below the print, one octave below the usual male reading (C4) | open: which octave (user checks later) |
 | Ghost | 4 | all | 1 | "Moderato (♩=95)" | metronome only | mistake (minor) |
 | Ghost | 4 | all | 15, 30, 40, 48 | double barline | final barline (light-heavy) | mistake |
 | Ghost | 4 | all | 16, 31, 41, 49, 62 | rehearsal letters A–E | none | mistake (letters are kept) |
@@ -122,7 +129,7 @@ not decided.
 | Ghost | 20 | Drums | 45–46 | 45 "Fill" (four slashes), crash on beat 1 of 46 | 45 a written-out groove with the crash, 46 without | mistake (crash a bar early); how to write a slash "Fill" bar: question |
 | Ghost | 20 | Guitar | 59, 61 | last eighth C5 (written) | D (61 with accent) | mistake |
 | Ghost | 20 | Guitar | 60 | first eighth C5, as in 58 | eighth rest | mistake |
-| Ghost | 20 | PianoReduction | 92–106, 130–132 | chord symbols above the piano staff | none | open: Ghost piano reductions keep chord symbols (1a, 4, 11a have them); the user adds them later (2026-10-18) |
+| Ghost | 20 | PianoReduction | 9–134 | a chord symbol under almost every bar (PianoReduction.pdf pages 257–274: B♭/F, E♭/B♭, A♭m7, ...; checked 2026-11-02, not only 92–106 / 130–132) | none (the truth guitar has 105) | open: Ghost piano reductions keep chord symbols (1a, 4, 11a have them); the user checks later (2026-10-18, again 2026-11-09) |
 | Ghost | 20 | PianoReduction | 135 | upper staff F4 + F5 eighth, accent (&gt;) | F3 + F5 quarter, marcato + staccato (the lower staff is fixed) | mistake |
 
 ## 2. Conventions
@@ -136,7 +143,6 @@ not decided.
 | Anastasia | 4 | Dmitry, Vlad | | octave as printed | an octave below the output | the truth is right, the PDF is wrong (user 2026-10-15); error accepted |
 | Anastasia | 4 | Keyboard 1, Keyboard 2, winds, Drums | whole parts | patch labels and playing words ("LH: Tuba", "RH: Celesta [bring out]", "Solo", "lead", "poco a poco cresc.", "choke", "pick up tamb.", "snares on / off", ...) | none | user 2026-10-18 |
 | Anastasia | 4 | Keyboard 2 | 82–84 | "RH: Bassoon – sounding 8vb" | 8vb line, no label | patch octaves as octave lines (as Ghost 20 Utility) |
-| Anastasia | 4 | Keyboard 2, Klarinette in B 2, Flöte 2 | whole parts | dynamics, hairpins, accents, tenuto, slurs, ... | missing | `plain` rows get no marks and none are scored (user 2026-10-18; Keyboard 2 `plain` in every Anastasia sheet) |
 | Anastasia | 4 | Triangel | 94, 97 | triangle noteheads | x head (94), normal head (97) | MuseScore can't set a triangle head here (user 2026-10-18) |
 | Anastasia | 4, 4A | Xylophon (drum book) | 4: 1–27, 169–173; 4A: 1–3 | "mallets": x / ⊗ heads, rolls, "choke"; 4 bar 27 kit notes (bass drum F4 + x "choke") | a Xylophon part with pitches, incl. the kit notes of 27 | "mallets" = xylophone, everything in the mallets sections is Xylophon (user 2026-10-18); Drums rows `Xylophon` / `Xylophone`, alias `mallets` |
 | Ghost | 4 | Guitar | 15–38, 47–57, 60–74 | slashes + chord symbols ("cont. in same style … ad lib.") after a written fingerpicking pattern | the last written pattern continued over the slash bars | user 2026-10-18: the pipeline continues the last written pattern as long as the slashes last |
