@@ -16,6 +16,151 @@ Every change to the pipeline (and every item below) is measured before it is kep
    one commit each on branch `improvements`; the new bench id becomes the reference.
 4. Work through the fixes in order of expected gain and stop when the gains flatten out.
 
+## User requests (2026-11-09): try these first
+
+The user's feedback after opening the outputs in MuseScore, plus two tasks the user wrote up. These items are
+**user-requested and come before every other item in this file**; each still goes through the acceptance rule.
+Items that do not change the metric (U1, U2, U10, U11) are accepted when the total does not get worse and the
+check named in the item passes. Reference: `r13-ref`, every song reassembled with the code of 2026-11-09 after the
+workbook changes of the same day (song 5 truth linked, `plainArticulation` flags of songs 1 / 2 / 4 / 4A removed,
+Anastasia Klavierauszug piano no longer scored: `Piano=-` in every PianoReduction `truth` cell).
+Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug left out).
+
+| # | Improvement | Max | Expected | Effort | Needs the user |
+|---|---|---|---|---|---|
+| U1 | Percussion parts import as the real instrument (not "percussion-synthesizer" / piano) | 0 (metric reads the MusicXML) | 0; saves re-assigning every percussion part | medium | no |
+| U2 | "Hide if empty" on every part of the MuseScore file, as in the truths | 0 | 0 | small | no |
+| U3 | Dynamics: more found, on the right bar and beat | 727 missing + 349 made up | -100..-300 (detector: R7 / #33) | large | no |
+| U4 | Hairpins attached to notes (no `<offset>`), more found | 539 missing + 81 made up | -50..-200 | medium | no |
+| U5 | Lyrics: hyphens on the right syllables, melisma lines | lyrics share of the score | -30..-100 | medium | no |
+| U6 | Bar lengths: no bar longer or shorter than its time signature | ~10 bars Anastasia 3 / 5 (+ MuseScore "corrupted" bars) | -10..-20 | small | no |
+| U7 | Rest-only bars as one full-bar rest | done for rest-only voices (R9, `r11-a2`) | check what is left | small | no |
+| U8 | Ties span at most 2 bars, slurs at most 6 | 5 ties, 1 slur (`r12-a`) | -5..-6 | tiny | no |
+| U9 | "con sord." / "sordino" = gedämpft, "senza sord." = offen | 0 in the current truths | 0 | tiny | no |
+| U10 | German instrument names as in the truths | 0 | 0 | small | no |
+| U11 | Anastasia Klavierauszug piano not generated | 0 (not scored since 2026-11-09) | 0; saves time | small | no |
+| U12 | Cut bars placed at the system break (align_bars) | Anastasia 5A: 4 parts × 10 bars | 5A has no truth: 0; fewer misplaced bars | small | no |
+| U13 | Duet labels into both singers (`singer_groups`, "DIMITRY") | song 6, no truth | 0 | small | no |
+
+U1. **Percussion instruments (user 2026-11-09: "they all have a midi mix instead of Glockenspiel or Bells").** The
+truths use the MuseScore instruments `crash-cymbal` (Hängendes Becken), `splash-cymbal`, `triangle`, `mark-tree`,
+`bell-tree`, `glockenspiel`, `crotales`, `timpani`, `tambourine`, `wood-blocks`, `castanets`, `xylophone`,
+`drum-kit-5` (Schlagzeug). Song 5 `combined.mscz` (code of 2026-11-02): Crotales, Glock and Timpani import right,
+but Cymbal, Triangle and Bell Tree become `percussion-synthesizer`, because MuseScore maps an unpitched part with an
+`<instrument-sound>` it does not know as an unpitched kit to the synthesizer. Song 1–4A outputs of 2026-10-18 had no
+sounds at all (piano). Plan: (1) per song, the instrument names of the book map to the truth's instrument (song 5
+"Cymbal" = Hängendes Becken = crash, songs 1 / 4 = Splash-Becken): `sound` per instrument in `show.yaml`, a song
+override in the `instruments` cell ("Cymbal (sound: metal.cymbal.crash)"); (2) unpitched parts get a full
+`<score-instrument>` + `<midi-instrument>` with `<midi-unpitched>` and notes with `<unpitched>` + `<instrument id>`,
+tested with a `to_mscz` round trip per instrument; if MuseScore still falls back, (3) post-process the `.mscz`: swap
+the `<Instrument>` block of the part for the one MuseScore writes for that instrument id (taken from a score saved
+by MuseScore, e.g. the truth). Check: open each combined.mscz, the `<Instrument id>` of every percussion part equals
+the truth's. The metric's `instrument` category reads the output MusicXML, so it does not see this; add the check
+to the bench report (instrument id after the round trip).
+
+U2. **Hide empty staves (user 2026-11-09).** The truths keep the style `hideEmptyStaves` 0 and
+`dontHideStavesInFirstSystem` 1, and set `<hideWhenEmpty>on</hideWhenEmpty>` on every `<Part>` ("Hide if empty:
+always" per instrument in MuseScore 4). MusicXML has no such setting, so do it after `to_mscz`: open the .mscz
+(zip), add the element to every `<Part>` of the .mscx and the style keys, write it back. Check: the combined.mscz
+of song 5 has 23 `<hideWhenEmpty>on` parts and opens without a warning.
+
+U3. **Dynamics (user: "dynamics is bad and a lot is missing; often in the wrong bar").** Of 952 truth dynamics 727
+are missing and 349 output dynamics are made up; 21 missing ones are in the output one bar off, 27 in the right bar
+on another beat (same token). Most missing ones are on the scans, where Audiveris does not find them (R7, #33). Plan:
+(1) the detector (#33: template match of p / mp / mf / f / ff / sfz glyphs under the staff, OCR fallback);
+(2) placement: a dynamic goes to the note whose head is nearest in x *within the bar the glyph's x lies in* (now the
+onset comes from the Audiveris direction offset, which can cross the barline); (3) cross-part vote: a dynamic found in
+most parts of a book group at the same bar and beat is a strong hint for the parts that miss it (orchestral tutti),
+but only as a check, never copied blindly (dynamics differ per instrument).
+
+U4. **Hairpins attached to notes (user: "crescendi and decrescendi (the symbols) should be attached to notes and not
+moved or placed by hand; many are wrong").** The outputs write wedges as `<direction>` with an `<offset>` (e.g.
+Anastasia 4 Violin 1, 42 wedges, offsets 36 / 60 / 84): MuseScore then puts the hairpin at a time position that
+may hold no note, and the user drags it. Plan: drop `<offset>` on wedges, put the start direction right before the
+note at the start onset and the stop before the note (or after the last note) at the end onset, both snapped to the
+nearest note / rest onset of that staff; a stop that lands on the start's onset moves to the next note. 539 of 624
+truth hairpins are missing and 81 made up: same detector work as U3 (hairpins are two lines meeting at a point:
+Hough lines on the scans, vector lines on the born-digital pages). Measure the attachment part separately (wedge
+items move from "wrong beat" to matched).
+
+U5. **Lyrics: blanks, hyphens and melisma lines (user: "between 'in my dreams' there should be blanks not dashes,
+especially underscores 147, 148, 149").** Song 5 Anya: the syllable pairing is shifted by one: "found" (begin) +
+"by" (end) shows "found-by", "road." (begin) + "There" (end), "a" (begin) "round," (middle) "it" (end); the real
+"re-cent-ly" is right. Melisma lines: the outputs have none (0 of 942 lyrics), the truths 42; song 5 bars 147–149
+"back___" needs one. Plan: (1) take the hyphen from the PDF text layer of the vector PianoReductions (a "-" glyph
+between two syllables) instead of inferring it; a syllable is `begin` / `middle` only when a hyphen follows it on
+the page; (2) an underscore line (a horizontal line at lyric height after a syllable) gives `<extend/>` on that
+syllable and `<extend type="continue|stop">` up to the line's end note; (3) test on song 5 bars 8–15, 147–149.
+
+U6. **Bar lengths (user: "Anastasia 3 or 5, bars 77, 79, 87, 115, 145, 156 have a wrong length; MuseScore says the bar
+is corrupt and the note values do not add up").** It is song 5 (`results/anastasia/5`, code of 2026-11-02): Keyboard 2
+bars 77, 79 (4.5 quarters), 87, 115 (7), Keyboard 1 145 (4), Reed 2 156 (4); song 3 has Keyboard 2 87, 145 and
+Trumpet 156. Cause (R9 leftover): the voices of two staves follow each other with no `<backup>` between them, or a
+voice is split by `<forward>`, so the bar's length is the sum. Plan: a last pass per bar and voice in
+`write_score`: each voice's notes must end at or before the bar length; a voice that starts after another voice's
+end without a `<backup>` gets one (rewind to the bar start), else the overflow is cut as in `cut_long_bar`. Check:
+MuseScore converts every song without `-f` ("corrupted") where the bar counts agree.
+
+U7. **Full-bar rests (user: "a bar of only rests gets the full-bar rest, not single rests").** Done for whole voices
+of rests in R9 (`r11-a2`, -125). Check in the refreshed outputs which bars still show several rests (likely a second
+voice of rests next to a full bar rest, or rests in a bar with an empty voice 1), then extend `fit_measure_rests`.
+
+U8. **Tie and slur length (user: "ties can only be in 2 bars, slurs maximum in 6 bars").** `r12-a`: 5 ties over more
+than 2 bars (Anastasia 3 Fagott, Keyboard 1, Klarinette 1 / 2, 4 Trompete), 1 slur over more than 6 bars (4 Violine 1).
+Plan: in the last pass with `drop_duplicate_curves`, drop a tie whose stop is not in the same or the next bar (and
+the dangling start), and a slur whose stop is more than 5 bars after its start.
+
+U9. **Mute words (user: "con sord., sordino, con sordino all mean gedämpft; senza sord., senza sordino stop it").**
+`text.MUTE_ON` already takes "con sord." / "con sordino", `MUTE_OFF` "senza sord." / "senza sordino"; add "sordino",
+"sord.", "con sordini", "mit Dämpfer" / "ohne Dämpfer", and make sure the translated word also gets the playback
+(`musicxml.play_techniques`: "gedämpft" -> mute on, "offen" -> off). These words are not in the current truths, so
+the check is a unit test.
+
+U10. **German instrument names (user: like the truths).** Output part names and instrument names as in the song 4
+truth: Violine 1 / 2, Violoncello, Kontrabass, Piccolo, Flöte n, Oboe, Englisch Horn, Klarinette in B n, Fagott,
+Horn in F, Trompete in B, Posaune, Pauken, Glockenspiel, Crotales, Xylophon, Glockenbaum, Mark Tree, Triangel,
+Hängendes Becken / Splash-Becken, Holzblöcke, Kastagnetten, Tamburin, Schlagzeug; Keyboard 1 / 2 keep their names;
+singers keep their labels (Frauen, Männer for Women / Men). The number n is the reed book's (Reed 2 Flute = Flöte 2)
+or the truth's. Source: a `german` name per instrument in the `show.yaml` library (one place), used by
+`set_sounds` for `<part-name>` and `<instrument-name>`. Not scored (bench maps by the workbook). Check: the
+combined.mscz part list reads like the truth's.
+
+U11. **Anastasia Klavierauszug piano (user 2026-11-09: "can be ignored in the future, both in generating and in
+scoring").** Scoring: done in the workbook (`Piano=-`). Generating: a `show.yaml` meta key (`piano_part: false`)
+makes the vocal-score engine write only "PianoReduction - Voices" (no "- Piano" file, not in combined.mscz); the
+piano staves are still read, because the voices' bars, barlines and system text come from the same systems.
+Check: songs 1–5A bench unchanged, no "- Piano" file.
+
+U12. **Empty bars of a cut at the system break (user task, 2026-11-09).** Anastasia 5A (`omrbench transcribe
+anastasia --songs 5A`, output `results/anastasia/5A/`, run `20261105-010953`): the parts print bars 1–5, then a new
+system starting with "[to] 16" (cut; bars 6–15 stay as empty bars, workbook `bars` 21). In Violin 1, Cello, Horn and
+Reed 2 the "[to] 16" label was not read, so the first number after the gap is "17" at system 2 bar 2. `align_bars`
+takes the else branch ("printed bar number 17") and inserts the 10 rest bars right before bar 17: printed 16 lands at
+output bar 6 and output bar 16 is empty (log: "10 rest bar(s) inserted before page 1 system 2 (#2) bar 2 (printed bar
+number 17)"). Fix: when a gap is closed by a printed number and a system break lies between the last confirmed bar and
+that number, insert the rests at the system break (end of the previous system, where cuts are printed), not right
+before the numbered bar. The rest-extension branch ("after the rest at ...") keeps priority; fall back to "right before
+the number" only without a system break in the gap. Check: reassemble 5A from its run (`scripts/reassemble.py`);
+bars with notes: Violin 1 1–5 and 16–21, Cello / Horn / Reed 2 2–5 and 16–21; Bass, Reed 1, Reed 3, Trumpet, Trombone,
+Keyboard 1, Keyboard 2, Violin 2 unchanged; bench both shows (acceptance rule); a test in `tests/` for a gap closed by a
+mid-system number after a system break. Out of scope (OCR misreads): Drums bar 1 "1" read as "11"; PianoReduction
+"[to] 16" read as "[to] 15".
+
+U13. **Duet labels in the No. 6 PianoReduction (user task, 2026-11-09).** "Learn To Do It", PianoReduction.pdf pages
+78–96; labels VLAD:, DMITRY:, ANYA:, "VLAD & DMITRY:" (2×), "VLAD & DIMITRY:" (3×, a typo in the PDF), "BOTH:" (1×).
+Every duet bar goes into both the Vlad and the Dmitry part (the song 4 truth convention Both=Dmitry, Both=Vlad); no
+separate "Vlad & Dmitry" or "Both" part. `build_vocal_parts` splits "&" / "+" / "AND" labels (`_singers_of`) and merges
+OCR spellings (`_canonical_singers`, Levenshtein ratio >= 0.85), so "VLAD & DIMITRY" probably merges into "VLAD &
+DMITRY", but nothing guarantees it: check whether the split "DIMITRY" makes its own part; if so, map split names onto
+known single labels with the same fuzzy match. "BOTH" names nobody: a per-song mapping in the PianoReduction `extra`
+cell of sheet 6, `singer_groups: {Both: [Vlad, Dmitry]}`, read in `pipeline/engine.py` next to `male_voices` and passed
+to `build_vocal_parts`; a grouped label puts the line into each listed singer's part like `_singers_of`. Vlad and Dmitry
+are in `male_voices` (treble-8vb); `voice_sounds` has both. Check: `omrbench transcribe anastasia --songs 6 --parts
+PianoReduction`; the Voices output has exactly Vlad, Dmitry, Anya (plus a "Voice n" part for bars before the first
+label); duet bars in both Vlad and Dmitry; tests for `singer_groups` and the "DIMITRY" spelling; `omrbench bench
+anastasia` unchanged for songs 1–5. Sheet 6 `plainText` lists "Vlad & Dmitry, Vlad & Dimitry, Both": after the fix it
+needs only "Vlad, Dmitry, Anya" (the user's workbook).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
@@ -249,8 +394,8 @@ Plan:
    dynamic, hairpin, articulation, slur or fermata when a part without the flag has the same one on the same bar and
    onset (slurs / hairpins: same start and stop onset); keep the rest. Expressive words the same way. Compare by
    concert onset, not pitch, so transposing parts match.
-3. Which parts carry the flag: song 3 Violine 2 / Klarinette 2 / Flöte 2 by the data; songs 1, 2, 4, 4A flags to be
-   removed or kept by the user (the data says their truths are complete).
+3. Which parts carry the flag: song 3 Violine 2 / Klarinette 2 / Flöte 2. The flags of songs 1, 2, 4, 4A were removed
+   (user 2026-11-09); the new reference `r13-ref` scores those parts in full.
 Expected: song 3 Violin 2 / Reed 2 recover most of their +663 against the "flag off" scoring (they keep ~5 % of marks
 and the rule drops ~95 % of the shared ones); the other flagged parts are scored in full (their marks are mostly read
 right already). The new reference rises by about the hidden cost, so this is measured as a metric change first, then
