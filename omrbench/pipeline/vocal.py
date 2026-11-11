@@ -71,10 +71,11 @@ def _bar_index(plan, x: float) -> int | None:
 
 # ----------------------------------------------------------------------------- lyrics
 
-def _lyric(t: Text, extend: bool) -> etree._Element:
+def _lyric(t: Text, extend: bool, syllabic: str | None = None) -> etree._Element:
     ly = etree.Element("lyric", number=str(t.verse or 1))
-    if t.syllabic in ("single", "begin", "middle", "end"):
-        etree.SubElement(ly, "syllabic").text = t.syllabic
+    syllabic = syllabic or t.syllabic
+    if syllabic in ("single", "begin", "middle", "end"):
+        etree.SubElement(ly, "syllabic").text = syllabic
     etree.SubElement(ly, "text").text = t.value.strip()
     if extend:
         etree.SubElement(ly, "extend")
@@ -86,18 +87,50 @@ def _put(note: etree._Element, ly: etree._Element) -> None:
     note.insert(idx, ly)
 
 
-def attach_lyrics(plans, pages: list[Page], D: int, stats) -> None:
+def attach_lyrics(plans, pages: list[Page], D: int, stats, printed: dict | None = None) -> None:
+    """printed (U5, vector pages): page number -> (hyphens, lines) of the PDF text layer / drawing
+    (vector.read_lyric_marks); there a syllable is begin / middle / end only by a printed hyphen and
+    has a melisma line only by a printed line."""
     by_page = {p.number: p for p in pages}
+    carry: dict = {}         # (track, verse) -> a hyphen ends the last system's line
     for plan in plans:
         sy = plan.system
         if sy.piano_group is None or not plan.n or sy.page not in by_page:
             continue
         for gi, g in enumerate(sy.groups()):
             if gi != sy.piano_group and gi in plan.chosen:
-                _attach_staff(plan, gi, g[0], by_page[sy.page], D, stats)
+                marks = (printed or {}).get(sy.page)
+                syllabic = _printed_syllabic(g[0], by_page[sy.page], marks, carry,
+                                             sy.logical[gi] if gi < len(sy.logical) else gi) if marks else {}
+                _attach_staff(plan, gi, g[0], by_page[sy.page], D, stats, syllabic,
+                              marks[1] if marks else None)
 
 
-def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats) -> None:
+def _printed_syllabic(st: Staff, page: Page, marks, carry: dict, track) -> dict[int, str]:
+    """id(syllable) -> syllabic from the printed hyphens: a hyphen between a syllable and the next one of
+    its line (or after the last one of the line, before the system's end) joins them."""
+    il = st.interline
+    hyphens = marks[0]
+    out = {}
+    syls = [t for t in page.texts if t.staff == st.id and t.kind == "syllable"
+            and t.y >= st.bottom - il and _usable(t)]
+    for verse in sorted({t.verse for t in syls}):
+        row = sorted((t for t in syls if t.verse == verse), key=lambda t: t.x)
+        before = carry.get((track, verse), False)
+        for k, t in enumerate(row):
+            right = t.x + t.w
+            limit = row[k + 1].x + 0.25 * il if k + 1 < len(row) else right + 4 * il
+            after = any(right - 0.25 * il <= hx <= limit and abs(hy - (t.y + t.h / 2)) <= il
+                        for hx, hy in hyphens)
+            out[id(t)] = {(False, False): "single", (False, True): "begin",
+                          (True, True): "middle", (True, False): "end"}[(before, after)]
+            before = after
+        carry[(track, verse)] = before
+    return out
+
+
+def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats, syllabic: dict | None = None,
+                  lines: list | None = None) -> None:
     il = st.interline
     # sung text is printed below its staff
     syls = [t for t in page.texts if t.staff == st.id and t.kind == "syllable"
@@ -128,8 +161,12 @@ def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats) -> None:
                 if any(ly.get("number") == str(verse) for ly in note.findall("lyric")):
                     stats.lyrics_unplaced += 1
                     continue
-                extend = any(e.verse == t.verse and 0 <= e.x - (t.x + t.w) <= 1.5 * il for e in exts)
-                _put(note, _lyric(t, extend))
+                if lines is None:
+                    extend = any(e.verse == t.verse and 0 <= e.x - (t.x + t.w) <= 1.5 * il for e in exts)
+                else:       # U5: a printed line from the syllable's end at its baseline
+                    extend = any(-0.25 * il <= x0 - (t.x + t.w) <= 1.5 * il and x1 - x0 >= il
+                                 and t.y <= y <= t.y + t.h + 0.5 * il for x0, x1, y in lines)
+                _put(note, _lyric(t, extend, (syllabic or {}).get(id(t))))
                 stats.lyrics += 1
                 last = k
 

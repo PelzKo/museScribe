@@ -494,3 +494,26 @@ def read_all_systems(pdf, pages: list) -> dict[int, list]:
     with FITZ_LOCK, fitz.open(pdf) as doc:
         return {pages[i].number: read_systems(p, pages[i]) for i, p in enumerate(doc)
                 if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"}
+
+
+def read_lyric_marks(pdf, pages: list) -> dict[int, tuple[list, list]]:
+    """U5: page number -> (lyric hyphens: (x centre, y centre) of every "-" text item, horizontal lines:
+    (x0, x1, y)) of the vector pages, in page coordinates. Audiveris pairs syllables by guess ("found" +
+    "by" read as "found-by"); the text layer has every printed hyphen and melisma line."""
+    import pymupdf as fitz
+
+    from ..pdfkind import classify_page
+    from ..rasterize import FITZ_LOCK
+    out = {}
+    with FITZ_LOCK, fitz.open(pdf) as doc:
+        for i, p in enumerate(doc):
+            if i >= len(pages) or not p.get_fonts() or classify_page(p, i + 1).kind != "vector":
+                continue
+            sx = pages[i].width / p.rect.width if p.rect.width else 1.0
+            hyphens = [((sp["bbox"][0] + sp["bbox"][2]) / 2 * sx, (sp["bbox"][1] + sp["bbox"][3]) / 2 * sx)
+                       for block in p.get_text("dict")["blocks"] for line in block.get("lines", [])
+                       for sp in line["spans"] if sp["text"].strip() == "-"]
+            lines = [(r.x0 * sx, r.x1 * sx, r.y0 * sx) for d in p.get_drawings()
+                     if (r := d["rect"]).height < 1 and r.width > 0]
+            out[pages[i].number] = (hyphens, lines)
+    return out

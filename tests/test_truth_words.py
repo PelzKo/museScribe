@@ -306,3 +306,17 @@ def test_one_instrument_percussion_part_on_the_single_line():
     assert one_line_position({0: {"name": "Drum Set", "clef": "percussion", "kit": True}}) is None
     assert one_line_position({0: {"name": "Glock", "clef": "pitched", "sound": "x"}}) is None
     assert one_line_position({}) is None
+
+
+def test_printed_hyphens_decide_the_syllabic():
+    from types import SimpleNamespace
+    from omrbench.pipeline.layout import Text
+    from omrbench.pipeline.vocal import _printed_syllabic
+    st = SimpleNamespace(id=1, bottom=0, interline=10)
+    syl = lambda x, v: Text(page=1, staff=1, x=x, y=20, w=20, h=10, value=v, kind="syllable", syllabic="begin")
+    found, by, re_, cent = syl(0, "found"), syl(50, "by"), syl(100, "re"), syl(150, "cent")
+    page = SimpleNamespace(texts=[found, by, re_, cent])
+    carry = {}
+    out = _printed_syllabic(st, page, ([(135, 25), (185, 25)], []), carry, 1)   # "re-cent-" to the next line
+    assert [out[id(t)] for t in (found, by, re_, cent)] == ["single", "single", "begin", "middle"]
+    assert carry == {(1, 1): True}

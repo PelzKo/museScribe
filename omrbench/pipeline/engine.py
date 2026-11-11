@@ -401,7 +401,8 @@ class Pipeline(Engine):
             A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
             A.place_sim(plans, SL.read_lines(sample.pdf, pages, B.SIM))
         if vocal:
-            V.attach_lyrics(plans, pages, D, stats)
+            V.attach_lyrics(plans, pages, D, stats,
+                            None if is_scan(sample.pdf) else SL.read_lyric_marks(sample.pdf, pages))
             V.place_marks(plans, pages, D, stats)
         elif is_scan(sample.pdf) and sample.score_type not in ("piano", "drums"):
             # R40: the hairpins Audiveris finds but drops at its export, placed by x; its dynamics
