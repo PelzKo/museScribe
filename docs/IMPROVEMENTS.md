@@ -76,6 +76,10 @@ on another beat (same token). Most missing ones are on the scans, where Audiveri
 onset comes from the Audiveris direction offset, which can cross the barline); (3) cross-part vote: a dynamic found in
 most parts of a book group at the same bar and beat is a strong hint for the parts that miss it (orchestral tutti),
 but only as a check, never copied blindly (dynamics differ per instrument).
+Placement (2) **rejected 2026-11-11, measured +0** (`u3-a` vs `r40-w`): dynamics hung on the nearest note of their
+staff like the hairpins (`attach_wedges` extended to dynamics, no `<offset>`). All 228 dynamics with an offset were
+already on a note onset, so neither the score nor MuseScore changes. The bar-crossing case (an Audiveris offset
+past the barline) needs the glyph x from the `.omr`; it is 21 dynamics at most (see above), not tried.
 
 U4. **Hairpins attached to notes (user: "crescendi and decrescendi (the symbols) should be attached to notes and not
 moved or placed by hand; many are wrong").** The outputs write wedges as `<direction>` with an `<offset>` (e.g.
