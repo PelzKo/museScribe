@@ -403,6 +403,10 @@ class Pipeline(Engine):
         if vocal:
             V.attach_lyrics(plans, pages, D, stats)
             V.place_marks(plans, pages, D, stats)
+        elif is_scan(sample.pdf) and sample.score_type not in ("piano", "drums"):
+            # R40: the hairpins Audiveris finds but drops at its export, placed by x; its dynamics
+            # stay as exported (the `.omr` ones cost more than they fix next to homr's)
+            V.place_marks(plans, pages, D, stats, kinds=("wedge",))
         if sample.meta.get("cues") == "drop":
             A.drop_cues(plans, pages, D, stats)
             A.drop_play_cues(plans, pages, stats, None if is_scan(sample.pdf)

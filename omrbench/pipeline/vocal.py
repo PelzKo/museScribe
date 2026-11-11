@@ -136,19 +136,19 @@ def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats) -> None:
 
 # ------------------------------------------------------------------ dynamics, wedges
 
-def strip_marks(bar: B.Bar) -> None:
+def strip_marks(bar: B.Bar, kinds: tuple[str, ...] = MARK_TYPES) -> None:
     """Remove the engines' dynamics and hairpins (placed again from the layout)."""
     items = []
     for el in bar.items:
         if el.tag == "direction":
             for dt in el.findall("direction-type"):
-                for k in [k for k in dt if k.tag in MARK_TYPES]:
+                for k in [k for k in dt if k.tag in kinds]:
                     dt.remove(k)
                 if not len(dt):
                     el.remove(dt)
             if el.find("direction-type") is None:
                 continue
-        elif el.tag == "note":
+        elif el.tag == "note" and "dynamics" in kinds:
             for nt in el.findall("notations"):
                 for d in nt.findall("dynamics"):
                     nt.remove(d)
@@ -225,18 +225,20 @@ def _wedge_el(kind: str, placement: str) -> etree._Element:
     return d
 
 
-def place_marks(plans, pages: list[Page], D: int, stats) -> None:
-    """Replace the engines' dynamics and hairpins with the ones on the page."""
+def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] = MARK_TYPES) -> None:
+    """Replace the engines' dynamics and hairpins (`kinds`) with the ones on the page."""
     for plan in plans:
         for g in plan.chosen.values():
             for bar in g:
-                strip_marks(bar)
+                strip_marks(bar, kinds)
     on_page: dict[int, list] = {}
     for p in plans:
         if p.n and p.chosen and not p.system.skip:
             on_page.setdefault(p.system.page, []).append(p)
     for page in pages:
         for mk in page.marks:
+            if mk.kind not in kinds:
+                continue
             plan = _system_of(page, on_page.get(page.number, []), mk.cy)
             if plan is None:
                 stats.marks_unplaced += 1

@@ -372,7 +372,8 @@ with the current truth. Revisit only with new readers or truth of new score type
 - User requests U6–U9 (2026-11-11): U8 `u8-c` **12 239** (Anastasia 9 022, Ghost 3 217), ties <= 2 bars, slurs <= 6; U6 `u6-b` **12 200**
   (Anastasia 8 995, Ghost 3 205), no voice past the bar end; U9 `u9-a` 12 200 (mute words); U7 `u7-b` **12 187**
   (Anastasia 8 983, Ghost 3 204), one full-bar rest per staff of rests. U4 part 1 `u4-b` **12 185** (Anastasia
-  8 981, Ghost 3 204), hairpins attached to notes. **Reference from now on: `u4-b`.**
+  8 981, Ghost 3 204), hairpins attached to notes; R40 `r40-w` **11 968** (Anastasia 8 764, Ghost 3 204), the
+  `.omr` hairpins on scanned single-staff parts. **Reference from now on: `r40-w`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

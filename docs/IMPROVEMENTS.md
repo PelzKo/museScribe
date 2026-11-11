@@ -355,7 +355,7 @@ real implementation in `transcribe.share_marks` should land close, but must be r
 
 | # | Improvement | Evidence | Expected | Effort |
 |---|---|---|---|---|
-| R40 | Dynamics + hairpins from the Audiveris `.omr` on every scanned part | measured: single-staff parts **-398**, keyboards +176 | -400 now, -600..-800 with placement + filters | small–medium |
+| R40 | Dynamics + hairpins from the Audiveris `.omr` on every scanned part | **hairpins done 2026-11-11: -217** (`u4-b` -> `r40-w`); `.omr` dynamics now +43 next to homr's | more with placement + filters | small–medium |
 | R41 | Words only one book has are dropped (playing words kept) | simulated **-247**, worst part +1 | -200..-250 | small |
 | R42 | Dynamics / fermatas only one book has are dropped | simulated -128 / -28 (after R40: -78) | -80..-150 | small |
 | R43 | One-instrument percussion parts on the truth's staff line | simulated **-69**, no part worse | -69 | tiny |
@@ -416,6 +416,13 @@ hairpins are now mostly *found but misplaced*, which is the cheap kind of error.
 The scans have an interline of 18–20 px (Audiveris wants about 20), so a detector (#33) is still an option for
 what Audiveris does not see, but only after this: the remaining gap is 319 hairpins and 526 dynamics, not 703 and
 670. homr 0.7.1 also reads dynamics (R49) and gives a second vote.
+**Hairpins done 2026-11-11: -217** (`u4-b` 12 185 -> `r40-w` 11 968, Anastasia 8 764; worst part +9 Anastasia 3 Cello).
+Re-measured after R49 (homr 0.7.1 dynamics) and U4 (`attach_wedges`), on scanned parts that are not `type: piano` /
+`drums` (`vocal.place_marks(kinds=("wedge",))` in `engine.py`): `.omr` hairpins and dynamics `r40-wd` -173
+(hairpins -218, dynamics **+43**); hairpins only `r40-w` **-217**; hairpins plus `.omr` dynamics only in bars
+(staves) with none `r40-wa` -181 (dynamics +35). So homr's dynamics now beat the `.omr` ones even where it has
+none: the `.omr` dynamics stay out. Dropping `.omr` wedges narrower than 2 or 3 interlines changes nothing (none
+are). Keyboards and drum books are still left as they are.
 
 R41. **A word that only one book prints in a bar is almost always noise.** Simulated on `r13-ref` (both shows):
 drop every `words` item of a part when at least 4 books have notes in that bar and no other book has the same
