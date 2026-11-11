@@ -192,3 +192,21 @@ def test_bar_of_rests_on_two_interleaved_staves_gets_one_measure_rest_each():
     B.fit_measure_rests(bar, 8)
     assert [(e.tag, e.findtext("duration"), e.findtext("staff")) for e in bar.items] == [
         ("note", "8", "1"), ("backup", "8", None), ("note", "8", "2")]
+
+
+def test_hairpins_hang_on_the_nearest_note():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def n(d):
+        return etree.fromstring(f"<note><pitch><step>C</step><octave>4</octave></pitch>"
+                                f"<duration>{d}</duration><voice>1</voice></note>")
+    bar = B.Bar([n(2), n(2), n(4)], "crop")
+    B.add_direction(bar, etree.fromstring('<direction><direction-type><wedge type="crescendo"/>'
+                                          '</direction-type></direction>'), 1, None)
+    B.add_direction(bar, etree.fromstring('<direction><direction-type><wedge type="stop"/>'
+                                          '</direction-type></direction>'), 7, None)
+    B.attach_wedges(bar)                        # start at 1 -> the note at 0 or 2, stop at 7 -> bar end
+    assert [e.tag if e.tag == "note" else e.find("direction-type/wedge").get("type") for e in bar.items] == \
+        ["crescendo", "note", "note", "note", "stop"]
+    assert not any(e.find("offset") is not None for e in bar.items)

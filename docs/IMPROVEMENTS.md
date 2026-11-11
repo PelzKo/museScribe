@@ -86,6 +86,11 @@ nearest note / rest onset of that staff; a stop that lands on the start's onset 
 truth hairpins are missing and 81 made up: same detector work as U3 (hairpins are two lines meeting at a point:
 Hough lines on the scans, vector lines on the born-digital pages). Measure the attachment part separately (wedge
 items move from "wrong beat" to matched).
+**Part 1 (attachment) done 2026-11-11: -2** (`u7-b` 12 187 -> `u4-b` 12 185; worst part +0). `bars.attach_wedges`,
+called in `write_score` after the bar is final: every wedge start / stop goes right before the note (or rest) of its
+staff nearest its onset, no `<offset>` (748 wedges, 523 of them had an offset); a stop may also go after the last
+note, a stop on a start's onset moves to the next note. Placing them while assembling (`add_direction`, `u4-a`) is
++14: the later bar repairs reorder the items and the inline positions go stale (Anastasia 3 Keyboard 1 +10).
 
 U5. **Lyrics: blanks, hyphens and melisma lines (user: "between 'in my dreams' there should be blanks not dashes,
 especially underscores 147, 148, 149").** Song 5 Anya: the syllable pairing is shifted by one: "found" (begin) +

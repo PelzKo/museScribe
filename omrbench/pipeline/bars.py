@@ -656,6 +656,67 @@ def add_direction(bar: Bar, direction: etree._Element, onset: int,
     return d
 
 
+def _wedge_slot(items: list, onset: int, staff: int, stop: bool, starts: set) -> int | None:
+    """Index in `items` of the note (or rest) of `staff` nearest to `onset`, for a hairpin start /
+    stop; a stop may also go after the last note, and one on a start's onset moves to the next note.
+    None when the staff has no notes."""
+    cur, slots, ends = 0, [], []         # (onset, index to insert at)
+    for i, el in enumerate(items):
+        if el.tag == "note":
+            if el.find("chord") is not None or el.find("grace") is not None:
+                continue
+            dur = int(el.findtext("duration", "0") or 0)
+            if int(el.findtext("staff", "1") or 1) == staff:
+                j = i
+                while j and items[j - 1].tag == "note" and items[j - 1].find("grace") is not None:
+                    j -= 1               # before the note's graces, after directions already there
+                slots.append((cur, j))
+                k = i + 1
+                while k < len(items) and items[k].tag == "note" and items[k].find("chord") is not None:
+                    k += 1
+                ends.append((cur + dur, k))
+            cur += dur
+        elif el.tag == "backup":
+            cur -= int(el.findtext("duration", "0") or 0)
+        elif el.tag == "forward":
+            cur += int(el.findtext("duration", "0") or 0)
+    if not slots:
+        return None
+    if stop:
+        ons = {on for on, _ in slots}
+        slots = sorted(slots + [e for e in ends if e[0] not in ons], key=lambda s: s[0])
+        best = min(slots, key=lambda s: abs(s[0] - onset))
+        if best[0] in starts:
+            later = [s for s in slots if s[0] > best[0]]
+            if later:
+                return later[0][1]
+        return best[1]
+    return min(slots, key=lambda s: (abs(s[0] - onset), s[0]))[1]
+
+
+def attach_wedges(bar: Bar) -> None:
+    """Hairpin starts / stops go right before the note (or rest) of their staff nearest to their
+    onset, without <offset> (U4): MuseScore puts an offset one where there may be no note."""
+    starts: set[tuple[int, int]] = set()
+    for on, el in onsets(bar):
+        w = el.find("direction-type/wedge") if el.tag == "direction" else None
+        if w is None or len(el.findall("direction-type")) > 1:
+            continue
+        staff = int(el.findtext("staff", "1") or 1)
+        stop = w.get("type") == "stop"
+        i = bar.items.index(el)
+        del bar.items[i]
+        at = _wedge_slot(bar.items, on, staff, stop, {o for o, s in starts if s == staff})
+        if at is None:
+            bar.items.insert(i, el)
+            continue
+        for off in el.findall("offset"):
+            el.remove(off)
+        bar.items.insert(at, el)
+        if not stop:
+            starts.add((next(o for o, e in onsets(bar) if e is el), staff))
+
+
 def to_unpitched(bar: Bar) -> Bar:
     """homr has no percussion support: keep its rhythm, turn pitches into staff positions."""
     b = copy.deepcopy(bar)

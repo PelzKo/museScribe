@@ -2438,6 +2438,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
                 B.rewind_voices(bar, length)
                 while B.cut_long_bar(bar, length):     # each voice segment that ends past the bar
                     pass
+            B.attach_wedges(bar)
             if bar.source == "crop" and bar.read_key is not None and key is not None and not perc \
                     and bar.read_key != key and abs(int(bar.read_key) - int(key)) < 7:
                 # (7 or more apart = an enharmonic spelling of the key, e.g. Db vs C#: not a misread)
