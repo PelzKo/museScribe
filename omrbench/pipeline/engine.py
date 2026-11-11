@@ -484,6 +484,10 @@ class Pipeline(Engine):
         # the import name stays the sound id: labels MuseScore knows ("Voice 1") would pick another voice
         sounds.update({k: {"sound": v, "ms_name": v, "german": voice_names.get(k, k) if voice_names else None}
                        for k, v in (sample.meta.get("voice_sounds") or {}).items()})
+        if "Voices" in files:      # a singer label without a voice_sounds entry: a generic voice, not a piano
+            for k in (sp.findtext("part-name") for sp in files["Voices"].iterfind("part-list/score-part")):
+                sounds.setdefault(k, {"sound": "voice.vocals", "ms_name": "voice.vocals",
+                                      "german": voice_names.get(k, k) if voice_names else None})
         single = {k: sample.meta[k] for k in ("sound", "ms_name", "german") if sample.meta.get(k)}
         for root in [score, *(files or {}).values()]:
             musicxml.set_sounds(root, sounds, single)

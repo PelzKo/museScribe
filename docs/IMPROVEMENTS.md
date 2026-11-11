@@ -47,6 +47,7 @@ Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug lef
 | U13 | Duet labels into both singers (`singer_groups`, "DIMITRY") | song 6, no truth | 0 | small | no |
 | U14 | `show_overrides.yaml` moved into data/ (show.yaml, workbook cells) | 0 | 0 | tiny | no |
 | U15 | "Hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off) | 0 | 0 | tiny | no |
+| U16 | Singer labels without a `voice_sounds` entry import as a voice, not a piano | 0 | 0 | tiny | no |
 
 U1. **Percussion instruments (user 2026-11-09: "they all have a midi mix instead of Glockenspiel or Bells").** The
 truths use the MuseScore instruments `crash-cymbal` (Hängendes Becken), `splash-cymbal`, `triangle`, `mark-tree`,
@@ -278,6 +279,14 @@ combined.mscz. Now a show.yaml key `hide_empty_staves` (default off): `data/anas
 **Done 2026-11-12, metric-neutral (+0, `u14-a` 11 460 -> `u15-a` 11 460; output MusicXML byte-identical).** Check
 (`u15-a`): every Anastasia combined.mscz has `<hideWhenEmpty>on` on all parts (song 5: 22 of 22, the piano is gone
 since U11), no Ghost one has any.
+
+U16. **Generic voice for unknown singers (U10 open point).** A Voices part whose label has no `voice_sounds` entry
+(Anastasia 4 "Solo", "Black Marketeer #1") had no `<score-instrument>` and imported as a piano.
+**Done 2026-11-12, metric-neutral (+0, `u15-a` 11 460 -> `u16-a` 11 460, no part changed).** `pipeline/engine.py`:
+every part of the "Voices" file without an entry gets `voice.vocals` (MuseScore "voice"), shown name as for the
+known singers. Check (`u16-a` combined.mscz, Instrument id piano -> voice): Anastasia 3 "Voice 2", 4 "Solo" /
+"Black Marketeer #1", 4A "Voice"; Ghost 13 / 20 / 4 / 5 "Voice 3..5", 1a "Cue", 20 "Ens" / "Vvomen", 5 "Willie"
+(OCR spellings: candidates for `voice_sounds` / label merging).
 
 ## From the code and current-output review (2026-11-10)
 
