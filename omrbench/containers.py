@@ -30,7 +30,7 @@ IMAGES = {
     # TensorFlow 2.12 (zeus): Python 3.10, CUDA 11.8 / cuDNN 8
     "base-cuda11": ("omrbench/base:cuda11", "base", {"BASE_IMAGE": "nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04"}),
     "audiveris": ("omrbench/audiveris:5.11.0", "audiveris", {"BASE_IMAGE": "omrbench/base:cpu"}),
-    "homr": ("omrbench/homr:0.7.0", "homr", {"BASE_IMAGE": "omrbench/base:cuda13"}),
+    "homr": ("omrbench/homr:0.7.1", "homr", {"BASE_IMAGE": "omrbench/base:cuda13"}),
     "oemer": ("omrbench/oemer:0.1.8", "oemer", {"BASE_IMAGE": "omrbench/base:cuda"}),
     "clarity": ("omrbench/clarity:c6bb8a4", "clarity", {"BASE_IMAGE": "omrbench/base:cpu"}),
     "transcoda": ("omrbench/transcoda:b529f8a", "transcoda", {"BASE_IMAGE": "omrbench/base:cpu"}),

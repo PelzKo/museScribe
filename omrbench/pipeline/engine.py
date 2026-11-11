@@ -355,6 +355,8 @@ class Pipeline(Engine):
         crop_bars = {}
         for (k, gi), r in roots.items():
             part = r.find("part")
+            if part is not None and r.findtext("identification/encoding/software") == "homr":
+                B.homr_as_printed(part)
             n_staves = len(systems[k].groups()[gi])
             bars = B.part_bars(part, D, "crop", staves=n_staves) if part is not None else []
             if bars and max(b.staves for b in bars) == n_staves:
@@ -379,7 +381,7 @@ class Pipeline(Engine):
         prefer = self.cfg.get("prefer") or "auto"
         if prefer == "auto":
             # homr reads scans better; on born-digital PDFs Audiveris is near perfect
-            # and also has ties, which homr never outputs
+            # and has every tie (homr: only slurs between equal pitches)
             prefer = ["crop", "audiveris"] if is_scan(sample.pdf) else ["audiveris", "crop"]
         # the recognizer's name (e.g. "homr") stands for its crops
         prefer = ["crop" if s in rec.split("+") else s for s in prefer]
@@ -535,7 +537,8 @@ class Pipeline(Engine):
             images = rasterize(sample.pdf, workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi", dpi=dpi)
             self.add_ocr_text(pages, images, workdir / "ocr", sample.pdf)
         roots = {}
-        for f in sorted((workdir / "crops").glob("s*-g*.musicxml")):
+        # the main crop before its retries with smaller margins (s01-g1 before s01-g1-m4)
+        for f in sorted((workdir / "crops").glob("s*-g*.musicxml"), key=lambda f: (len(f.stem), f.stem)):
             k, g = f.stem[1:].split("-g")
             key = (int(k) - 1, int(g.split("-")[0]) - 1)
             roots.setdefault(key, musicxml.load(f))

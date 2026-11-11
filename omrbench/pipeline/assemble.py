@@ -440,7 +440,8 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             perc = all(st.clef == "PERCUSSION_CLEF" for st in group)
             if perc:
                 # homr reads percussion staves as pitched (often with a C clef): its bars only
-                # where Audiveris lacks the system's bar count (Ghost 20 Drums: 1180 vs 695 notes)
+                # where Audiveris lacks the system's bar count (Ghost 20 Drums: 1180 vs 695 notes;
+                # homr 0.7.1, two voices: homr first +180, homr as second candidate +60)
                 order = ["audiveris", "crop"]
                 hb = None if ab else hb and [B.to_unpitched(b) for b in hb]
             options = {"crop": hb, "audiveris": ab}
@@ -468,7 +469,7 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     # didn't add up (Audiveris), the other engine's notes are better
                     with_notes = [(s, b) for s, b in cands if not b.rest_only]
                     cands = with_notes + [c for c in cands if c not in with_notes]
-                ok = [(s, b) for s, b in cands if B.bar_ok(b, length)]
+                ok = [(s, b) for s, b in cands if B.bar_ok(b, length, side_voices=s == "crop")]
                 st_i = sy.stacks[i] if i < len(sy.stacks) else None
                 if vx:      # printed bars: the Audiveris stack in this bar
                     st_i = next((st for st in sy.stacks if l <= (st.left + st.right) / 2 < r), None)
@@ -526,7 +527,13 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     src = a_bars.get(gi)
                     if src:
                         j = i if len(src) == n else min(len(src) - 1, round(i * len(src) / n))
+                        # homr >= 0.7.1 reads dynamics too: where it has one in the bar, its reading
+                        # stands (all truth songs: writing both +370, Audiveris' only +304 against this)
+                        own = any(e.tag == "direction" and e.find("direction-type/dynamics") is not None
+                                  for e in bar.items)
                         for on, el in B.onsets(src[j]):
+                            if own and el.tag == "direction" and el.find("direction-type/dynamics") is not None:
+                                continue
                             if el.tag == "direction":
                                 st = el.findtext("staff")
                                 B.add_direction(bar, el, on, int(st) if st and st.isdigit() else None)
@@ -748,8 +755,10 @@ def continue_patterns(plans: list[SysPlan], D: int, stats: Stats) -> None:
             for i, bar in enumerate(g):
                 length = B.bar_length(p.times[i], D)
                 if bar.source != "slash":
-                    # a pattern has a rhythm; a held note (Ghost 4 guitar 39-40) is none
-                    if len({on for on, el in B.onsets(bar) if el.tag == "note" and el.find("rest") is None}) >= 2:
+                    # a pattern has a rhythm; a held note (Ghost 4 guitar 39-40) is none, and neither is a
+                    # bar that does not add up (homr >= 0.7.1 reads slashes as notes on the middle line)
+                    if B.bar_ok(bar, length) and len({on for on, el in B.onsets(bar)
+                                                      if el.tag == "note" and el.find("rest") is None}) >= 2:
                         last[L] = (bar, length)
                     continue
                 pat = last.get(L)

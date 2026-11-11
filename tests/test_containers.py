@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_run_cmd_runs_as_host_user_and_mounts_identical_paths(tmp_path):
-    cmd = containers.run_cmd("omrbench/homr:0.7.0", ["homr", "p.png"],
+    cmd = containers.run_cmd("omrbench/homr:0.7.1", ["homr", "p.png"],
                              mounts={tmp_path: str(tmp_path)}, gpu=True, cwd=str(tmp_path),
                              stats_file=f"{tmp_path}/stats.json")
     assert cmd[:3] == ["docker", "run", "--rm"]
@@ -36,7 +36,7 @@ def test_env_is_passed_as_e_flags(tmp_path):
 
 
 def test_pool_cmd_is_interactive_and_runs_the_worker(tmp_path):
-    cmd = containers.pool_cmd("omrbench/homr:0.7.0", mounts={tmp_path: str(tmp_path)}, gpu=True, env={})
+    cmd = containers.pool_cmd("omrbench/homr:0.7.1", mounts={tmp_path: str(tmp_path)}, gpu=True, env={})
     assert "-i" in cmd
     assert cmd[-2:] == [containers.HOMR_WORKER, containers.HOMR_WORKER_SCRIPT]
 

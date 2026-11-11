@@ -7,8 +7,9 @@ set -euo pipefail
 
 OMRBENCH_HOME="${OMRBENCH_HOME:-$HOME/.local/share/omrbench}"
 AUDIVERIS_VERSION="${AUDIVERIS_VERSION:-5.11.0}"
-# pinned: homr main changes ProcessingConfig and its MusicXML output; re-run the truth bench before bumping
-HOMR_VERSION="${HOMR_VERSION:-0.7.0}"
+# pinned: the worker's ProcessingConfig and the repairs (pipeline/bars.py homr_as_printed) follow this
+# version's output; re-run the truth bench before bumping
+HOMR_VERSION="${HOMR_VERSION:-0.7.1}"
 TESS_LANGS="${TESS_LANGS:-deu lat eng ita}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

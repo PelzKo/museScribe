@@ -8,7 +8,7 @@ the evaluation protocol (section 12) from the OMR research notes.
 |---|---|---|
 | `audiveris` | Audiveris 5.11 batch CLI (`-batch -transcribe -export`) | stock settings |
 | `audiveris-meta` | same, with switches from `meta.yaml` | drums, OCR languages, small heads, ... |
-| `homr` | homr 0.7.0 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
+| `homr` | homr 0.7.1 (pinned, `HOMR_VERSION` in `setup.sh`), one call per page | CPU or CUDA |
 | `oemer` | oemer 0.1.8, `oemer page.png`, one call per page | CPU or CUDA; disabled by default; unmaintained since 2024 |
 | `pipeline` | Audiveris layout + homr per cropped staff group + repairs | see below |
 | `pipeline-zeus` / `-smt` / `-transcoda` | same, another crop recognizer (`recognizer:`), homr on the groups it can't read | Zeus `c8569eb` (OLiMPiC grand staff CC BY-SA, `ayce-2026-08-03` solo staff CC BY-NC-SA); `PRAIG/smt-grandstaff` |

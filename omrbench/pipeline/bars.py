@@ -79,6 +79,30 @@ def _clef(c) -> Clef:
 LOG = logmod.get("bars")
 
 
+def homr_as_printed(part: etree._Element) -> None:
+    """homr >= 0.7.1 writes what MusicXML needs, not what is printed: a time estimated from the
+    bar lengths (in the <divisions> block; a printed one follows the clef in a second block) and
+    a multi-measure rest of n as n measures. Back to the printed staff, in place: no estimated
+    time (the song's time is carried over) and one bar per multi-rest (Bar.multirest = n)."""
+    for t in part.xpath("measure[1]/attributes[divisions and not(clef) and not(key)]/time"):
+        t.getparent().remove(t)
+    for m in part.findall("measure"):
+        n = (m.findtext("attributes/measure-style/multiple-rest") or "").strip()
+        for _ in range(int(n) - 1 if n.isdigit() else 0):
+            nxt = m.getnext()
+            if nxt is None or any(el.tag != "note" or el.find("rest[@measure='yes']") is None for el in nxt):
+                break
+            part.remove(nxt)
+    # a repeat start closes the measure before it, also at the start of the staff: a measure of
+    # attributes only that is no bar. Its contents go to the front of the next measure
+    for m in part.findall("measure"):
+        nxt = m.getnext()
+        if nxt is not None and m.find("note") is None and m.find("attributes/measure-style") is None:
+            for el in reversed(m):
+                nxt.insert(0, el)
+            part.remove(m)
+
+
 def part_bars(part: etree._Element, D: int, source: str, staves: int = 1) -> list[Bar]:
     """Split a MusicXML <part> into Bars (durations rescaled to D divisions). Lyrics are
     dropped: vocal scores get them from the page layout (lyrics.py)."""
@@ -193,8 +217,10 @@ def voice_lengths(bar: Bar) -> dict[tuple[str, str], int]:
     return out
 
 
-def bar_ok(bar: Bar, length: int | None) -> bool:
-    """Every voice fills the bar exactly (whole-bar rests count as full)."""
+def bar_ok(bar: Bar, length: int | None, side_voices: bool = False) -> bool:
+    """Every voice fills the bar exactly (whole-bar rests count as full).
+    side_voices (homr >= 0.7.1 writes several voices per staff): one voice per staff must fill the
+    bar; a further voice printed for a part of the bar only has to lie inside it."""
     if length is None or bar.empty:
         return not bar.empty
     lens = voice_lengths(bar)
@@ -202,7 +228,17 @@ def bar_ok(bar: Bar, length: int | None) -> bool:
         r = n.find("rest")
         if r is not None and r.get("measure") == "yes":
             lens[(n.findtext("staff", "1"), n.findtext("voice", "1"))] = length
-    return bool(lens) and all(v == length for v in lens.values())
+    if not side_voices or all(v == length for v in lens.values()):
+        return bool(lens) and all(v == length for v in lens.values())
+    ends: dict[tuple[str, str], int] = {}
+    for on, n in onsets(bar):
+        if n.tag == "note" and n.find("grace") is None:
+            k = (n.findtext("staff", "1"), n.findtext("voice", "1"))
+            if on < 0:
+                return False
+            ends[k] = max(ends.get(k, 0), on + int(n.findtext("duration", "0") or 0))
+    return all(e <= length for e in ends.values()) and \
+        all(any(v == length for (st, _), v in lens.items() if st == staff) for staff in {st for st, _ in lens})
 
 
 def fit_measure_rests(bar: Bar, length: int) -> None:
@@ -440,7 +476,8 @@ def copy_marks(bar: Bar, src: Bar) -> int:
 
 def copy_ties(bar: Bar, src: Bar) -> int:
     """Ties of `src` (Audiveris' reading of the same bar) onto the notes of `bar` with the same
-    onset, staff and pitch (homr writes no ties). Returns the ties added."""
+    onset, staff and pitch that have none (homr only has the ties it read as slurs between equal
+    pitches inside one crop). Returns the ties added."""
     ties: dict[tuple, list[str]] = {}
     for on, n in onsets(src):
         if n.tag == "note" and (k := _note_key(on, n)) and n.find("tie") is not None:

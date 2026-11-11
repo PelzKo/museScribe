@@ -4,7 +4,7 @@
 ARG BASE_IMAGE=omrbench/base:cuda13
 FROM ${BASE_IMAGE}
 
-ARG HOMR_VERSION=0.7.0
+ARG HOMR_VERSION=0.7.1
 ARG ORT_VERSION=1.31.0
 
 # both model sets: fp16 for CUDA (--init) and fp32 for CPU (--init --gpu no); the package dir is read-only at run time

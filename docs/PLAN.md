@@ -136,7 +136,7 @@ Images (all built and verified on the PC, GPU visible where used):
 | Image | Base | Notes |
 |---|---|---|
 | `omrbench/audiveris:5.11.0` | cpu | needs `libgtk-3` even in `-batch`; tessdata at `/opt/tessdata`; `JAVA_TOOL_OPTIONS` legacy merge sort |
-| `omrbench/homr:0.7.0` | cuda13 | pinned 0.7.0 (main has a breaking ProcessingConfig change); onnxruntime-gpu 1.31.0 needs CUDA 13; holds fp32 + fp16 models; honours `CUDA_VISIBLE_DEVICES=""` |
+| `omrbench/homr:0.7.1` | cuda13 | pinned 0.7.1 (since 2026-11-11; worker: `title_detection=False`; output differences handled in `bars.homr_as_printed`, section 7); onnxruntime-gpu 1.31.0 needs CUDA 13; holds fp32 + fp16 models; honours `CUDA_VISIBLE_DEVICES=""` |
 | `omrbench/oemer:0.1.8` | cuda | patched to ask for CPU when `CUDA_VISIBLE_DEVICES=""` (onnxruntime-gpu 1.19 segfaults otherwise) |
 | `omrbench/clarity:c6bb8a4` | cpu | whole-PDF engine + `clarity-crops` staff reader (stage B on our crops) |
 | `omrbench/transcoda:b529f8a` | cpu | full-page pianoform -> kern |
@@ -365,6 +365,10 @@ with the current truth. Revisit only with new readers or truth of new score type
 
 - Vector pages: bar numbers and multi-rest counts come from the PDF text layer; pages without fonts skip it.
 - Ghost 20 multi-rests: text-layer counts + Audiveris MULTI_REST stacks keep Audiveris' count (0.538 -> 0.719).
+- homr 0.7.1 (2026-11-11, IMPROVEMENTS R49): `r14-h70` 13 555 -> `r14-h71` **12 243**; work dirs `runs/h71`.
+  Its MusicXML is not the printed staff: estimated time on every crop, multi-rests written out, an empty measure
+  before a repeat start (`bars.homr_as_printed` undoes all three); its dynamics win over Audiveris' in a bar; a
+  second voice may cover a part of the bar (`bar_ok(side_voices=True)`). Check these again at the next bump.
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

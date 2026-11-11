@@ -15,7 +15,7 @@ bad()  { echo "    FAIL $*"; fail=1; }
 
 step "1. homr image: onnxruntime providers"
 if nvidia-smi -L >/dev/null 2>&1; then
-  providers="$(docker run --rm --gpus all omrbench/homr:0.7.0 /opt/homr/bin/python \
+  providers="$(docker run --rm --gpus all omrbench/homr:0.7.1 /opt/homr/bin/python \
     -c 'import onnxruntime as o; print(o.get_available_providers())' 2>&1)"
   echo "    $providers"
   if grep -q CUDAExecutionProvider <<<"$providers"; then ok "GPU provider available"; else bad "no CUDAExecutionProvider"; fi

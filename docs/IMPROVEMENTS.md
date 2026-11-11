@@ -339,7 +339,7 @@ real implementation in `transcribe.share_marks` should land close, but must be r
 | R46 | Marcato from the Audiveris `.omr` shape | `.omr` 238 marcatos, output 53, truth 94; 55 accents should be marcatos | -30..-50 | small |
 | R47 | Repeat signs from the `.omr` repeat dots | 980 dots (about 245 signs), output 126 repeats, truth 255 | part of R27's -76..-104, more reliable | medium |
 | R48 | Incomplete truth parts: skip their articulations in the score | about 500 actions that are not errors | 0 (measurement) | small |
-| R49 | homr 0.7.1 (dynamics, marcato, ties, tremolo, two voices, note positions) | drop-in measured, see below | drop-in +1 121 (rejected); keyboards only about -233; more after adapting the repairs | medium–large |
+| R49 | homr 0.7.1 (dynamics, marcato, ties, tremolo, two voices, note positions) | **done 2026-11-11: -1 312** (`r14-h70` 13 555 -> `r14-h71` 12 243), see below | `imgpos`, drum kit voices still open | medium–large |
 
 R40. **Audiveris already finds the hairpins and dynamics; they are lost at its MusicXML export.** The backlog said
 "Audiveris never sees them, a detector is needed" (U3, U4, R7, #33). That is wrong. Counted over all Anastasia scan
@@ -505,7 +505,45 @@ dynamics / hairpins / slurs) of those parts in `bench` and `error_report` until 
 skipped parts in the report. This is a measurement change: rebaseline first (R39). It also takes about 500
 "made up" articulations out of the error ranking, where they are now the third largest kind.
 
-R49. **homr 0.7.1 (released on PyPI 2026-11-10; the pipeline pins 0.7.0).** Its changelog and output: dynamics
+R49. **Done 2026-11-11: the pipeline pins homr 0.7.1.** Reference of the same code on the 0.7.0 crops: `r14-h70`
+= **13 555** (Anastasia 9 993, Ghost 3 562; `r13-ref` + the commit of 2026-11-10). With 0.7.1: `r14-h71` = **12 243**
+(Anastasia 9 023: 1 375, 2 339, 3 2 654, 4 4 519, 4A 145, 5 991; Ghost 3 220: 1a 97, 4 835, 5 1 307, 11a 121, 13 90,
+20 770). **-1 312 (-9.7 %), acceptance rule passes** (worst part Ghost 5 Utility +22, Anastasia 4 Reed 3 +18, 2 Keyboard 1
++14). By category: notes -501, dynamics -332, articulations -104, slurs -104, tremolos -98, barlines -42, ties -36,
+bar lengths -26, bars -23. Best parts: Ghost 20 Piano -174, Anastasia 3 Keyboard 1 -161, 4 Keyboard 1 -118.
+Work dirs with the 0.7.1 crops of the 12 truth songs: `results/<show>/runs/h71/pipeline/` (every crop re-read with the
+pool worker of the `omrbench/homr:0.7.1` image; reassemble from these: `scripts/reassemble.py <show> --from h71 --to
+NEW`). `results/<show>/<song>/` + combined.mscz of the 12 truth songs hold `r14-h71`; the other songs (5A, 6, ...) are
+still 0.7.0 readings until they are transcribed again. What was changed, in the order of its effect:
+1. **The `x-h71` crops of the experiment below were partly wrong** (e.g. Anastasia 1 Cello `s01-g1`: 30 bars in a
+   5-bar crop). Re-read with the real worker, the plain bump is +253, not +1 121.
+2. `_homr_worker.py`: `ProcessingConfig(title_detection=False)` (the OCR title is not used). Pins: `setup.sh`,
+   `docker/homr/Dockerfile`, `containers.py` (`omrbench/homr:0.7.1`), smoke script.
+3. `bars.homr_as_printed` (called for homr crops in `Pipeline.assemble`): 0.7.1 writes (a) a **time estimated from
+   the bar lengths** into the `<divisions>` block of every crop without a printed time (3 406 crops; the pipeline took
+   it for a printed time change): dropped; (b) a **multi-rest of n as n measures**: folded back into one bar with
+   `Bar.multirest = n`; (c) an **empty measure before every repeat start** (also at the start of a staff: one bar too
+   many per such system, the reason for the bar / barline / key losses of the drop-in): merged into the next
+   measure. (c) alone: 13 486 -> 12 844.
+4. **Dynamics**: 0.7.1 reads them. Where homr has a dynamic in a bar, Audiveris' dynamics of that bar are not added
+   (`plan_systems`). Measured on the same state: both written 13 808, Audiveris only 13 742, both without equal
+   tokens 13 508, homr only where Audiveris has none 13 486, **homr first 13 438**.
+5. **Second voices** (`bars.bar_ok(side_voices=True)` for crop bars): 0.7.1 writes a second voice for the part of the
+   bar it is printed in; "every voice fills the bar" rejected those bars and took Audiveris' (Ghost 20 Piano: broken
+   Audiveris bars instead of full homr bars). Now one voice per staff must fill the bar, further voices only have to
+   lie inside it: -345 (Ghost 20 Piano -262, Anastasia 4 Piano -78).
+6. `continue_patterns`: a pattern bar must add up. 0.7.1 reads slash bars as whole notes on the middle line, and
+   that reading was copied over 20 slash bars (Ghost 4 Guitar +184; song Ghost 4 +163 -> -41 against 0.7.0).
+7. `Pipeline.reassemble` loads the main crop before its `-m4` / `-m3` retries (the trap noted below).
+Tested and **not** changed: homr bars on percussion staves (0.7.1 has two voices there): homr first +180, homr as
+second candidate +60, both worse than "Audiveris first" (Anastasia 3 Drums +156). ties: `convert_ties` of homr does
+what `slurs_to_ties` does, inside one crop; `copy_ties` and `slurs_to_ties` stay for the rest. Tremolos are still
+start / stop pairs (`single_tremolos` stays).
+Still open from the list below: `imgpos` for placing Audiveris marks / chord symbols / words by x (3), the drum kit
+voices (R45, with Audiveris stem directions rather than homr's bars), homr dynamics as a vote with the `.omr`
+dynamics of R40, marcato vote (R46). Notes of the experiment of 2026-11-10 (0.7.0 pinned, kept for the findings):
+
+**homr 0.7.1 (released on PyPI 2026-11-10).** Its changelog and output: dynamics
 (`<dynamics>` directions, pppp..fff, sfz, fp, ...), strong accents, ties (0.7.0 wrote none), tremolo, **several
 voices per staff**, unprinted triplets, and **the image position of every note** as an XML comment after the
 note (`<!-- imgpos: x, y -->`). Hairpins and "arco" / "pizz." are not in its vocabulary. A scratch image

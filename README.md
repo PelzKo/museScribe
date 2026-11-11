@@ -25,7 +25,7 @@ omrbench doctor          # engines, GPU, shows and samples found
 - Tesseract data for `deu lat eng ita`, from the full `tessdata` repo, since Audiveris needs the legacy models
 - the homr and oemer model downloads, so they don't count towards the first run's time
 
-Engine versions: Audiveris 5.11.0 and homr 0.7.0 (both pinned in `setup.sh`; newer homr
+Engine versions: Audiveris 5.11.0 and homr 0.7.1 (both pinned in `setup.sh`; a newer homr
 changes its API and output, so re-run `omrbench bench` after bumping it), oemer 0.1.8
 (unmaintained since 2024, off by default). MuseScore 4 is needed for `.mscz` output and to
 read truth `.mscz` files (`musescore_cli` in `bench.yaml`, `mscore` on PATH, or the default
