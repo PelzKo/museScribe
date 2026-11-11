@@ -224,6 +224,7 @@ class Job:
     pdf: Path
     meta: dict
     sid: str              # log / work dir id, "anastasia-1--Horn"
+    hide_empty: bool = False   # show.yaml `hide_empty_staves` (U2): combined.mscz parts "Hide if empty"
 
 
 def input_key(job: Job, engine: str, spec: dict) -> str:
@@ -266,7 +267,8 @@ def project_jobs(cfg: dict, name: str, songs=None, parts=None) -> tuple[Path, li
         for part in song.parts:
             if parts and part.name not in parts:
                 continue
-            jobs.append(Job(song.id, part.name, part.pdf, part.meta, f"{proj.name}-{song.id}--{part.name}"))
+            jobs.append(Job(song.id, part.name, part.pdf, part.meta, f"{proj.name}-{song.id}--{part.name}",
+                            bool(proj.show.get("hide_empty_staves"))))
     if parts and (unknown := set(parts) - {p.name for s in selected for p in s.parts}):
         problems.append(f"no part {', '.join(sorted(unknown))} in the selected songs")
     return Path(cfg["results_dir"]) / proj.name, [s.id for s in selected], jobs, problems
@@ -439,7 +441,7 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
         files = [(Path(o).stem, root / g / o) for job in order[g]
                  for o in output_names(job.name, job.meta) if (root / g / o).exists()]
         if files and (g in changed or not (root / g / "combined.musicxml").exists()):
-            _combine(g, files, root / g, cfg)
+            _combine(g, files, root / g, cfg, any(j.hide_empty for j in order[g]))
     LOG.info(f"latest outputs in {root}/<{'song' if root.name != 'samples' else 'sample'}>/, "
              f"this run in {run_dir}")
     return failed
@@ -507,7 +509,7 @@ def hide_empty_staves(mscz: Path) -> int:
     return n
 
 
-def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -> None:
+def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict, hide: bool = False) -> None:
     """Stack the group's latest files into dest/combined.musicxml (+ .mscz)."""
     exe = find_musescore(cfg.get("musescore_cli"))
     with logmod.context(group):
@@ -523,7 +525,7 @@ def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -
         mscz = combined.with_suffix(".mscz")
         try:
             clean = to_mscz(combined, mscz, exe)
-            hidden = hide_empty_staves(mscz)
+            hidden = hide_empty_staves(mscz) if hide else 0
             if clean:
                 LOG.info(f"-> {mscz.name} ({hidden} parts hide when empty)")
             else:
@@ -541,7 +543,7 @@ def combine_run(cfg: dict, project: str, run: str, songs=None) -> None:
         files = [(Path(o).stem, d / o) for j in jobs if j.group == g
                  for o in output_names(j.name, j.meta) if (d / o).exists()]
         if files:
-            _combine(g, files, d, cfg)
+            _combine(g, files, d, cfg, any(j.hide_empty for j in jobs if j.group == g))
 
 
 def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine: str, dst_run: str,

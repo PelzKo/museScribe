@@ -46,6 +46,7 @@ Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug lef
 | U12 | Cut bars placed at the system break (align_bars) | Anastasia 5A: 4 parts × 10 bars | 5A has no truth: 0; fewer misplaced bars | small | no |
 | U13 | Duet labels into both singers (`singer_groups`, "DIMITRY") | song 6, no truth | 0 | small | no |
 | U14 | `show_overrides.yaml` moved into data/ (show.yaml, workbook cells) | 0 | 0 | tiny | no |
+| U15 | "Hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off) | 0 | 0 | tiny | no |
 
 U1. **Percussion instruments (user 2026-11-09: "they all have a midi mix instead of Glockenspiel or Bells").** The
 truths use the MuseScore instruments `crash-cymbal` (Hängendes Becken), `splash-cymbal`, `triangle`, `mark-tree`,
@@ -270,6 +271,13 @@ german: Hängendes Becken)", sheet 5 "Mark Tree (sound: metal.bells.mark-tree, g
 PianoReduction `extra` "chord_names: false, singer_groups: {Both: [Vlad, Dmitry]}", `plainText` "Vlad, Dmitry, Anya"
 (the only resolved-meta change: song 6, no truth, not reassembled from h71). Code: `project.OVERRIDES_FILE`, `under`
 and the per-song `songs:` lookup in `part_meta` (book-file-name keys too: the `extra` cell does that) are gone.
+
+U15. **"Hide if empty" per show (user 2026-11-12: Ghost truths do not set it).** U2's `hide_empty_staves` ran on every
+combined.mscz. Now a show.yaml key `hide_empty_staves` (default off): `data/anastasia/show.yaml` true,
+`data/ghost/show.yaml` false (data/ gitignored). `transcribe.Job.hide_empty` carries it to `_combine`.
+**Done 2026-11-12, metric-neutral (+0, `u14-a` 11 460 -> `u15-a` 11 460; output MusicXML byte-identical).** Check
+(`u15-a`): every Anastasia combined.mscz has `<hideWhenEmpty>on` on all parts (song 5: 22 of 22, the piano is gone
+since U11), no Ghost one has any.
 
 ## From the code and current-output review (2026-11-10)
 

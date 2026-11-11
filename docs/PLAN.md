@@ -383,7 +383,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   **11 460** (Anastasia 8 312, Ghost 3 148), bars of an unread cut inserted at the system break.
   U13 `u13-a` 11 460 (metric-neutral), duet labels ("VLAD & DMITRY:", `singer_groups` BOTH) into both singers.
   U14 `u14-a` 11 460 (metric-neutral), `show_overrides.yaml` moved into data/ (show.yaml, workbook cells).
-  **Reference from now on: `u14-a`.**
+  U15 `u15-a` 11 460 (metric-neutral), "hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off).
+  **Reference from now on: `u15-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps
