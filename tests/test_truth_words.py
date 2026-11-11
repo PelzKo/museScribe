@@ -167,6 +167,19 @@ def test_fermata_most_parts_have_goes_onto_the_others():
     assert musicxml.share_fermatas(lone) == 0
 
 
+def test_dynamic_only_one_book_has_goes():
+    from lxml import etree
+    from omrbench import musicxml
+    def part(dyn=""):
+        d = f"<direction><direction-type><dynamics><{dyn}/></dynamics></direction-type></direction>" if dyn else ""
+        return etree.fromstring(f'<part><measure number="1">{d}<note><pitch><step>C</step><octave>4</octave>'
+                                f'</pitch><duration>4</duration></note></measure></part>')
+    books = [[part("ff")], [part("p")], [part("p")], [part()]]
+    assert musicxml.drop_lone_marks(books, "dynamics", 4) == 1      # ff: no other book has it
+    assert books[0][0].find(".//direction") is None and books[1][0].find(".//p") is not None
+    assert musicxml.drop_lone_marks(books[1:], "dynamics", 4) == 0   # only 3 books play
+
+
 def test_play_techniques_give_playing_words_their_sound():
     from lxml import etree
     from omrbench.musicxml import play_techniques

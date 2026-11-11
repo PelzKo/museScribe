@@ -361,7 +361,7 @@ real implementation in `transcribe.share_marks` should land close, but must be r
 |---|---|---|---|---|
 | R40 | Dynamics + hairpins from the Audiveris `.omr` on every scanned part | **hairpins done 2026-11-11: -217** (`u4-b` -> `r40-w`); `.omr` dynamics now +43 next to homr's | more with placement + filters | small–medium |
 | R41 | Words only one book has are dropped (playing words kept) | simulated **-247**, worst part +1 | -200..-250 | small |
-| R42 | Dynamics / fermatas only one book has are dropped | simulated -128 / -28 (after R40: -78) | -80..-150 | small |
+| R42 | Dynamics / fermatas only one book has are dropped | **done 2026-11-11: -135** (`r40-w` -> `r42-df`) | -80..-150 | small |
 | R43 | One-instrument percussion parts on the truth's staff line | simulated **-69**, no part worse | -69 | tiny |
 | R44 | Drum books on vector pages: groove written over the slash bars, kit refresh, "sim." marks | Ghost 5 Drums 442 of 455 | -250..-350 | medium |
 | R45 | Anastasia drum kit: two voices, ghost notes, routing | Schlagzeug 4: 661 of 787; 3: 252 of 448 | -300..-500 with R28 / R29 | large |
@@ -443,6 +443,11 @@ the song; one vote per book like `share_barlines`, only parts with the song's ba
 text the metric uses, never touch system text, lyrics, or words the playback pass turned into techniques.
 
 R42. **Dynamics and fermatas only one book has.** Same rule per category, simulated on `r13-ref`:
+**Done 2026-11-11: -135** (`r40-w` 11 968 -> `r42-df` 11 833, Anastasia 8 643, Ghost 3 190; worst part +8
+Anastasia 5 Drums-Percussion, then +5 Anastasia 4 PianoReduction, +3 Ghost 13 Bass; best Anastasia 4 Cello -19,
+Keyboard 2 -11). `musicxml.drop_lone_marks` in `transcribe.share_marks`, one vote per book, parts with the song's
+bar count: dynamics -118 alone (`r42-d`, 511 removed: same token in no other book, >= 4 books playing), fermatas
+-17 alone (`r42-f`, 24 removed: no other book has one, >= 3 books playing).
 - Dynamics, same token in the same bar in no other book, at least 4 books playing: **-128** (403 removed, about
   two thirds made up; worst Anastasia 5 Becken +6, Anastasia 3 Horn +5; best Anastasia 4 Violoncello -17,
   Keyboard 2 -14, Klarinette 2 -12). Requiring "no other book has *any* dynamic in the bar" removes fewer: -47.

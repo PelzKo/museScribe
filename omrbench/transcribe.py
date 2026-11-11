@@ -449,6 +449,10 @@ def share_marks(dest: Path, jobs: list[Job]) -> None:
         books.setdefault(f.stem.split(" - ")[0], []).extend(r.findall("part"))
     b = musicxml.share_barlines(list(books.values()), song_bars)
     LOG.info(f"{dest.name}: {b} double barlines / repeat signs after the vote")
+    # R42: a dynamic / fermata only one book has in a bar where most books play is made up
+    for kind, playing in (("dynamics", 4), ("fermata", 3)):
+        n = musicxml.drop_lone_marks(list(books.values()), kind, playing, song_bars)
+        LOG.info(f"{dest.name}: {n} {kind} only one book has removed")
     for f, r, _ in roots:
         musicxml.write(r, f)
 

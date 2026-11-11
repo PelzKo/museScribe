@@ -418,6 +418,58 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
     return added
 
 
+def _lone_marks(m: etree._Element, kind: str) -> list[tuple[str, etree._Element]]:
+    """(token, element) of the dynamics (token = the dynamic) or fermatas (token "") in a measure."""
+    if kind == "fermata":
+        return [("", f) for f in m.iter("fermata")]
+    return [(_dyn_token(d), d) for dyn in m.iter("dynamics") for d in dyn]
+
+
+def drop_lone_marks(books: list[list[etree._Element]], kind: str, playing: int,
+                    bars: int | None = None) -> int:
+    """R42: a dynamic (`kind` "dynamics": the same one) or fermata ("fermata": any) that no other book
+    has in that bar, where at least `playing` books have notes, is almost always made up: removed.
+    One vote per book, only parts with the song's bar count. Returns the marks removed."""
+    parts = [p for b in books for p in b]
+    counts = [len(p.findall("measure")) for p in parts]
+    common = int(bars) if bars else max(set(counts), key=counts.count, default=0)
+    has: dict[tuple[int, str], int] = {}
+    plays: dict[int, int] = {}
+    for b in books:
+        mine, notes = set(), set()
+        for p in [p for p in b if len(p.findall("measure")) == common]:
+            for i, m in enumerate(p.findall("measure")):
+                mine |= {(i, t) for t, _ in _lone_marks(m, kind)}
+                if any(n.find("rest") is None for n in m.iter("note")):
+                    notes.add(i)
+        for k in mine:
+            has[k] = has.get(k, 0) + 1
+        for i in notes:
+            plays[i] = plays.get(i, 0) + 1
+    removed = 0
+    for p, c in zip(parts, counts):
+        if c != common:
+            continue
+        for i, m in enumerate(p.findall("measure")):
+            if plays.get(i, 0) < playing:
+                continue
+            for t, el in _lone_marks(m, kind):
+                if has.get((i, t), 0) > 1:
+                    continue
+                parent = el.getparent()
+                parent.remove(el)
+                removed += 1
+                # an emptied <dynamics> / <notations> / direction goes too
+                while parent is not None and not len(parent) and parent.tag in ("dynamics", "notations",
+                                                                              "direction-type", "direction"):
+                    up = parent.getparent()
+                    up.remove(parent)
+                    parent = up
+                if parent is not None and parent.tag == "direction" and parent.find("direction-type") is None:
+                    parent.getparent().remove(parent)
+    return removed
+
+
 def _barline_marks(m: etree._Element, last: bool) -> set[str]:
     out = set()
     for bl in m.findall("barline"):
