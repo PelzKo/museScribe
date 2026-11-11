@@ -450,8 +450,9 @@ class Pipeline(Engine):
         if vocal:
             # male_voices: extra singer names written in treble-8vb ("Dmitry", "Vlad")
             male = [A.MALE_VOICES] + [re.escape(str(n)) for n in sample.meta.get("male_voices") or []]
+            # singer_groups: {Both: [Vlad, Dmitry]}, a label naming several singers (U13)
             voices, piano, times = A.build_vocal_parts(
-                plans, D, stats, re.compile("|".join(male), re.I))
+                plans, D, stats, re.compile("|".join(male), re.I), sample.meta.get("singer_groups"))
             A.share_system_text([voices, [piano]], times, D)
             parts = voices + [piano]
             if max_wedge:

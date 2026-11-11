@@ -245,6 +245,15 @@ PianoReduction`; the Voices output has exactly Vlad, Dmitry, Anya (plus a "Voice
 label); duet bars in both Vlad and Dmitry; tests for `singer_groups` and the "DIMITRY" spelling; `omrbench bench
 anastasia` unchanged for songs 1–5. Sheet 6 `plainText` lists "Vlad & Dmitry, Vlad & Dimitry, Both": after the fix it
 needs only "Vlad, Dmitry, Anya" (the user's workbook).
+**Done 2026-11-12, metric-neutral user request (+0, `u12-a` 11 460 -> `u13-a` 11 460, no part changed).** Found: the
+spaced "VLAD & DMITRY:" labels were never read as singer labels (`text._LABEL` took no lone "&" / "+" word), so the duets
+stayed in Vlad's part; now they are, and a split name goes onto the single label spelled like it (`_known`, "DIMITRY" ->
+"DMITRY"). `singer_groups` (meta, read in `engine.py`, passed to `build_vocal_parts` / `_singers_of`) is set for song 6 in
+`show_overrides.yaml` (`songs: {"6": {PianoReduction: ...}}`: keys under a book's file name now apply to that book,
+`project.part_meta`), because the workbook write was blocked; move it into the sheet 6 `extra` cell and cut `plainText`
+to "Vlad, Dmitry, Anya" (not done). Check (`u13-t` transcribe, `u13-6` reassembly, copied to `results/anastasia/6/`):
+Voices = Vlad, Dmitry, Anya; 47 bars in both Vlad and Dmitry (BOTH, 29-38, 191-215). Not read: "VLAD' & DIMITRY.."
+(colon OCR'd as "..") and the "VLAD &" line break at 191 where the text layer has no label.
 
 ## From the code and current-output review (2026-11-10)
 

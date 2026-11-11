@@ -2148,16 +2148,29 @@ MALE_VOICES = r"\b(men|male|tenors?|bass(es)?|baritones?)\b"
 _DUET = re.compile(r"\s*(?:\+|&|\bAND\b)\s*")
 
 
-def _singers_of(label: str, known: set[str]) -> list[str]:
+def _known(name: str, known: set[str]) -> str:
+    """The single label `name` is a spelling of ("DIMITRY" -> "DMITRY", Levenshtein ratio >= 0.85), else name."""
+    import Levenshtein
+
+    best = max(known, key=lambda k: Levenshtein.ratio(k.upper(), name.upper()), default=None)
+    return best if best and Levenshtein.ratio(best.upper(), name.upper()) >= 0.85 else name
+
+
+def _singers_of(label: str, known: set[str], groups: dict | None = None) -> list[str]:
     """"DOWAGER+ANASTASIA" -> ["DOWAGER EMPRESS", "ANASTASIA"]: each name, or the one
-    single label elsewhere in the score that starts with it; a single label -> [label]."""
+    single label elsewhere in the score that starts with it (or is spelled like it); a single
+    label -> [label]. `groups` (song meta `singer_groups`, {"Both": ["Vlad", "Dmitry"]}): a label
+    that names those singers."""
+    members = next((m for g, m in (groups or {}).items() if str(g).upper() == label.upper()), None)
+    if members:
+        return [_known(str(m), known) for m in members]
     names = [s.strip() for s in _DUET.split(label) if s.strip()]
     if len(names) < 2:
         return [label]
     out = []
     for n in names:
         longer = [k for k in known if k.startswith(n + " ")]
-        out.append(longer[0] if len(longer) == 1 else n)
+        out.append(longer[0] if len(longer) == 1 else _known(n, known))
     return out
 
 
@@ -2175,15 +2188,15 @@ def _octave_treble(part: OutPart) -> None:
                 o.text = str(int(o.text) - 1)
 
 
-def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats,
-                      male: re.Pattern | None = None) -> tuple[list[OutPart], OutPart, list]:
+def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats, male: re.Pattern | None = None,
+                      groups: dict | None = None) -> tuple[list[OutPart], OutPart, list]:
     """Vocal score -> (one part per singer label, the piano, times).
 
     The singer of a vocal staff is the last label printed on it ("DMITRY:"), carried
     over to the staff at the same position in the next systems; a label inside a bar
     splits the bar there. Before the first label a staff is "Voice <n>". Dialogue and
     stage directions go to the top voice part. Parts whose name matches `male` are
-    written in treble-8vb clef.
+    written in treble-8vb clef. `groups`: see _singers_of.
     """
     total = sum(p.n for p in plans)
     times: list = []
@@ -2231,7 +2244,7 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats,
                             continue
                         name = f"Voice {L}"
                     # a duet label ("DOWAGER+ANASTASIA") puts the line into each singer's part
-                    for k, single in enumerate(_singers_of(name, known)):
+                    for k, single in enumerate(_singers_of(name, known, groups)):
                         part = voices.setdefault(single, OutPart(T.singer_name(single), 1,
                                                                  [None] * total))
                         old = part.bars[pos + i]

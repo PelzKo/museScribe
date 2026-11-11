@@ -158,9 +158,9 @@ RUNNING_PAGE = re.compile(r"\bpg\.?\s*\d+\s*$|\bpage\s+\d+\s*$", re.I)
 
 # ------------------------------------------------------------------- vocal scores
 
-# "DMITRY:", "SOLO WOMAN:", "(2nd x:) WOMEN:", "ALL (NO DMITRY):", "BLACK MARKETEER #3:"; OCR
-# often turns the colon into ";", "‘" or a few junk letters ("WOMENtss")
-_LABEL = re.compile(r"^(?:\([^)]*\)\s*)?\(?([A-Z][A-Z'’.+&-]*(?:\s+(?:[A-Z][A-Z'’.+&-]*|#?\d+)){0,2})"
+# "DMITRY:", "SOLO WOMAN:", "(2nd x:) WOMEN:", "ALL (NO DMITRY):", "BLACK MARKETEER #3:", "VLAD & DMITRY:";
+# OCR often turns the colon into ";", "‘" or a few junk letters ("WOMENtss")
+_LABEL = re.compile(r"^(?:\([^)]*\)\s*)?\(?([A-Z][A-Z'’.+&-]*(?:\s+(?:[A-Z][A-Z'’.+&-]*|#?\d+|[&+])){0,2})"
                     r"\)?\s*(\([^)]*\))?\s*([:;‘'’]|[a-z]{1,3}\b)?\s*(.*)$")
 _NOT_SINGERS = {"PED", "SFZ", "FP", "MP", "MF", "PP", "FF", "SOP", "ALTO", "TACET", "TUTTI"}
 

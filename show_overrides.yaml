@@ -3,7 +3,8 @@
 # into show.yaml when convenient and delete them here.
 #   instruments / parts / meta   as in show.yaml
 #   songs: {<song>: {<instrument>: {keys}}}   per-song instrument keys, like "Cymbal (sound: ...)" in the
-#                                             workbook's `instruments` cell (the cell wins)
+#                                             workbook's `instruments` cell (the cell wins); under a file
+#                                             name ("PianoReduction") they are that book's keys (`extra` wins)
 # piano_part: false: the Klavierauszug piano is read and votes in share_marks (written to <song>/vote/), not output (U11)
 # ms_name: the instrument name written for MuseScore's import when the sound id alone picks another
 # MuseScore instrument (names win over sounds; tested with MuseScore 4.7, IMPROVEMENTS U1)
@@ -47,6 +48,8 @@ anastasia:
     "5":
       Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal, german: Hängendes Becken}  # truth "Becken"
       Mark Tree: {sound: metal.bells.mark-tree, german: Mark Tree}                              # mark-tree
+    "6":
+      PianoReduction: {singer_groups: {Both: [Vlad, Dmitry]}}   # U13: "BOTH:" sings in Vlad's and Dmitry's part
 ghost:
   instruments:
     Drum Set: {sound: drum.group.set}       # the drum legend's kit pieces alone import as a synthesizer

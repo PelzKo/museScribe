@@ -295,3 +295,12 @@ def test_gap_closed_by_a_mid_system_number_fills_at_the_system_break():
     plans = [plan(0, 5, {0: 1}), plan(1, 6, {0: 6, 1: 17, 4: 20})]  # Violin 1: "[to] 16" read as "6"
     A.align_bars(plans, 1, A.Stats())
     assert plans[0].n == 15 and plans[1].n == 6
+
+
+def test_duet_and_group_labels_go_to_the_known_singers():
+    known = {"VLAD", "DMITRY", "ANYA"}
+    assert A._singers_of("VLAD & DIMITRY", known) == ["VLAD", "DMITRY"]
+    assert A._singers_of("BOTH", known, {"Both": ["Vlad", "Dmitry"]}) == ["VLAD", "DMITRY"]
+    assert A._singers_of("BOTH", known) == ["BOTH"]
+    from omrbench.pipeline import text as T
+    assert T.parse_label("VLAD & DIMITRY:", False) == ("VLAD & DIMITRY", "")

@@ -148,6 +148,7 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
     if row["skip"]:
         meta["skip_systems"] = expand_range(row["skip"])
     song_own = (show.get("songs") or {}).get(str(ctx.get("song"))) or {}
+    meta.update(song_own.get(name) or {})      # keys under the book's file name: this song's book only
     entries = [(n, {**(song_own.get(n) or {}), **own}) for n, own in split_instruments_cell(row["instruments"])]
     extra = yaml.safe_load("{" + row["extra"].replace("\n", ", ") + "}") if row["extra"] else {}
     library = show.get("instruments", {})
