@@ -206,6 +206,10 @@ leaves no "- Piano" file, but `share_marks` then loses the piano's vote: barline
 has it" filters (R41 / R42) change in other books (+1..+3 in 11 parts). Next try: keep the piano for the vote only
 (e.g. written to a side folder of the run that combine / bench ignore), or give the PianoReduction book the piano's
 marks for the vote in memory.
+**Done 2026-11-11 (retry), metric-neutral user request (+0, `u10-c` 11 499 -> `u11-b` 11 499, no part changed).**
+`piano_part: false` (show_overrides.yaml, Anastasia PianoReduction): the engine still writes both files, the piano
+goes to `<song>/vote/` (`transcribe.output_paths`), where `share_marks` reads it for the vote; `output_names` (combine,
+bench, error report) leaves it out. Check: no "- Piano" file in any `u11-b` song folder, combined has no piano.
 
 U12. **Empty bars of a cut at the system break (user task, 2026-11-09).** Anastasia 5A (`omrbench transcribe
 anastasia --songs 5A`, output `results/anastasia/5A/`, run `20261105-010953`): the parts print bars 1–5, then a new

@@ -199,9 +199,22 @@ def combine(files: list[tuple[str, Path]], out: Path) -> Path:
 
 
 def output_names(name: str, meta: dict) -> list[str]:
-    """The MusicXML file name(s) transcribe writes for the PDF `name`."""
+    """The MusicXML file name(s) transcribe writes for the PDF `name` (combined, benched)."""
     split = SPLIT_TYPES.get(meta.get("type"))
-    return [f"{name} - {n}.musicxml" for n in split] if split else [f"{name}.musicxml"]
+    names = [f"{name} - {n}.musicxml" for n in split] if split else [f"{name}.musicxml"]
+    # U11: `piano_part: false` keeps the piano out of the outputs; it still votes in share_marks
+    return [n for n in names if not (meta.get("piano_part") is False and n.endswith(" - Piano.musicxml"))]
+
+
+VOTE_DIR = "vote"   # U11: engine outputs read only by share_marks (not combined, not benched)
+
+
+def output_paths(dest: Path, name: str, meta: dict) -> list[Path]:
+    """Every file the engine writes for `name`, in engine order; the hidden ones under dest/VOTE_DIR."""
+    split = SPLIT_TYPES.get(meta.get("type"))
+    names = [f"{name} - {n}.musicxml" for n in split] if split else [f"{name}.musicxml"]
+    shown = output_names(name, meta)
+    return [dest / n if n in shown else dest / VOTE_DIR / n for n in names]
 
 
 @dataclass
@@ -321,7 +334,7 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
     for job in jobs_in:
         label = f"{job.sid.replace('--', '/', 1)}.pdf"
         order[job.group].append(job)
-        outs = output_names(job.name, job.meta)
+        outs = [f.name for f in output_paths(Path(), job.name, job.meta)]
         try:
             key = input_key(job, engine, spec)
         except OSError as e:
@@ -329,11 +342,11 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
             failed += 1
             continue
         prev = manifests[job.group].get(job.name) or {}
-        if not latest and not force and all((run_dir / job.group / o).exists() for o in outs):
+        if not latest and not force and all(f.exists() for f in output_paths(run_dir / job.group, job.name, job.meta)):
             LOG.info(f"{label}: already in {run_dir.name}, skipped (--force to redo)")
             skipped += 1
             continue
-        if latest and not force and prev.get("key") == key and all((root / job.group / o).exists() for o in outs):
+        if latest and not force and prev.get("key") == key and all(f.exists() for f in output_paths(root / job.group, job.name, job.meta)):
             LOG.info(f"{label}: unchanged since run {prev.get('run')}, skipped (--force to redo)")
             skipped += 1
             continue
@@ -401,11 +414,12 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
             done += 1
             # the run keeps its own copy; the group folder holds the latest output
             for dest in (run_dir / job.group, root / job.group)[:2 if latest else 1]:
-                dest.mkdir(parents=True, exist_ok=True)
-                for out, src in zip(outs, srcs):
+                for out, src in zip(output_paths(dest, job.name, job.meta), srcs):
+                    out.parent.mkdir(parents=True, exist_ok=True)
                     # atomic: a crash never leaves a half-written output that a resume takes as done
-                    shutil.copyfile(src, dest / (out + ".part"))
-                    os.replace(dest / (out + ".part"), dest / out)
+                    part = out.with_name(out.name + ".part")
+                    shutil.copyfile(src, part)
+                    os.replace(part, out)
             if not latest:
                 continue
             manifests[job.group][job.name] = {
@@ -434,8 +448,8 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
 def share_marks(dest: Path, jobs: list[Job]) -> None:
     """Song-level repairs over all of a song's parts in `dest` (pipeline outputs): fermatas most
     parts have go onto the others; `plain` parts are left alone."""
-    files = [(dest / o, job.meta.get("plain")) for job in jobs
-             for o in output_names(job.name, job.meta) if (dest / o).exists()]
+    files = [(f, job.meta.get("plain")) for job in jobs
+             for f in output_paths(dest, job.name, job.meta) if f.exists()]
     roots = [(f, musicxml.load(f), plain) for f, plain in files]
     parts = []
     for _, r, plain in roots:
@@ -541,9 +555,9 @@ def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine:
     eng = config_mod.engines(cfg, [engine])[0]
     failed = 0
     for job in jobs:
-        outs = output_names(job.name, job.meta)
         dest = root / "runs" / dst_run / job.group
-        if not force and all((dest / o).exists() for o in outs):
+        outs = output_paths(dest, job.name, job.meta)
+        if not force and all(f.exists() for f in outs):
             continue
         wd = root / "runs" / src_run / work_engine / job.sid
         if not (wd / "audiveris").is_dir():
@@ -563,11 +577,12 @@ def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine:
             LOG.error(f"{job.sid}: {engine} gave {len(roots)} files for {len(outs)} outputs")
             failed += 1
             continue
-        dest.mkdir(parents=True, exist_ok=True)
-        for name, r in zip(outs, roots):
-            musicxml.write(r, dest / (name + ".part"))
-            os.replace(dest / (name + ".part"), dest / name)
-        LOG.info(f"{job.sid}: reassembled with {engine} in {time.perf_counter() - t0:.0f}s -> {', '.join(outs)}")
+        for out, r in zip(outs, roots):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            musicxml.write(r, out.with_name(out.name + ".part"))
+            os.replace(out.with_name(out.name + ".part"), out)
+        LOG.info(f"{job.sid}: reassembled with {engine} in {time.perf_counter() - t0:.0f}s -> "
+                 f"{', '.join(o.name for o in outs)}")
     for g in {job.group for job in jobs}:
         if (root / "runs" / dst_run / g).is_dir():
             share_marks(root / "runs" / dst_run / g, [j for j in jobs if j.group == g])

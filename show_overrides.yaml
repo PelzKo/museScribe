@@ -4,6 +4,7 @@
 #   instruments / parts / meta   as in show.yaml
 #   songs: {<song>: {<instrument>: {keys}}}   per-song instrument keys, like "Cymbal (sound: ...)" in the
 #                                             workbook's `instruments` cell (the cell wins)
+# piano_part: false: the Klavierauszug piano is read and votes in share_marks (written to <song>/vote/), not output (U11)
 # ms_name: the instrument name written for MuseScore's import when the sound id alone picks another
 # MuseScore instrument (names win over sounds; tested with MuseScore 4.7, IMPROVEMENTS U1)
 # german: the part / instrument name shown in MuseScore, as in the truths (IMPROVEMENTS U10); "{n}" = the
@@ -18,7 +19,7 @@ anastasia:
     Trumpet: {german: Trompete in B}
     Trombone: {german: Posaune}
     Reed 3: {german: Fagott}
-    PianoReduction: {voice_names: {Women: Frauen, Men: Männer}}
+    PianoReduction: {voice_names: {Women: Frauen, Men: Männer}, piano_part: false}   # U11: piano votes only
   instruments:
     Drum Set: {sound: drum.group.set, ms_name: Drumset (common), german: Schlagzeug}  # the truths: drum-kit-5
     Clarinet: {german: "Klarinette in B {n}"}

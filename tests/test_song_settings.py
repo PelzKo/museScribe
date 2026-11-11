@@ -265,3 +265,13 @@ def test_german_names_take_the_book_number():
     assert root.findtext(".//part-name") == "Clarinet"          # bench / workbook name stays
     assert root.findtext(".//part-name-display/display-text") == "Klarinette in B 2"
     assert root.findtext(".//instrument-name") == "Klarinette in B 2"
+
+
+def test_piano_part_false_keeps_the_piano_for_the_vote_only(tmp_path):
+    from omrbench.transcribe import output_names, output_paths
+    meta = {"type": "piano_reduction", "piano_part": False}
+    assert output_names("PianoReduction", meta) == ["PianoReduction - Voices.musicxml"]
+    assert output_paths(tmp_path, "PianoReduction", meta) == [
+        tmp_path / "PianoReduction - Voices.musicxml", tmp_path / "vote" / "PianoReduction - Piano.musicxml"]
+    assert len(output_names("PianoReduction", {"type": "piano_reduction"})) == 2
+
