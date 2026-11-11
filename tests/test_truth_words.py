@@ -180,6 +180,19 @@ def test_dynamic_only_one_book_has_goes():
     assert musicxml.drop_lone_marks(books[1:], "dynamics", 4) == 0   # only 3 books play
 
 
+def test_word_only_one_book_has_goes_playing_words_stay():
+    from lxml import etree
+    from omrbench import musicxml
+    def part(*words):
+        d = "".join(f"<direction><direction-type><words>{w}</words></direction-type></direction>" for w in words)
+        return etree.fromstring(f'<part><measure number="1">{d}<note><pitch><step>C</step><octave>4</octave>'
+                                f'</pitch><duration>4</duration></note></measure></part>')
+    books = [[part("Tamb.", "pizz.")], [part("Rit.")], [part("rit.")], [part()]]
+    assert musicxml.drop_lone_marks(books, "words", 4) == 1      # Tamb.: no other book; pizz. kept
+    assert [w.text for w in books[0][0].iter("words")] == ["pizz."]
+    assert len(books[1][0].findall(".//direction")) == 1          # rit. in two books stays
+
+
 def test_play_techniques_give_playing_words_their_sound():
     from lxml import etree
     from omrbench.musicxml import play_techniques

@@ -429,6 +429,11 @@ none: the `.omr` dynamics stay out. Dropping `.omr` wedges narrower than 2 or 3 
 are). Keyboards and drum books are still left as they are.
 
 R41. **A word that only one book prints in a bar is almost always noise.** Simulated on `r13-ref` (both shows):
+**Done 2026-11-11: -263** (`r42-df` 11 833 -> `r41-a` 11 570, Anastasia 8 422, Ghost 3 148; worst part +1
+Anastasia 3 Reed 1; best Anastasia 3 PianoReduction -18, Keyboard 1 -14, Anastasia 4 Drums-Percussion -12). `kind
+"words"` in `musicxml.drop_lone_marks` (`transcribe.share_marks`), >= 4 books playing, 422 words removed (Anastasia
+288, Ghost 134); kept: system text, directions with a `<sound>`, `PLAY_WORDS` and `_KEEP_WORDS` (mute / open /
+loco / 8va / sim / "to ..." / cresc / dim / espr / dolce).
 drop every `words` item of a part when at least 4 books have notes in that bar and no other book has the same
 text in that bar. Result -297 (436 words removed). The removed words are part labels and misreads the existing
 filters miss ("solo" 19, "tamb." 15, "timpani" 9, "bell tree" 6, "triangle" 6, "str. ens. (loco)" 6, "clarinet" 5,

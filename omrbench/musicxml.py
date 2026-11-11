@@ -154,6 +154,8 @@ def merge_parts(roots: list[etree._Element]) -> etree._Element:
 
 
 PLAY_WORDS = re.compile(r"pizz|arco|gedämpft|offen|\bdiv|unis|\bsul\b|solo|tutti|sord|col legno|harm|^zu ", re.I)
+# R41: words that are no part label even when only one book prints them
+_KEEP_WORDS = re.compile(r"mute|open|loco|8va|8vb|15ma|\bsim|^\W*to |cresc|dim|espr|dolce", re.I)
 KEEP_DIRECTIONS = {"rehearsal", "segno", "coda", "octave-shift"}
 
 
@@ -419,9 +421,21 @@ def share_fermatas(parts: list[etree._Element], bars: int | None = None) -> int:
 
 
 def _lone_marks(m: etree._Element, kind: str) -> list[tuple[str, etree._Element]]:
-    """(token, element) of the dynamics (token = the dynamic) or fermatas (token "") in a measure."""
+    """(token, element) of the dynamics (token = the dynamic), fermatas (token "") or words (token = the
+    text) in a measure."""
     if kind == "fermata":
         return [("", f) for f in m.iter("fermata")]
+    if kind == "words":     # R41: the text token the metric uses; system text, techniques, playing words stay
+        out = []
+        for d in m.iter("direction"):
+            if d.get("system") in ("only-top", "also-top") or d.find("sound") is not None:
+                continue
+            for dt in d.findall("direction-type"):
+                ws = dt.findall("words")
+                text = re.sub(r"[\ue000-\uf8ff]", "", "".join(w.text or "" for w in ws))
+                if text.strip() and not (PLAY_WORDS.search(text) or _KEEP_WORDS.search(text)):
+                    out += [(_norm_text(text), w) for w in ws]
+        return out
     return [(_dyn_token(d), d) for dyn in m.iter("dynamics") for d in dyn]
 
 
