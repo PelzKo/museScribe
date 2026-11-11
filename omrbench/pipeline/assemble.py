@@ -2112,6 +2112,18 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
     return list(by_name.values()), times
 
 
+def one_line_position(changes: dict) -> str | None:
+    """R43: the staff position of every hit of a one-instrument percussion part (no kit), as in the
+    truths: the instrument's `line`, else D4 for a wood block, else E4 (MuseScore's single line). A
+    percussion instrument with no `sound` (a drum set not marked `kit`) keeps its positions."""
+    ins = list(changes.values())
+    if not ins or any(str(x.get("clef", "")).lower() != "percussion" or x.get("kit") or not x.get("sound")
+                      for x in ins):
+        return None
+    lines = {x.get("line") or ("D4" if x.get("sound") == "wood.wood-block" else "E4") for x in ins}
+    return lines.pop() if len(lines) == 1 else None
+
+
 def _canonical_singers(plans: list[SysPlan]) -> dict[str, str]:
     """OCR spellings of one label ("DMITRY", "DMlTRY") -> the most frequent one."""
     import Levenshtein
@@ -2469,6 +2481,11 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
             elif "double" in bar.barlines:
                 bl = etree.SubElement(m, "barline", location="right")
                 etree.SubElement(bl, "bar-style").text = "light-light"
+        line = one_line_position(p.changes)
+        if line:
+            for u in part.iter("unpitched"):
+                for tag, v in (("display-step", line[0]), ("display-octave", line[1:])):
+                    (u.find(tag) if u.find(tag) is not None else etree.SubElement(u, tag)).text = v
     n = slurs_to_ties(root)      # a curve between two equal pitches is a tie
     k = tie_held_chords(root)
     close_ties(root)             # a tie start whose stop the reader lost (system breaks, vector curves)

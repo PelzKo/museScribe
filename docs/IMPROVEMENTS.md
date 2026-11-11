@@ -478,6 +478,11 @@ to the truth's position): **-69, no part worse**. Fix: a `line` (display step / 
 in the `show.yaml` library, default E4, written for every note of a split part that is not a kit
 (`drumkit.py` / `build_parts`). Do it together with U1 (the same parts get their real MuseScore instrument).
 Wood Block = D4 is the only other value in the truths.
+**Done 2026-11-11: -71** (`r41-a` 11 570 -> `r43-a` 11 499, Anastasia 8 351, Ghost 3 148; no part worse; best
+Anastasia 3 Tamburin -24, Anastasia 5 Becken -16). `assemble.one_line_position` in `write_score`: a split part whose
+instruments are all `clef: percussion` with a `sound` and no `kit` gets every hit on the instrument's `line`, else D4
+for `wood.wood-block`, else E4 (`line` is read from the show.yaml library but not set there: `data/` is read-only).
+U1's instrument ids are not part of this.
 
 R44. **Ghost 5 Drums (442 of 455 from scratch: the worst part relative to its size).** The page
 (`results/ghost/runs/r3/pipeline/ghost-5--Drums/subset.pdf`, one page) has three things the pipeline does not

@@ -375,7 +375,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   8 981, Ghost 3 204), hairpins attached to notes; R40 `r40-w` **11 968** (Anastasia 8 764, Ghost 3 204), the
   `.omr` hairpins on scanned single-staff parts; R42 `r42-df` **11 833** (Anastasia 8 643, Ghost 3 190), dynamics /
   fermatas only one book has dropped; R41 `r41-a` **11 570** (Anastasia 8 422, Ghost 3 148), words only one book
-  prints dropped (playing words kept). **Reference from now on: `r41-a`.**
+  prints dropped (playing words kept); R43 `r43-a` **11 499** (Anastasia 8 351, Ghost 3 148), one-instrument
+  percussion parts on the truth's line. **Reference from now on: `r43-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

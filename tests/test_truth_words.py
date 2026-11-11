@@ -296,3 +296,13 @@ def test_tie_over_three_bars_and_slur_over_seven_are_dropped():
     root = etree.fromstring("<score-partwise><part id='P1'>" + bar(1, tied("C", "start")) + bar(2, v2)
                             + bar(3, tied("C", "stop")) + "</part></score-partwise>")
     assert drop_long_curves(root) == 0
+
+
+def test_one_instrument_percussion_part_on_the_single_line():
+    from omrbench.pipeline.assemble import one_line_position
+    tamb = {"name": "Tambourine", "clef": "percussion", "sound": "drum.tambourine"}
+    assert one_line_position({0: tamb}) == "E4"
+    assert one_line_position({0: {**tamb, "sound": "wood.wood-block"}}) == "D4"
+    assert one_line_position({0: {"name": "Drum Set", "clef": "percussion", "kit": True}}) is None
+    assert one_line_position({0: {"name": "Glock", "clef": "pitched", "sound": "x"}}) is None
+    assert one_line_position({}) is None
