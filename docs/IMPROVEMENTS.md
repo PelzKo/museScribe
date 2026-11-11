@@ -48,6 +48,7 @@ Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug lef
 | U14 | `show_overrides.yaml` moved into data/ (show.yaml, workbook cells) | 0 | 0 | tiny | no |
 | U15 | "Hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off) | 0 | 0 | tiny | no |
 | U16 | Singer labels without a `voice_sounds` entry import as a voice, not a piano | 0 | 0 | tiny | no |
+| U17 | Ties over a voice change end in the next bar in MuseScore | 0 | 0 | none | no |
 
 U1. **Percussion instruments (user 2026-11-09: "they all have a midi mix instead of Glockenspiel or Bells").** The
 truths use the MuseScore instruments `crash-cymbal` (Hängendes Becken), `splash-cymbal`, `triangle`, `mark-tree`,
@@ -287,6 +288,14 @@ every part of the "Voices" file without an entry gets `voice.vocals` (MuseScore 
 known singers. Check (`u16-a` combined.mscz, Instrument id piano -> voice): Anastasia 3 "Voice 2", 4 "Solo" /
 "Black Marketeer #1", 4A "Voice"; Ghost 13 / 20 / 4 / 5 "Voice 3..5", 1a "Cue", 20 "Ens" / "Vvomen", 5 "Willie"
 (OCR spellings: candidates for `voice_sounds` / label merging).
+
+U17. **Ties over a voice change (user 2026-11-12: Ghost 20 PianoReduction bar 29 tied 29 -> 32 in MuseScore; a tie
+spans at most 2 bars).** **Checked 2026-11-12, no change needed.** In the MusicXML the bar-29 ties start in voice 1
+and the bar-30 notes are in voice 2, so a voice-keyed reading (U8's `drop_long_curves`, which keeps it) pairs the start
+with the voice-1 stop in bar 32. MuseScore 4.7's import does not: in `u13-a` .. `u16-a` combined.mscz the ties go
+29 -> 30 (`<next><location><voices>1</voices><measures>1</measures>`), also after a load / save round trip. Over every
+combined.mscz of `u16-a` (both shows): 0 ties span more than one barline (10 cross-voice ties in Ghost 20, 1 in 13, all
+into the next bar). If MuseScore shows 29 -> 32, it is another file (an older `results/ghost/20/`?): tell me which.
 
 ## From the code and current-output review (2026-11-10)
 
