@@ -12,6 +12,20 @@ def test_playing_words_follow_the_truth():
     assert out == ["", "", "gedämpft", "", "offen", "pizz.", "arco", "Open H.H."]
 
 
+def test_sordino_words_mean_gedaempft_and_play_back():
+    from lxml import etree
+    from omrbench.musicxml import play_techniques
+    for on in ("con sord.", "Con sordino", "sordino", "sord.", "con sordini", "mit Dämpfer"):
+        assert playing_words(on, False) == ("gedämpft", True), on
+    for off in ("senza sord.", "senza sordino", "Senza sordini", "ohne Dämpfer"):
+        assert playing_words(off, True) == ("offen", False), off
+    root = etree.fromstring("<score-partwise><part id='P1'><measure number='1'>" + "".join(
+        f"<direction><direction-type><words>{playing_words(w, m)[0]}</words></direction-type></direction>"
+        for w, m in (("sordino", False), ("ohne Dämpfer", True))) + "</measure></part></score-partwise>")
+    assert play_techniques(root) == 2
+    assert [d.findtext("sound/play/mute") for d in root.iter("direction")] == ["on", "off"]
+
+
 XML = """<score-partwise><part-list><score-part id="P1"><part-name>Voice</part-name></score-part></part-list>
 <part id="P1"><measure number="1"/></part></score-partwise>"""
 

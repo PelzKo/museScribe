@@ -448,8 +448,9 @@ def clean_words(t: str) -> str:
 
 MUTE_KIND = r"(?:st\.?|straight|cup|harmon|practice|wah)"
 MUTE_PREP = re.compile(rf"^(?:to|change to)\s+(?:{MUTE_KIND}\s*)?(?:mute|cup|open)\b", re.I)
-MUTE_ON = re.compile(rf"^(?:{MUTE_KIND}\s*)?mute[ds]?\.?$|^cup$|^con sord(?:\.|ino)?$", re.I)
-MUTE_OFF = re.compile(r"^(?:open|senza sord(?:\.|ino)?|mute off)\.?$", re.I)
+# con sord. / sord. / sordino / con sordini / mit Dämpfer = gedämpft; senza sord(ino|ini) / ohne Dämpfer = offen
+MUTE_ON = re.compile(rf"^(?:{MUTE_KIND}\s*)?mute[ds]?\.?$|^cup$|^(?:con )?sord(?:\.|ino|ini)?$|^mit dämpfer$", re.I)
+MUTE_OFF = re.compile(r"^(?:open|senza sord(?:\.|ino|ini)?|mute off|ohne dämpfer)\.?$", re.I)
 PIZZ = re.compile(r"^pizz\W*$", re.I)
 
 

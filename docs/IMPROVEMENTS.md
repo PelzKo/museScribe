@@ -130,6 +130,9 @@ U9. **Mute words (user: "con sord., sordino, con sordino all mean gedämpft; sen
 "sord.", "con sordini", "mit Dämpfer" / "ohne Dämpfer", and make sure the translated word also gets the playback
 (`musicxml.play_techniques`: "gedämpft" -> mute on, "offen" -> off). These words are not in the current truths, so
 the check is a unit test.
+**Done 2026-11-11: +0** (`u6-b` 12 200 -> `u9-a` 12 200, no part changed). `text.MUTE_ON` adds "sord.", "sordino",
+"con sordini", "mit Dämpfer"; `MUTE_OFF` "senza sordini", "ohne Dämpfer"; unit test
+`test_sordino_words_mean_gedaempft_and_play_back` (the translated word gets `<play><mute>`).
 
 U10. **German instrument names (user: like the truths).** Output part names and instrument names as in the song 4
 truth: Violine 1 / 2, Violoncello, Kontrabass, Piccolo, Flöte n, Oboe, Englisch Horn, Klarinette in B n, Fagott,
