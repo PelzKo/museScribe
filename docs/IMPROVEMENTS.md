@@ -80,6 +80,10 @@ U2. **Hide empty staves (user 2026-11-09).** The truths keep the style `hideEmpt
 always" per instrument in MuseScore 4). MusicXML has no such setting, so do it after `to_mscz`: open the .mscz
 (zip), add the element to every `<Part>` of the .mscx and the style keys, write it back. Check: the combined.mscz
 of song 5 has 23 `<hideWhenEmpty>on` parts and opens without a warning.
+**Done 2026-11-11, metric-neutral user request (+0, `u1-c` 11 499 -> `u2-a` 11 499, no part changed).**
+`transcribe.hide_empty_staves` after `to_mscz` (every combined.mscz, both shows): `<hideWhenEmpty>on` after each
+`<trackName>`, style `hideEmptyStaves` 0 / `dontHideStavesInFirstSystem` 1. Check: song 5 (`u2-a`) 23 of 23 parts,
+the MuseScore CLI opens it without `-f`. Ghost's truths mostly do not set it; tell me if Ghost should stay without.
 
 U3. **Dynamics (user: "dynamics is bad and a lot is missing; often in the wrong bar").** Of 952 truth dynamics 727
 are missing and 349 output dynamics are made up; 21 missing ones are in the output one bar off, 27 in the right bar

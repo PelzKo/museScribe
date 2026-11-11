@@ -29,9 +29,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -457,6 +459,39 @@ def share_marks(dest: Path, jobs: list[Job]) -> None:
         musicxml.write(r, f)
 
 
+# truths (U2): every part "Hide if empty: always", empty staves hidden except in the first system
+_HIDE_STYLE = {"hideEmptyStaves": "0", "dontHideStavesInFirstSystem": "1"}
+
+
+def hide_empty_staves(mscz: Path) -> int:
+    """Set <hideWhenEmpty>on</hideWhenEmpty> on every <Part> of the .mscz and the truths' style keys
+    (MusicXML has no such setting). Returns the parts set."""
+    with zipfile.ZipFile(mscz) as z:
+        items = [(i, z.read(i)) for i in z.infolist()]
+    n = 0
+    out = []
+    for info, data in items:
+        if info.filename.endswith(".mscx"):
+            text = data.decode("utf-8")
+            text, n = re.subn(r"(<Part\b[^>]*>(?:(?!</Part>).)*?</trackName>)(?!\n[ \t]*<hideWhenEmpty>)(\n[ \t]*)",
+                              r"\1\2<hideWhenEmpty>on</hideWhenEmpty>\2", text, flags=re.S)
+            data = text.encode("utf-8")
+        elif info.filename.endswith(".mss"):
+            text = data.decode("utf-8")
+            for k, v in _HIDE_STYLE.items():
+                text, found = re.subn(rf"<{k}>[^<]*</{k}>", f"<{k}>{v}</{k}>", text)
+                if not found:
+                    text = text.replace("</Style>", f"  <{k}>{v}</{k}>\n    </Style>", 1)
+            data = text.encode("utf-8")
+        out.append((info, data))
+    tmp = mscz.with_suffix(".mscz.part")
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+        for info, data in out:
+            z.writestr(info, data)
+    os.replace(tmp, mscz)
+    return n
+
+
 def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -> None:
     """Stack the group's latest files into dest/combined.musicxml (+ .mscz)."""
     exe = find_musescore(cfg.get("musescore_cli"))
@@ -472,8 +507,10 @@ def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -
             return
         mscz = combined.with_suffix(".mscz")
         try:
-            if to_mscz(combined, mscz, exe):
-                LOG.info(f"-> {mscz.name}")
+            clean = to_mscz(combined, mscz, exe)
+            hidden = hide_empty_staves(mscz)
+            if clean:
+                LOG.info(f"-> {mscz.name} ({hidden} parts hide when empty)")
             else:
                 LOG.warning(f"-> {mscz.name} (MuseScore flagged differing bar counts/lengths "
                             "between parts and filled them; saved with -f)")

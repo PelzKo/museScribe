@@ -377,7 +377,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   fermatas only one book has dropped; R41 `r41-a` **11 570** (Anastasia 8 422, Ghost 3 148), words only one book
   prints dropped (playing words kept); R43 `r43-a` **11 499** (Anastasia 8 351, Ghost 3 148), one-instrument
   percussion parts on the truth's line; U1 `u1-c` 11 499 (metric-neutral), percussion parts import as the truth's
-  MuseScore instrument. **Reference from now on: `u1-c`.**
+  MuseScore instrument; U2 `u2-a` 11 499 (metric-neutral), "hide if empty" on every part of combined.mscz.
+  **Reference from now on: `u2-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

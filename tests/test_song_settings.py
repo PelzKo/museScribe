@@ -231,3 +231,19 @@ def test_song_override_and_unpitched_sound():
     assert root.findtext(".//score-instrument/instrument-name") == "Suspended Cymbal"
     assert root.findtext(".//midi-instrument/midi-unpitched") == "58"
     assert [c.tag for c in root.find(".//note")][2] == "instrument"
+
+
+def test_hide_empty_staves(tmp_path):
+    import zipfile
+    from omrbench.transcribe import hide_empty_staves
+    f = tmp_path / "x.mscz"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("x.mscx", "<Score>\n  <Part id=\"1\">\n    <trackName>A</trackName>\n    <Instrument/>\n  </Part>\n"
+                             "  <Part id=\"2\">\n    <trackName>B</trackName>\n  </Part>\n</Score>\n")
+        z.writestr("score_style.mss", "<Style>\n  <hideEmptyStaves>1</hideEmptyStaves>\n    </Style>\n")
+    assert hide_empty_staves(f) == 2
+    assert hide_empty_staves(f) == 0       # once only
+    with zipfile.ZipFile(f) as z:
+        mscx, mss = z.read("x.mscx").decode(), z.read("score_style.mss").decode()
+    assert mscx.count("<hideWhenEmpty>on</hideWhenEmpty>") == 2
+    assert "<hideEmptyStaves>0<" in mss and "<dontHideStavesInFirstSystem>1<" in mss
