@@ -165,6 +165,395 @@ label); duet bars in both Vlad and Dmitry; tests for `singer_groups` and the "DI
 anastasia` unchanged for songs 1–5. Sheet 6 `plainText` lists "Vlad & Dmitry, Vlad & Dimitry, Both": after the fix it
 needs only "Vlad, Dmitry, Anya" (the user's workbook).
 
+## From the code and current-output review (2026-11-10)
+
+Review only: no pipeline or metric changes. U1–U13 above retain priority. The saved `r13-ref` benchmarks
+total **13 863** actions across 12 songs and 174 compared parts (Anastasia 9 999, Ghost 3 864). A fresh error
+report on those outputs and today's workbook / truths contains **14 305 differences**, 40 392 truth notes.
+`ERRORS.md` describes `r3-f` on
+2026-10-18 (10 songs, 129 parts), so its counts and "never written" findings are historical, not the current
+ranking. Neither the difference count nor its change across these different datasets is an edit-penalty gain.
+
+Reproduce the current diagnostic report:
+
+```bash
+source ~/.local/share/omrbench/env.sh
+python scripts/error_report.py anastasia,ghost --run r13-ref --out results/errors/review-20261110-current
+```
+
+Local review artifacts: `results/errors/review-20261110-current/{errors.md,errors.json}` and
+`results/errors/review-20261110-probes.{py,json}`. The latter contains small in-memory counterexamples and an
+inventory of the mapped parts (unfinished / plain handling as in the report; an output mapped to two truth
+parts is counted once in the inventory). Inventory counts below are XML elements, **not measured errors or
+promised savings**. Validation: all 108 existing tests pass; the counterexamples expose cases those tests do
+not cover.
+
+Current largest saved edit-penalty categories: notes 3978, articulations 2584, dynamics 1376, hairpins 891,
+slurs 755, words 698, lyrics 560. This still supports U3/U4 and the scan detector, the existing drum-routing
+work R28/R29, and R30's instrument words. The additions below address specific gaps in the code and in the
+checks needed to judge those improvements. No candidate was implemented or accepted in this review.
+
+| # | New work | Evidence / scope | Expected gain | Effort |
+|---|---|---|---|---|
+| R34 | Score both curve endpoints and the note a mark belongs to | Endpoint / voice changes can score 0; supports U4, U8, R8, R17 | metric coverage; rebaseline first | medium |
+| R35 | Score lyric hyphens and extender spans | 127 truth `<extend>` elements, 0 in mapped outputs; supports U5 | metric coverage; rebaseline first | medium |
+| R36 | Fermata vote per source book, inspect every staff / voice | Splitting one book changes the vote; current category 148 actions | unmeasured subset of 148 | medium |
+| R37 | Tie repairs require adjacent times, not just adjacent XML notes | Three repairs bridge a `<forward>` gap in small examples | unmeasured; endpoint-only changes currently score 0 | small–medium |
+| R38 | Preserve and score added / altered chord degrees | 18 truth degree elements, 0 in mapped outputs; C vs Cadd9 can score 0 | unmeasured; complements R10 / R18 | small–medium |
+| R39 | Store the evaluation inputs with every benchmark and compare like with like | Comparison checks row keys / totals, not truth or metric identity | reliability, no direct penalty saving | small |
+
+R34. **Score complete curves and their anchors.** `musicxml.part_staves` emits only a start token for
+slurs, ties and hairpins. The stop position is discarded; `edits.part_bars` and `scripts/error_report.py`
+both consume these tokens. Confirmed with identical notes: moving a slur's stop from note 4 to note 2,
+removing a tie's stop, or shortening a hairpin all give **penalty 0**. Consequently U4's stop attachment and
+U8's length repairs cannot be judged fully by the current score. Separately, moving an accent from C4 in
+voice 1 to simultaneous E4 in voice 2 on the same staff also gives 0: marking tokens retain staff / onset
+but not their note anchor (R17).
+
+Plan: pair starts and stops in the extractor, retain both aligned endpoints and the attached note / voice
+where relevant, and charge one changed curve rather than two independent endpoint edits. Resolve MusicXML
+numbers as local references; renumbering a slur or a voice without changing its connections must stay free.
+Use the bar alignment to compare endpoints across inserted / deleted bars, distinguish dangling starts /
+stops from complete curves, and retain the existing convention for ties versus slurs. Check moved / missing
+stops, cross-bar and overlapping curves, chord ties, and simultaneous voices. Update the diagnostic report
+as well as the penalty, then rebench the same saved outputs before measuring pipeline gains. The mapped
+outputs have 2498 slur starts and 2178 stops; the imbalance warrants a pairing audit, but is not itself a
+count of 320 independently repairable errors.
+
+R35. **Lyric structure in the metric, alongside U5's extraction.** The lyric event is only verse number
+and normalized `<text>`. Changing `single` to `begin`, or removing `<extend/>` from "back", leaves the
+penalty at **0**. This explains why correcting a visible "found-by" or adding the requested melisma line
+may fail the strict improvement rule even when the output looks right. The current mapped truths contain
+1610 lyric elements and 127 extender elements; mapped output parts contain 1452 lyrics and no extenders.
+Some extender differences belong to already missing lyrics, so 127 is not an additional-action estimate.
+
+Plan: compare syllabic boundaries and the extender's start/end anchors with the lyric's verse and text.
+Treat omitted `syllabic` and explicit `single` consistently, and allow equivalent extender encodings to
+match. Avoid charging the same missing lyric again for every continuation element. Check U5's song 5
+bars 8–15 and 147–149, plus multi-verse lyrics and a melisma across a barline. Establish the metric baseline
+separately, then evaluate U5; a zero change under today's metric is insufficient evidence against it.
+
+R36. **Fermata votes must not depend on instrument or singer splitting.** `transcribe.share_marks`
+flattens all output parts before `share_fermatas`; only barlines use one vote per book. In the reproduced
+example one of four books has a fermata: nothing is copied. Represent that same positive book as three
+parts and the count becomes three of six: a fermata is added to all three other books. Conversely, empty
+split parts can dilute positive evidence. `_starts` / `setdefault((bar, onset), note)` also retain only the
+first note or rest in XML order: a fermata on the lower piano staff at the same onset is invisible to the
+vote. A two-part example confirms that it is not propagated.
+
+Plan: pass source-book groups as for `share_barlines`, inspect marks on all staves / voices and chord
+notes before reducing to a book vote, and keep appropriate attachment targets when writing a mark.
+Preserve the song-bar-count and plain-part exclusions. Reassemble from the work dirs to obtain evidence
+before the old sharing pass; voting again on already shared `r13-ref` outputs is not an independent
+experiment. Check that splitting one book cannot change the decision, that lower-staff marks count, and
+that a single book cannot manufacture a cross-book consensus. Current diagnostics: 49 missing, 91 made-up,
+5 wrong-beat fermatas (145 differences; saved penalty 148). These are the category's scope, not all caused
+by voting. First inspect Anastasia 1 bars 31–32 and the lower-staff keyboard examples.
+
+R37. **Use musical time when repairing ties.** `_chords` retains explicit rests but ignores `<forward>`
+and measures without notes in that voice; `slurs_to_ties` likewise tracks the last note without its end
+time. A C4 quarter, a one-quarter `<forward>`, then another C4 quarter is not a contiguous pair. Nevertheless
+the small examples show `close_ties` adding a stop across that gap, `slurs_to_ties` converting a slur across
+it into a tie, and `tie_held_chords` adding an E4 tie across the same gap between C–E chords. The pending
+explicit-rest guard in `slurs_to_ties` does not cover this case.
+
+Plan: retain absolute start/end times per staff and voice, including forwards, backups and intervening
+bars; only repair a tie when the first note's end equals the second note's start. Preserve legitimate ties
+over bar / system breaks, handle grace notes according to the existing convention, and leave intentional
+let-ring notation separate. Test explicit rests, forward gaps, an empty intermediate voice/bar and a real
+barline tie. Audit actual outputs for these cases before estimating a gain. This complements U8: two notes
+can be within its two-bar limit and still be separated by silence. R34 is needed to expose missing-stop
+repairs in the score; changing a slur into a tie can already affect the current categories.
+
+R38. **Chord degrees need semantics, not only display suffixes.** `pipeline.chords.KINDS` maps `add9`
+and `2` to `major`; `harmony` preserves the printed suffix in `kind@text` but writes no `<degree>`.
+The metric reads root / kind / bass and ignores both degrees and `kind@text`, so C major and C major with
+an added ninth compare equal. The current truths contain 18 degree elements (Ghost 4 Guitar / Klavier,
+11a Guitar, 20 Guitar); the mapped outputs have none. This is a coverage gap, not proof that all 18 chords
+are otherwise present or displayed incorrectly by MuseScore.
+
+Plan: extend the parsed symbol with added / altered / omitted degrees, emit them in MusicXML, and compare
+a normalized semantic chord token. Equivalent spellings must match; merely comparing raw `kind@text`
+would charge harmless suffix choices. Check C versus Cadd9, altered fifths and ninths, slash basses, then
+round-trip through MuseScore to verify display and playback. This extends R18 beyond recognizing more
+suffixes and lets R10's gains include chord quality. Rebaseline the metric separately; do not count this
+small inventory on top of all 231 current chord actions as if the errors were disjoint.
+
+R39. **Benchmark provenance and a compatible comparison baseline.** `scores.json` records output path,
+date and truth filenames; `trend.csv` adds HEAD, but not dirty changes, truth hashes, workbook mappings /
+flags or metric version. `compare_bench.load` reduces each file to row keys and penalties. Therefore a
+truth correction, a `plainArticulation` change or a scoring change can look like a pipeline gain even when
+the same rows remain. This is especially relevant now: November added songs and changed flags, while
+`PLAN.md` section 5 still ends its explicit reference history at `r3-k`; the current `r13-ref` is documented
+at the top of this file.
+
+Plan: store hashes of truth content, effective scoring mappings / exclusions and metric code (including
+dirty changes), plus separately the generation code / settings and output hashes. Require equal
+evaluation fingerprints for the acceptance comparison; generation fingerprints should be allowed to
+differ because that is what a pipeline experiment changes. When evaluation inputs change, rebench BASE
+and NEW under the same inputs. Include source run, evaluated songs, truth / workbook identity and metric
+identity in generated error reports, and link the current reference from `PLAN.md` and `ERRORS.md` while
+retaining historical tables. Check that a truth or metric change is detected even with identical row keys,
+and that a normal pipeline-only change remains comparable.
+
+Two extensions to existing ideas, rather than separate pipeline projects:
+
+- **R13 / measure-repeat scoring:** neither the extractor nor the headline metric records
+  `<measure-repeat>`. Adding/removing the sign while retaining identical underlying notes scores 0.
+  There are currently zero such elements in the mapped truths and outputs, so this has no measured
+  present gain. Add structural coverage when the Anastasia truths adopt the requested printed `%` signs;
+  score the visible sign and handle its repeated musical contents consistently, without penalizing both
+  the same missing sign and an artificial set of missing notes.
+- **U4/U5/U8 / acceptance:** the strict penalty-drop rule cannot establish the benefit of endpoint-only
+  or hyphen/extender-only changes with the present extractor. R34/R35 supply the missing checks. Metric
+  revisions are measurement changes, not accepted pipeline improvements; keep their rebaseline separate.
+
+## From the experiments of 2026-11-10 (Audiveris `.omr` marks, cross-book rules, drums, homr 0.7.1)
+
+Experiments only: no pipeline or metric code was changed. Everything was measured on the `r13-ref` outputs or by
+reassembling the cached work dirs with scratch scripts (monkeypatches), then `omrbench bench`. U1–U13 keep their
+priority. User answers of 2026-11-10 that rank this list:
+
+- **Dynamics and hairpins** are the leftover errors that cost the most time, and **most time goes into drums /
+  percussion**.
+- The sparse truth parts (Anastasia 3 Bass, Trombone, Trumpet, Keyboard 2; Anastasia 4 Trumpet, Trombone: about 500
+  articulations the output has and the truth lacks) are **incomplete truths**, not pipeline errors. Do not chase
+  those made-up marks, and expect these parts to block the acceptance rule for correct changes (R48).
+- Cross-book rules (dropping a mark only one book has) are fine as long as the acceptance rule holds.
+
+Scratch material (not in git): `results/anastasia/runs/x-omr-{base,w,d,wd}` + bench ids of the same names,
+`results/<show>/runs/x-h71` (work dirs with homr 0.7.1 crops), `results/errors/x-omr-{base,wd}`. The base of these
+runs is `x-omr-base` = Anastasia **9 997** (`r13-ref` 9 999; the working tree had uncommitted changes).
+"Simulated" below means: computed on the aligned output / truth bars of `r13-ref` with the metric's own bar path
+(`edits._align`, `_bar_cost`), votes taken in output-bar-index space over the books with the song's bar count. A
+real implementation in `transcribe.share_marks` should land close, but must be re-measured.
+
+| # | Improvement | Evidence | Expected | Effort |
+|---|---|---|---|---|
+| R40 | Dynamics + hairpins from the Audiveris `.omr` on every scanned part | measured: single-staff parts **-398**, keyboards +176 | -400 now, -600..-800 with placement + filters | small–medium |
+| R41 | Words only one book has are dropped (playing words kept) | simulated **-247**, worst part +1 | -200..-250 | small |
+| R42 | Dynamics / fermatas only one book has are dropped | simulated -128 / -28 (after R40: -78) | -80..-150 | small |
+| R43 | One-instrument percussion parts on the truth's staff line | simulated **-69**, no part worse | -69 | tiny |
+| R44 | Drum books on vector pages: groove written over the slash bars, kit refresh, "sim." marks | Ghost 5 Drums 442 of 455 | -250..-350 | medium |
+| R45 | Anastasia drum kit: two voices, ghost notes, routing | Schlagzeug 4: 661 of 787; 3: 252 of 448 | -300..-500 with R28 / R29 | large |
+| R46 | Marcato from the Audiveris `.omr` shape | `.omr` 238 marcatos, output 53, truth 94; 55 accents should be marcatos | -30..-50 | small |
+| R47 | Repeat signs from the `.omr` repeat dots | 980 dots (about 245 signs), output 126 repeats, truth 255 | part of R27's -76..-104, more reliable | medium |
+| R48 | Incomplete truth parts: skip their articulations in the score | about 500 actions that are not errors | 0 (measurement) | small |
+| R49 | homr 0.7.1 (dynamics, marcato, ties, tremolo, two voices, note positions) | drop-in measured, see below | drop-in +1 121 (rejected); keyboards only about -233; more after adapting the repairs | medium–large |
+
+R40. **Audiveris already finds the hairpins and dynamics; they are lost at its MusicXML export.** The backlog said
+"Audiveris never sees them, a detector is needed" (U3, U4, R7, #33). That is wrong. Counted over all Anastasia scan
+books of the truth songs (PianoReduction left out):
+
+| | in the `.omr` | in Audiveris' MusicXML | in our output | truth |
+|---|---|---|---|---|
+| dynamics | 1 383 | 1 062 | 975 | 1 132 |
+| hairpins | 1 173 | 368 | 246 | 848 |
+
+Examples: Anastasia 5 Cello hairpins `.omr` 24, export 3, output 3, truth 24; Anastasia 4 Horn 36 / 6 / 4 / 34;
+Anastasia 4 Violin 2 37 / 9 / 8 / 43. Audiveris' export drops an inter that it could not link to a chord. The
+pipeline takes instrument parts' dynamics and wedges from that export (`pipeline.json`: `"dynamics": 0, "wedges":
+0`), while `layout.py` already loads every `.omr` `<dynamics>` / `<wedge>` with bounds into `page.marks`, and
+`vocal.place_marks` (engine.py, `if vocal:`) places them by x for piano reductions only.
+
+Measured (scratch: `vocal.place_marks` called on every scanned part right after `plan_systems`, so it replaces the
+engines' marks; `x-omr-*` against `x-omr-base`):
+
+| variant | Anastasia | delta | single-staff parts | keyboards | drums |
+|---|---|---|---|---|---|
+| hairpins only (`x-omr-w`) | 9 869 | -128 | -190 | +62 | -1 |
+| dynamics only (`x-omr-d`) | 9 908 | -89 | -203 | +114 | +13 |
+| both (`x-omr-wd`) | 9 775 | -222 | -398 | +176 | +11 |
+
+Best parts (both): Anastasia 4 Violin 2 -71, Cello -71, Bass -57, Horn -45, Oboe -31. Worst: Anastasia 3 Keyboard 1
++77, Keyboard 2 +26, Anastasia 5 Keyboard 1 +23, Anastasia 4 Trumpet +15 (incomplete truth), Keyboard 1 +14. So the
+naive version passes the acceptance rule only when keyboards (two-staff systems) and drum books are left as they
+are: **-398 with no part worse than +15**.
+
+What is left after it (error report, Anastasia, base -> both): hairpins missing 703 -> 319, at the wrong beat
+29 -> 180, made up 96 -> 265; dynamics missing 670 -> 526, at the wrong beat 52 -> 68, made up 495 -> 611. The
+hairpins are now mostly *found but misplaced*, which is the cheap kind of error. Plan:
+1. Enable the `.omr` marks for scanned single-staff parts (not `type: piano`, not drums) as a first accepted step.
+2. Hairpin onsets: 180 land on another beat than the truth. `vocal.place_marks` starts a wedge at the first note
+   at or after its left end and stops it at the last note before its right end. The truths (and U4) attach the
+   start to the note the hairpin begins under and the stop to the note it ends under. Tune on the 180: nearest
+   note instead of "at or after", a wedge that starts after the last note of a bar starts on that note, a stop on
+   the start's onset moves to the next note.
+3. Made-up marks (265 hairpins, 611 dynamics): filter by `ctx-grade` (already read into `Mark.grade`), by size
+   (a wedge shorter than about 2 interlines is an accent: 3 090 ACCENT inters sit next to them), drop a wedge that
+   overlaps a slur / tie inter, and the cross-book rule R42. Keyboards: the `.omr` has 131 dynamics for Anastasia 4
+   Keyboard 1 where the truth has 50 (cue staves and the vocal line of the conductor part): take only marks whose
+   owner staff is one of the kept staves (`keep_staves`), and a mark between the two piano staves once.
+4. Dynamics: where the export and the `.omr` both have one, keep the export's position (it is linked to a chord);
+   add the `.omr`-only ones by x.
+5. Drums: the `.omr` marks cost +11 to +13 there (percussion labels routed per instrument); place them after the
+   instrument split or leave drum books out.
+The scans have an interline of 18–20 px (Audiveris wants about 20), so a detector (#33) is still an option for
+what Audiveris does not see, but only after this: the remaining gap is 319 hairpins and 526 dynamics, not 703 and
+670. homr 0.7.1 also reads dynamics (R49) and gives a second vote.
+
+R41. **A word that only one book prints in a bar is almost always noise.** Simulated on `r13-ref` (both shows):
+drop every `words` item of a part when at least 4 books have notes in that bar and no other book has the same
+text in that bar. Result -297 (436 words removed). The removed words are part labels and misreads the existing
+filters miss ("solo" 19, "tamb." 15, "timpani" 9, "bell tree" 6, "triangle" 6, "str. ens. (loco)" 6, "clarinet" 5,
+"to flute" 4, "glock - soft mallets" 4, "bs." 4, "v.s. [while playing]" 3, "pocoriz.", "gfz", dialogue lines), but
+also 41 real ones, all playing words: "pizz." 14, "gedämpft" 13, "arco" 8, "offen" 5. With playing words kept
+(pizz, arco, solo, tutti, div, unis, gedämpft / offen and the mute words, loco, 8va, sim, "to ...", cresc, dim,
+espr, dolce, ...): **-247, 295 removed, worst part +1** (Anastasia 3 Oboe); best Anastasia 3 Keyboard 1 -18,
+Anastasia 4 Schlagzeug -12, Ghost 20 Piano -10, Anastasia 4 Keyboard 2 -9. With at least 2 playing books: -266.
+A window of +-1 bar for the confirming book changes nothing (-292 vs -297). This covers most of R12 and R30 with
+one rule and no word lists per instrument. Implement in `transcribe.share_marks` (it already sees every part of
+the song; one vote per book like `share_barlines`, only parts with the song's bar count), compare the normalised
+text the metric uses, never touch system text, lyrics, or words the playback pass turned into techniques.
+
+R42. **Dynamics and fermatas only one book has.** Same rule per category, simulated on `r13-ref`:
+- Dynamics, same token in the same bar in no other book, at least 4 books playing: **-128** (403 removed, about
+  two thirds made up; worst Anastasia 5 Becken +6, Anastasia 3 Horn +5; best Anastasia 4 Violoncello -17,
+  Keyboard 2 -14, Klarinette 2 -12). Requiring "no other book has *any* dynamic in the bar" removes fewer: -47.
+  A +-1 bar window: -86. On top of R40 (`x-omr-wd` outputs, Anastasia only) the rule still gives -78 (worst
+  Becken +10): do R40 first, then tune this.
+- Fermatas, no other book has a fermata in the bar, at least 3 books playing: **-28** (33 removed, no part worse).
+  This is the cheap half of R36.
+Measured and **not worth doing** (so nobody tries them again without a new idea):
+- Copying a mark into the books that lack it (a mark at least k books and a share of the playing books have goes
+  into every part with a note at that onset): dynamics +35 (k >= 2, half the books), 0 (k >= 3, two thirds);
+  hairpins +19; tremolos +10; fermatas +1; playing techniques +2; articulations +1 597. Marks differ per
+  instrument far more than the bar structure does; U3 (3) should stay a check, never a copy.
+- Moving a lone dynamic / hairpin to the bar or beat where the other books have the same one: +7 / +8.
+- Dropping lone hairpins +15, lone tremolos +53, lone slurs +88, lone ties +197, lone tenutos +94; lone
+  marcatos -5 (not worth a rule).
+
+R43. **One-instrument percussion parts sit on the wrong staff line.** In every truth, Tamburin, Triangel, Becken /
+Hängendes Becken / Splash-Becken, Glockenbaum and Kastagnetten write all hits on one position (`E4`, the single
+line MuseScore gives these instruments); Holzblöcke on `D4`. The output keeps the position of the printed head on
+the five-line drum staff (E5, G5, D5, C5), and the metric charges every hit as "wrong kit instrument": Anastasia 3
+Tamburin 24, Anastasia 5 Becken 16, Anastasia 3 Hängendes Becken 10, ... Simulated (every hit of such a part moved
+to the truth's position): **-69, no part worse**. Fix: a `line` (display step / octave) per unpitched instrument
+in the `show.yaml` library, default E4, written for every note of a split part that is not a kit
+(`drumkit.py` / `build_parts`). Do it together with U1 (the same parts get their real MuseScore instrument).
+Wood Block = D4 is the only other value in the truths.
+
+R44. **Ghost 5 Drums (442 of 455 from scratch: the worst part relative to its size).** The page
+(`results/ghost/runs/r3/pipeline/ghost-5--Drums/subset.pdf`, one page) has three things the pipeline does not
+handle; the truth is clear on all of them:
+1. Bars 3–7: bass drum quarters, the first bar with accent + staccato, then "sim.". The truth writes the two marks
+   on every following bar up to bar 22 (126 articulation actions). `bars.apply_sim` is not applied to this part
+   (the "sim." comes from the PDF text layer, `place_sim` is skipped for `score_type == "drums"` in engine.py).
+2. Bar 8 is a written groove ("Toms w/ ad lib. accents": eight 16ths on the tom + two bass drum quarters), bars
+   9–22 are slash bars, 2/4 up to 13 and 4/4 from 14. The truth writes the groove out in every slash bar (10 hits
+   per 2/4 bar, 20 per 4/4 bar: 213 hits in 15 bars with no output). `continue_patterns` exists but only runs when
+   the page says "same style" / "fingerpicking", and only when the slash bar is as long as the pattern bar. Needed:
+   run it on drum books for slash bars after a written bar, and repeat the pattern when the slash bar is a
+   multiple of its length (2/4 pattern twice in a 4/4 bar).
+3. The toms are at D5; the output has C5 (snare), because `drumkit.yaml` was derived from Ghost 20 only. Re-run
+   `scripts/derive_drumkit.py ghost` with the Ghost 4 / 5 truths (PLAN: "re-run it after every new drum truth").
+Also: the output is one bar late from bar 2 on (the two vamp bars 1–2 under repeat signs: one is dropped, an extra
+bar appears later; log "dropped 5 extra bar(s)"), so the groove bar lands in bar 9 and the simulated pattern fill
+alone only gave -42. Fix the vamp bars first. Bars 23 ff. (12/8, cymbal rolls with ⊗ heads, tremolos, the 11-bar
+rest) score about 60 of the 442. Expected with all four: 442 -> about 100. The same mechanism (groove + slashes)
+is R29 on the Anastasia scans; build one function for both.
+
+R45. **Anastasia drum kit (the part the user spends the most time on).** Schlagzeug in song 4 costs 661 of 787
+from scratch, in song 3 252 of 448. Split of the kit bars (`r13-ref`, bars aligned like the metric):
+
+| | truth bars with notes, output empty | both have notes | perfect of those | note cost in those |
+|---|---|---|---|---|
+| Anastasia 4 | 44 (269 hits) | 39 (302 hits) | 5 | 156 |
+| Anastasia 3 | 11 (41 hits) | 75 (310 hits) | 19 | 109 |
+
+- The empty bars of song 4 (31, 34–38, 45, 46, 50, 53, 54, 75, 80–85, 98, 105, 113, 162, 163, 176, 179–186, 190,
+  199–211) are R28 (kit bars routed into Tamburin / Triangel: the Tamburin output holds 116 hits and the Triangel
+  output 47 where the truths have a handful) and R29 (slash bars after "etc.": drum book page 14, bars 45–46, 48,
+  52–54). Both stay the first step: together about 270 hits.
+- The bars that are read are still half wrong (5 of 39 perfect). The page (drum book p. 14, bars 41–61) shows why:
+  **two voices on one staff** (snare and cymbals stem up, bass drum stem down), **grace notes** (flams / drags
+  before the snare hits), tremolo strokes, and "tamb." labels over single notes. homr 0.7.0 writes one voice per
+  staff, so one of the two voices is lost or merged into chords with wrong values (missing in read bars: snare C5
+  80, bass drum F4 59), and grace notes become real hits (made up: 34 at D4, 24 at F5, 10 at E5 with no truth hit
+  at that onset; song 3: D4 40, F5 15).
+- Ideas, in order: (1) homr 0.7.1 reads two voices per staff (R49): re-test the kit bars first with it. (2) The
+  Audiveris head-chords of the staff (`page.chords`, with stem direction in the `.omr`) give the two voices'
+  onsets: stem-up and stem-down heads are two rhythms that must each fill the bar; use them to check / rebuild the
+  reader's bar like `vector.read_drum_page` does on vector pages (same `slash_bar` writer). (3) Small heads
+  before a hit (`small-chord` inters, already loaded with `small=True`) are grace notes: drop them from the kit
+  (the truths do not write the flams as notes; check 3 bars with the user). (4) A kit position that occurs fewer
+  than 3 times in the song's kit and has no hit in the other voice at that onset is a misread: drop it.
+- Tremolos on drums: 24 missing in Anastasia 3 Schlagzeug, 20 in Anastasia 4, 15 in Anastasia 5 Becken (rolls).
+  Audiveris has no tremolo inter in these `.omr` files; homr 0.7.1 has a tremolo token (no stroke count: write 3
+  strokes on half / whole notes, the only value the drum truths use besides Anastasia 5 Violins' 1).
+
+R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
+MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
+where the truth has a marcato. `bars.copy_marks` only adds Audiveris marks to notes without a mark, so an accent
+homr read wins over Audiveris' marcato. Rule: where Audiveris has MARCATO on the note (same onset, staff, pitch)
+and the reader has an accent, write the marcato. homr 0.7.1 also has a strong-accent token (8 on the Anastasia 4
+Horn crops where 0.7.0 gave none): a second vote. No shape analysis of the crop needed.
+
+R47. **Repeat signs from the `.omr` repeat dots (R27, first bullet).** The `.omr` files hold 980 `repeat-dot`
+inters (4 dots per sign on these staves: about 245 signs) against 126 repeat marks in the output (69 forward, 57
+backward) and 255 in the truths (136 / 119); Audiveris' export has 120. So the dots of the missed repeat starts
+are detected, they are just not turned into a barline. Read the dots in `layout.py` (bounds, staff): two dots
+right of a barline = forward, left = backward; feed them into `Bar.barlines` before the book vote of
+`share_barlines`. R27's pairing rule (an end without a start gets one) stays as the fallback.
+
+R48. **Incomplete truth parts distort the acceptance rule.** User 2026-11-10: the missing articulations in
+Anastasia 3 Bass, Trombone, Trumpet, Keyboard 2 and Anastasia 4 Trumpet, Trombone are gaps in the truth. Today a
+correct change that adds printed marks is charged there (`r7-c`: Anastasia 3 Bass +27, Keyboard 2 +17; R40:
+Anastasia 4 Trumpet +15) and can fail the "no part worse than half the drop" test. Add a workbook cell next to
+`unfinished`, e.g. `unfinishedMarks: Bass, Trombone, ...`, that skips articulations (and, if the user says so,
+dynamics / hairpins / slurs) of those parts in `bench` and `error_report` until the truth is completed; list the
+skipped parts in the report. This is a measurement change: rebaseline first (R39). It also takes about 500
+"made up" articulations out of the error ranking, where they are now the third largest kind.
+
+R49. **homr 0.7.1 (released on PyPI 2026-11-10; the pipeline pins 0.7.0).** Its changelog and output: dynamics
+(`<dynamics>` directions, pppp..fff, sfz, fp, ...), strong accents, ties (0.7.0 wrote none), tremolo, **several
+voices per staff**, unprinted triplets, and **the image position of every note** as an XML comment after the
+note (`<!-- imgpos: x, y -->`). Hairpins and "arco" / "pizz." are not in its vocabulary. A scratch image
+(`docker build --build-arg HOMR_VERSION=0.7.1 -f docker/homr/Dockerfile .`) builds as is; the weights are new
+(transformer 509). Findings so far:
+- `omrbench/engines/_homr_worker.py` does not start with 0.7.1: `ProcessingConfig` needs the new argument
+  `title_detection` (use `False`). `homr --gpu no` is gone from the CLI help.
+- Crop level, same crops (Anastasia 1, all books): notes 1 471 -> 1 557, dynamics 0 -> 55, ties 0 -> 114, slurs
+  276 -> 163 (the rest became ties), tremolos 29 -> 37, voice 2 notes 45 -> 109, accents 207 -> 215, tenutos
+  128 -> 147. Anastasia 4 Horn (21 crops): dynamics 0 -> 18, strong accents 0 -> 8.
+- **Drop-in, no pipeline change** (crops re-read with 0.7.1, same work dirs, reassembled): Anastasia 1 scores 413
+  against 419: notes 64 -> 54, barlines 65 -> 47, tremolos 17 -> 10; worse: dynamics 58 -> 68 (homr's dynamics
+  are simply added to Audiveris'), bars 12 -> 18, ties 9 -> 14, articulations 49 -> 54. Per part it swings both
+  ways (Keyboard 2 -10, Piccolo -9, Flöte 2 -7, Pauken -7; Flöte 1, Violine 1, Violoncello +12 each), so the
+  repairs tuned to 0.7.0 (one voice per staff, no ties, no directions) need a pass before this is judged. Totals of
+  all songs: see the table.
+
+  | drop-in 0.7.1 vs 0.7.0 | base | 0.7.1 | delta | by book type |
+  |---|---|---|---|---|
+  | Anastasia (`x-omr-base` -> `x-h71o`) | 9 997 | 10 614 | **+617** | keyboards **-233**, drums +5, piano reductions +190, other parts +647 |
+  | Ghost (`x-g-base` -> `x-h71o`) | 3 864 | 4 368 | **+504** | piano reductions +213, drums +11, other parts +280 |
+
+  Rejected as a plain version bump. Per song: Anastasia 1 -6, 2 -12, 3 -21, 4 +474, 4A +13, 5 +161; Ghost 4 +225,
+  5 +185, 20 +65. Better categories (Anastasia): tremolos -92, slurs -49, articulations -30, fermatas -23,
+  bar lengths -14. Worse: notes +194, bars +193, barlines +152, keys +115, structure +79, dynamics +73, times +27;
+  Ghost: notes +362, articulations +63. Best parts: Anastasia 3 Keyboard 1 -136, 4 Keyboard 1 -71, 4 Horn -37,
+  3 Keyboard 2 -31, 4 Schlagzeug -24, Ghost 20 Guitar -50. Worst: Anastasia 4 Flöte 2 +163, Männer +69, 3 Horn +68,
+  4 Violine 1 / 2 +55 each, Ghost 4 Guitar +177, Ghost 20 Piano +91, Ghost 5 Electric Piano +73. The losses are
+  mostly bar structure (bars, barlines, keys, repeats shift when a part's bar count changes: the bar-count repairs
+  and `_vote` are tuned to 0.7.0's habits), not reading quality; the keyboards, where 0.7.0 was weakest (two
+  voices), gain clearly. So the value is real but needs the adaptation below, or a routing by book type first:
+  **0.7.1 for `type: piano` books only would be about -233 on Anastasia** (not yet measured as its own run;
+  check Ghost keyboards, which got worse: Ghost 5 Electric Piano +73).
+- Trap found on the way: `PipelineEngine.reassemble` loads `sorted(crops.glob("s*-g*.musicxml"))` with
+  `setdefault`, and `s01-g1-m3.musicxml` sorts before `s01-g1.musicxml`. A work dir that holds a margin-3 reading
+  next to the main crop uses the margin-3 one. In a normal run the other margins are only read after a failure, so
+  it does not show, but reading every PNG of a crop folder does: with margin 3 everywhere song 1 scores 538, not
+  413 (so a 3-interline margin is far worse than 5, and the retry order 5, 4, 3 is right).
+- What to do: (1) diff the parts that got worse (Anastasia 1 Flöte 1, Violine 1, Violoncello) to see which repair
+  misfires on the new output; (2) decide per element: homr dynamics as a vote with R40's `.omr` dynamics instead of
+  adding both, homr ties instead of the `slurs_to_ties` guesses, tremolo token -> single tremolo; (3) use `imgpos`
+  to place Audiveris marks, chord symbols and words on the reader's notes by x instead of by onset order
+  (`copy_marks`, `place_marks`, R17, #37); (4) re-test the drum kit bars (R45) and the two-voice keyboard bars;
+  (5) then run the acceptance rule. All main crops of the 12 truth songs were re-read with 0.7.1 into
+  `results/<show>/runs/x-h71/pipeline/` (work dirs copied from `r3`, `s3`, `20261102-064211`; other margins only
+  for crops that failed, like the pipeline; reassemble with `scripts/reassemble.py <show> --from x-h71 --to NEW`),
+  so the adaptation can be developed without re-reading.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

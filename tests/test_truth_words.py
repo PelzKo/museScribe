@@ -92,6 +92,15 @@ def test_slur_between_equal_pitches_becomes_tie():
     assert notes[3].find("notations/slur").get("type") == "start"
 
 
+
+def test_slur_across_a_rest_stays_a_slur():
+    from lxml import etree
+    from omrbench import musicxml
+    rest = "<note><rest/><duration>4</duration><voice>1</voice></note>"
+    root = etree.fromstring(f'<score-partwise><part id="P1"><measure number="1">{_n("B", 3, ("start", 1))}'
+                            f'{rest}{_n("B", 3, ("stop", 1))}</measure></part></score-partwise>')
+    assert musicxml.slurs_to_ties(root) == 0 and len(root.findall(".//slur")) == 2
+
 def test_slur_beside_a_tie_on_the_same_notes_is_dropped():
     from lxml import etree
     from omrbench import musicxml
@@ -206,3 +215,19 @@ def test_dedup_lyrics_keeps_first_voice_only():
     assert dedup_lyrics(root, ["Women", "Men"]) == 1
     counts = [len(p.findall(".//lyric")) for p in root.findall("part")]
     assert counts == [2, 0, 2]      # Anya is not listed: keeps hers
+
+
+def test_barline_vote_needs_two_books():
+    from lxml import etree
+    from omrbench import musicxml
+    rep = '<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>'
+
+    def part(n, mark_at=0):
+        return etree.fromstring('<part>' + ''.join(f'<measure>{rep if i == mark_at else ""}</measure>'
+                                                   for i in range(n)) + '</part>')
+    one, other = part(3), part(4)
+    musicxml.share_barlines([[one], [other]], 3)     # one book with the song's bar count: kept as read
+    assert one.find("measure/barline/repeat") is not None and other.find(".//repeat") is None
+    a, b, c = part(3), part(3), part(3, mark_at=1)
+    assert musicxml.share_barlines([[a], [b], [c]], 3) == 3     # 2 of 3 books: bar 1 in all 3, bar 2 out
+    assert all(p[0].find("barline/repeat") is not None and p[1].find("barline") is None for p in (a, b, c))

@@ -51,8 +51,10 @@ def write(root: etree._Element, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     doctype = ('<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" '
                '"http://www.musicxml.org/dtds/partwise.dtd">')
-    path.write_bytes(etree.tostring(root, xml_declaration=True, encoding="UTF-8",
-                                    doctype=doctype, pretty_print=True))
+    tmp = path.with_name(path.name + ".tmp")    # atomic: a crash never leaves a truncated score
+    tmp.write_bytes(etree.tostring(root, xml_declaration=True, encoding="UTF-8",
+                                   doctype=doctype, pretty_print=True))
+    tmp.replace(path)
 
 
 def _strip_ns(root: etree._Element) -> None:
@@ -162,9 +164,12 @@ def slurs_to_ties(root: etree._Element) -> int:
     for part in root.iter("part"):
         last: dict[tuple, etree._Element] = {}
         for n in part.iter("note"):
-            if n.find("rest") is not None or n.find("chord") is not None or n.find("grace") is not None:
-                continue
             key = (n.findtext("staff") or "1", n.findtext("voice") or "1")
+            if n.find("rest") is not None:
+                last.pop(key, None)     # a rest between two notes: no tie across it
+                continue
+            if n.find("chord") is not None or n.find("grace") is not None:
+                continue
             a, last[key] = last.get(key), n
             p, q = (x.find("pitch") if x is not None else None for x in (a, n))
             if p is None or q is None or [p.findtext(k) or "0" for k in ("step", "alter", "octave")] != \
@@ -392,7 +397,8 @@ def share_barlines(books: list[list[etree._Element]], bars: int | None = None) -
     a piano reduction are many parts but one page): the marks of its parts with the song's bar count
     `bars` (else the most common count). A mark at least half of the voting books have goes into
     every part with that count, the others are removed; parts with another bar count lose theirs
-    (their bars are shifted). Returns the marks written."""
+    (their bars are shifted). Fewer than two voting books: no vote, the voters keep their marks as
+    read (user 2026-11-10). Returns the marks written."""
     parts = [p for b in books for p in b]
     counts = [len(p.findall("measure")) for p in parts]
     common = int(bars) if bars else max(set(counts), key=counts.count, default=0)   # workbook cells are text
@@ -407,9 +413,11 @@ def share_barlines(books: list[list[etree._Element]], bars: int | None = None) -
         nbooks += any(p in voters for p in b)
         for k in mine:
             votes[k] = votes.get(k, 0) + 1
-    keep = {k for k, n in votes.items() if 2 * n >= nbooks and nbooks >= 2}
+    keep = {k for k, n in votes.items() if 2 * n >= nbooks}
     written = 0
     for p in parts:
+        if nbooks < 2 and p in voters:
+            continue
         ms = p.findall("measure")
         for i, m in enumerate(ms):
             last = i == len(ms) - 1

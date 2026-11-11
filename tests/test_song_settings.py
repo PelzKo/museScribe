@@ -8,6 +8,8 @@ def test_bar_map_and_positions():
     pos = A.song_positions(spec, [(131, "A"), (132, "A"), (132, "B")], False, 140)
     assert pos[66:69] == ["4/4", "2/4", "4/4"]
     assert pos[131 + 1] == "4/4" and pos[132 + 2] == "3/4"     # 131A and 132A take positions too
+    cut = A.song_positions(bar_map("1: 4/4, 2C: 3/4, 3: 2/4"), [(2, "C")], False, 4)
+    assert cut == ["4/4", "4/4", "3/4", "2/4"]      # a cut to 2C: 1, 2, 2C, 3 (no 2A, 2B)
     assert A.song_positions(spec, [], True, 3) == ["4/4", "4/4", "4/4"]     # pickup = position 0
     assert A._main_time(spec) == ("4", "4")
 

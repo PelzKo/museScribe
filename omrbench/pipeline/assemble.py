@@ -251,7 +251,8 @@ def song_positions(spec: list[tuple[int, str, str]], letters: list, pickup: bool
     """The song setting in force at each of the n output bars (after align_bars: output bar j is
     printed position j + 1, or j with a pickup bar; lettered bars take positions of their own)."""
     def position(num: int, letter: str) -> int:
-        return num + sum(1 for m, _ in letters if m < num) + (ord(letter) - ord("A") + 1 if letter else 0)
+        # like align_bars: only lettered bars that exist count ("[to] 132C" skips 132A and 132B)
+        return num + sum(1 for m, c in letters if m < num or (m == num and c <= letter))
     marks = sorted((position(num, letter), v) for num, letter, v in spec)
     out, cur, k = [], marks[0][1] if marks else None, 0
     for j in range(n):
