@@ -275,3 +275,23 @@ def test_piano_part_false_keeps_the_piano_for_the_vote_only(tmp_path):
         tmp_path / "PianoReduction - Voices.musicxml", tmp_path / "vote" / "PianoReduction - Piano.musicxml"]
     assert len(output_names("PianoReduction", {"type": "piano_reduction"})) == 2
 
+
+def test_gap_closed_by_a_mid_system_number_fills_at_the_system_break():
+    # U12 (Anastasia 5A): bars 1-5, unread "[to] 16" cut at the break, "17" read at system 2 bar 2
+    from types import SimpleNamespace as NS
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def plan(k, n, printed):
+        p = A.SysPlan(NS(page=1, stacks=[]), k, n=n, times=[("4", "4")] * n, xs=[(0, 1)] * n, printed=printed)
+        note = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>"
+        p.chosen = {0: [B.Bar([etree.fromstring(note)], "crop") for _ in range(n)]}
+        return p
+
+    plans = [plan(0, 5, {0: 1}), plan(1, 6, {1: 17, 4: 20})]
+    A.align_bars(plans, 1, A.Stats())
+    assert plans[0].n == 15 and all(b.rest_only for b in plans[0].chosen[0][5:])
+    assert plans[1].n == 6 and not plans[1].chosen[0][0].rest_only     # printed 16 stays output bar 16
+    plans = [plan(0, 5, {0: 1}), plan(1, 6, {0: 6, 1: 17, 4: 20})]  # Violin 1: "[to] 16" read as "6"
+    A.align_bars(plans, 1, A.Stats())
+    assert plans[0].n == 15 and plans[1].n == 6

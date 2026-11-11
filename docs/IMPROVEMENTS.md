@@ -225,6 +225,11 @@ bars with notes: Violin 1 1–5 and 16–21, Cello / Horn / Reed 2 2–5 and 16�
 Keyboard 1, Keyboard 2, Violin 2 unchanged; bench both shows (acceptance rule); a test in `tests/` for a gap closed by a
 mid-system number after a system break. Out of scope (OCR misreads): Drums bar 1 "1" read as "11"; PianoReduction
 "[to] 16" read as "[to] 15".
+**Done 2026-11-12: -39 (`u11-b` 11 499 -> `u12-a` 11 460; worst part +3 Anastasia 4 Horn, best -12 Anastasia 3
+Horn; passes the full acceptance rule).** `align_bars`: without a rest bar before the number, the bars go at the last
+system break in the gap; a number at that system's start counts as in the gap (Violin 1 reads "[to] 16" as "6"). Check
+(5A reassembled from run `20261105-010953`, `u12-5b` vs `u12-5b0`): Violin 1 1-5, 16-21; Cello / Horn / Reed 2 2-5,
+16-21; every other part unchanged. Test `test_gap_closed_by_a_mid_system_number_fills_at_the_system_break`.
 
 U13. **Duet labels in the No. 6 PianoReduction (user task, 2026-11-09).** "Learn To Do It", PianoReduction.pdf pages
 78–96; labels VLAD:, DMITRY:, ANYA:, "VLAD & DMITRY:" (2×), "VLAD & DIMITRY:" (3×, a typo in the PDF), "BOTH:" (1×).

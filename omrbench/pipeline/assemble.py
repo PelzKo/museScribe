@@ -1837,11 +1837,17 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
             inserts.append((o.j, d, f"cut mark [to] {o.label}"))
             continue
         # no cut mark: most likely a rest whose count was not read; extend the last rest
-        # bar before the number, else put the bars right before it
+        # bar before the number, else put the bars at the system break in the gap (U12: an
+        # unread "[to] 16" cut, printed at the system end; a number at that system's start,
+        # "16" read as "6", counts as in the gap), else right before the number
         rests = [j for j in range(max(pj, 0), o.j) if rest_only[j]]
+        breaks = [j for j in range(max(pj, 1), o.j + 1) if flat[j][1] == 0]
         if rests:
             inserts.append((rests[-1] + 1, d, f"after the rest at {at(rests[-1])}, printed bar "
                                              f"number {o.label} at {at(o.j)}"))
+        elif breaks:
+            inserts.append((breaks[-1], d, f"at the system break, printed bar number {o.label} "
+                                           f"at {at(o.j)}"))
         else:
             inserts.append((o.j, d, f"printed bar number {o.label}"))
     for j, d, why in sorted(inserts, key=lambda x: -x[0]):
