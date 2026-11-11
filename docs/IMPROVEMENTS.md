@@ -200,6 +200,12 @@ scoring").** Scoring: done in the workbook (`Piano=-`). Generating: a `show.yaml
 makes the vocal-score engine write only "PianoReduction - Voices" (no "- Piano" file, not in combined.mscz); the
 piano staves are still read, because the voices' bars, barlines and system text come from the same systems.
 Check: songs 1–5A bench unchanged, no "- Piano" file.
+**Rejected 2026-11-11, measured +40 (`u11-a` 11 539 vs `u10-c` 11 499; worst part +3 Anastasia 3
+Drums-Percussion).** `piano_part: false` (output_names without "Piano", the engine writing the voices only) works and
+leaves no "- Piano" file, but `share_marks` then loses the piano's vote: barlines, fermatas and the "only one book
+has it" filters (R41 / R42) change in other books (+1..+3 in 11 parts). Next try: keep the piano for the vote only
+(e.g. written to a side folder of the run that combine / bench ignore), or give the PianoReduction book the piano's
+marks for the vote in memory.
 
 U12. **Empty bars of a cut at the system break (user task, 2026-11-09).** Anastasia 5A (`omrbench transcribe
 anastasia --songs 5A`, output `results/anastasia/5A/`, run `20261105-010953`): the parts print bars 1–5, then a new
