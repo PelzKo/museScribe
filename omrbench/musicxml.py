@@ -231,6 +231,44 @@ def drop_duplicate_curves(root: etree._Element) -> int:
     return dropped
 
 
+def drop_long_curves(root: etree._Element, tie_bars: int = 1, slur_bars: int = 5) -> int:
+    """A tie ends in the same or the next bar, a slur at most 5 bars after its start (user
+    2026-11-09): a longer one is a misread pairing, both ends go. A tie whose next bar holds its
+    pitch in another voice of the staff stays (a voice change; the truth ties it). Returns the count dropped."""
+    dropped = 0
+    for part in root.iter("part"):
+        ties: dict[tuple, tuple] = {}
+        slurs: dict[str, tuple] = {}
+        ms = part.findall("measure")
+        held = [{(n.findtext("staff"), _pitch_key(n)) for n in m.iter("note")} for m in ms]
+        for mi, m in enumerate(ms):
+            for n in m.iter("note"):
+                key = (n.findtext("voice"), n.findtext("staff"), _pitch_key(n))
+                for t in n.findall("notations/tied"):
+                    if t.get("type") == "stop" and key in ties:
+                        a, start = ties.pop(key)
+                        if mi - a > tie_bars and (key[1], key[2]) not in held[a + 1]:
+                            for el, typ in ((start, "start"), (n, "stop")):
+                                for x in el.findall(f"tie[@type='{typ}']") + el.findall(f"notations/tied[@type='{typ}']"):
+                                    x.getparent().remove(x)
+                            dropped += 1
+                    elif t.get("type") == "start":
+                        ties[key] = (mi, n)
+                for sl in n.findall("notations/slur"):
+                    num = sl.get("number", "1")
+                    if sl.get("type") == "start":
+                        slurs[num] = (mi, sl)
+                    elif sl.get("type") == "stop" and num in slurs:
+                        a, start = slurs.pop(num)
+                        if mi - a > slur_bars:
+                            start.getparent().remove(start)
+                            sl.getparent().remove(sl)
+                            dropped += 1
+        for nt in [x for x in part.iter("notations") if not len(x)]:
+            nt.getparent().remove(nt)
+    return dropped
+
+
 def _pitch_key(n: etree._Element) -> tuple:
     p = n.find("pitch")
     return tuple(p.findtext(k) or "0" for k in ("step", "alter", "octave")) if p is not None else ()

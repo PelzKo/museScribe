@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
-from ..musicxml import PLAY_WORDS, _add_tie, close_ties, drop_duplicate_curves, play_techniques, slurs_to_ties, tie_held_chords
+from ..musicxml import PLAY_WORDS, _add_tie, close_ties, drop_duplicate_curves, drop_long_curves, play_techniques, slurs_to_ties, tie_held_chords
 from .ocr import DYNAMIC
 from . import bars as B
 from . import chords as CH
@@ -2471,6 +2471,7 @@ def write_score(parts: list[OutPart], times: list, credits: list[T.Line], D: int
     close_ties(root)             # a tie start whose stop the reader lost (system breaks, vector curves)
     play_techniques(root)        # pizz. / arco / gedämpft / offen play back in MuseScore
     drop_duplicate_curves(root)  # the same slur / tie twice (merged readers)
+    drop_long_curves(root)       # a tie over > 2 bars, a slur over > 6 bars (user 2026-11-09)
     if stats is not None:
         stats.slurs_to_ties += n
         stats.chord_ties += k

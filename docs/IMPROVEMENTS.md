@@ -113,6 +113,10 @@ U8. **Tie and slur length (user: "ties can only be in 2 bars, slurs maximum in 6
 than 2 bars (Anastasia 3 Fagott, Keyboard 1, Klarinette 1 / 2, 4 Trompete), 1 slur over more than 6 bars (4 Violine 1).
 Plan: in the last pass with `drop_duplicate_curves`, drop a tie whose stop is not in the same or the next bar (and
 the dangling start), and a slur whose stop is more than 5 bars after its start.
+**Done 2026-11-11: -4** (`r14-h71` 12 243 -> `u8-c` 12 239; worst part +1 Ghost 20 Reed / Anastasia 3 PianoReduction).
+`musicxml.drop_long_curves` after `drop_duplicate_curves`; a tie stays when the bar after its start holds its pitch on
+the staff in another voice (a voice change the truth ties: Ghost 20 PianoReduction bar 29; dropping it was +4,
+`u8-a` +0 / `u8-b` ties only +1).
 
 U9. **Mute words (user: "con sord., sordino, con sordino all mean gedämpft; senza sord., senza sordino stop it").**
 `text.MUTE_ON` already takes "con sord." / "con sordino", `MUTE_OFF` "senza sord." / "senza sordino"; add "sordino",

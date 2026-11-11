@@ -231,3 +231,28 @@ def test_barline_vote_needs_two_books():
     a, b, c = part(3), part(3), part(3, mark_at=1)
     assert musicxml.share_barlines([[a], [b], [c]], 3) == 3     # 2 of 3 books: bar 1 in all 3, bar 2 out
     assert all(p[0].find("barline/repeat") is not None and p[1].find("barline") is None for p in (a, b, c))
+
+
+def test_tie_over_three_bars_and_slur_over_seven_are_dropped():
+    from lxml import etree
+    from omrbench.musicxml import drop_long_curves
+
+    def bar(k, *notes):
+        return f"<measure number='{k}'>{''.join(notes)}</measure>"
+
+    def tied(step, typ):
+        return (f"<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>4</duration>"
+                f"<tie type='{typ}'/><voice>1</voice><notations><tied type='{typ}'/></notations></note>")
+    bars = [bar(1, tied("C", "start"), tied("D", "start"), _n("E", 4, ("start", 1)), _n("F", 4, ("start", 2))),
+            bar(2, tied("D", "stop"))] + [bar(k) for k in range(3, 6)] \
+        + [bar(6, _n("E", 4, ("stop", 2))), bar(7, tied("C", "stop"))] + [bar(8, _n("F", 4, ("stop", 1)))]
+    root = etree.fromstring("<score-partwise><part id='P1'>" + "".join(bars) + "</part></score-partwise>")
+    assert drop_long_curves(root) == 2              # C tie 1 -> 7, slur 1 over 1 -> 8; slur 2 (1 -> 6) stays
+    assert len(root.findall(".//tied")) == len(root.findall(".//tie")) == 2
+    assert [s.get("number") for s in root.iter("slur")] == ["2", "2"]
+    # a voice change: bar 2 holds the C in voice 2, the tie 1 -> 3 stays
+    v2 = tied("C", "start").replace("<voice>1</voice>", "<voice>2</voice>").replace("<tie type='start'/>", "")
+    v2 = v2.replace("<notations><tied type='start'/></notations>", "")
+    root = etree.fromstring("<score-partwise><part id='P1'>" + bar(1, tied("C", "start")) + bar(2, v2)
+                            + bar(3, tied("C", "stop")) + "</part></score-partwise>")
+    assert drop_long_curves(root) == 0
