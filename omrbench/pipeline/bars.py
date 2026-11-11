@@ -247,6 +247,23 @@ def fit_measure_rests(bar: Bar, length: int) -> None:
     bar. Its rests become one measure rest; the <backup> after it moves along (later onsets stay)."""
     items = bar.items
     moves = ("note", "backup", "forward")
+    rests = [n for n in items if n.tag == "note" and n.find("grace") is None]
+    if rests and all(n.find("rest") is not None for n in rests):
+        # a bar of rests only (voices of several staves interleaved): one measure rest per staff
+        first = {}
+        for n in rests:
+            first.setdefault(n.findtext("staff", "1"), n)
+        keep = [e for e in items if e.tag not in moves]
+        for k, n in enumerate(first.values()):
+            if k:
+                b = etree.Element("backup")
+                etree.SubElement(b, "duration").text = str(length)
+                keep.append(b)
+            n.find("duration").text = str(length)
+            n.find("rest").set("measure", "yes")
+            keep.append(n)
+        items[:] = keep
+        return
     voices: dict[tuple[str, str], list[etree._Element]] = {}
     for n in items:
         if n.tag == "note" and n.find("grace") is None:
@@ -256,7 +273,7 @@ def fit_measure_rests(bar: Bar, length: int) -> None:
             continue
         idx = [items.index(n) for n in notes]       # now: an earlier voice may have removed rests
         total = sum(int(n.findtext("duration", "0") or 0) for n in notes)
-        if total == length or any(items[k].tag in moves for k in range(idx[0], idx[-1]) if k not in idx):
+        if any(items[k].tag in moves for k in range(idx[0], idx[-1]) if k not in idx):
             continue
         nxt = next((items[k] for k in range(idx[-1] + 1, len(items)) if items[k].tag in moves), None)
         if nxt is not None:
@@ -268,6 +285,22 @@ def fit_measure_rests(bar: Bar, length: int) -> None:
         notes[0].find("rest").set("measure", "yes")
         for n in notes[1:]:
             items.remove(n)
+    # a staff of rests only shows one full-bar rest (user 2026-11-09): a second voice's measure rest
+    # goes with the <backup> next to it
+    for staff in {st for st, _ in voices}:
+        ks = [k for k in voices if k[0] == staff]
+        if any(n.find("rest") is None for k in ks for n in voices[k]):
+            continue
+        for k in ks[1:]:
+            n = voices[k][0]
+            if n not in items or n.find("rest").get("measure") != "yes":
+                continue
+            i = items.index(n)
+            b = next((items[j] for j in (i - 1, i + 1) if 0 <= j < len(items) and items[j].tag == "backup"
+                      and items[j].findtext("duration") == str(length)), None)
+            if b is not None:
+                items.remove(n)
+                items.remove(b)
 
 
 def pad_short_bar(bar: Bar, length: int) -> None:

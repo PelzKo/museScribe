@@ -115,6 +115,12 @@ song 2 bar 58 / song 5 bar 145) or tuplets in PianoReduction (Anastasia 4, Ghost
 U7. **Full-bar rests (user: "a bar of only rests gets the full-bar rest, not single rests").** Done for whole voices
 of rests in R9 (`r11-a2`, -125). Check in the refreshed outputs which bars still show several rests (likely a second
 voice of rests next to a full bar rest, or rests in a bar with an empty voice 1), then extend `fit_measure_rests`.
+**Done 2026-11-11: -13** (`u9-a` 12 200 -> `u7-b` 12 187; worst part +1 Anastasia 4 Drums-Percussion). Left in `u6-b`:
+213 staves of rests only with several rests (140 two voices of plain rests, 26 a measure rest plus a second voice,
+47 one voice). `fit_measure_rests`: a voice of rests that fills the bar exactly also becomes a measure rest (it was
+skipped), a second voice's measure rest in a staff of rests goes (`u7-a` -9), and a bar of rests only on interleaved
+staves becomes one measure rest per staff (`u7-b` -4 more). Still left: 61 staves of rests next to a staff with
+notes, voices interleaved (mostly Keyboard 1 / 2 lower staff; Anastasia 4A Keyboard 1 bars 2-4).
 
 U8. **Tie and slur length (user: "ties can only be in 2 bars, slurs maximum in 6 bars").** `r12-a`: 5 ties over more
 than 2 bars (Anastasia 3 Fagott, Keyboard 1, Klarinette 1 / 2, 4 Trompete), 1 slur over more than 6 bars (4 Violine 1).

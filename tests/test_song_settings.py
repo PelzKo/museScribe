@@ -163,3 +163,32 @@ def test_long_bar_of_equal_notes_loses_its_last_notes():
     while B.cut_long_bar(bar, 4):               # 4 quarters in a 2/4 bar
         pass
     assert [e.findtext("duration") for e in bar.items] == ["2", "2"]
+
+
+def test_staff_of_rests_keeps_one_full_bar_rest():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def r(d, v):
+        return etree.fromstring(f"<note><rest/><duration>{d}</duration><voice>{v}</voice></note>")
+    bar = B.Bar([r(8, 1), etree.fromstring("<backup><duration>8</duration></backup>"),
+                 r(2, 2), r(2, 2), r(4, 2)], "crop")
+    B.fit_measure_rests(bar, 8)                 # 4/4: a whole rest and a voice of 1 + 1 + 2 quarters of rests
+    assert [(e.tag, e.findtext("duration")) for e in bar.items] == [("note", "8")]
+    assert bar.items[0].find("rest").get("measure") == "yes"
+
+
+def test_bar_of_rests_on_two_interleaved_staves_gets_one_measure_rest_each():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+    x = [etree.fromstring(s) for s in (
+        "<note><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>",
+        "<backup><duration>4</duration></backup>",
+        "<note><rest/><duration>4</duration><voice>5</voice><staff>2</staff></note>",
+        "<note><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>",
+        "<backup><duration>4</duration></backup>",
+        "<note><rest/><duration>4</duration><voice>5</voice><staff>2</staff></note>")]
+    bar = B.Bar(x, "crop", staves=2)
+    B.fit_measure_rests(bar, 8)
+    assert [(e.tag, e.findtext("duration"), e.findtext("staff")) for e in bar.items] == [
+        ("note", "8", "1"), ("backup", "8", None), ("note", "8", "2")]
