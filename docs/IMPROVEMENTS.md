@@ -104,6 +104,13 @@ especially underscores 147, 148, 149").** Song 5 Anya: the syllable pairing is s
 between two syllables) instead of inferring it; a syllable is `begin` / `middle` only when a hyphen follows it on
 the page; (2) an underscore line (a horizontal line at lyric height after a syllable) gives `<extend/>` on that
 syllable and `<extend type="continue|stop">` up to the line's end note; (3) test on song 5 bars 8–15, 147–149.
+**Rejected 2026-11-11 by the rule, measured +0 (`u5-a` vs `r43-a`; the metric does not score syllabic / extend,
+R35).** The check passes: `vector.read_lyric_marks` reads the "-" glyphs and the horizontal lines of the vector
+pages, `vocal._printed_syllabic` sets begin / middle / end only by a printed hyphen (carried across system breaks),
+`<extend/>` only by a printed line at the syllable's end. Song 5: "found" / "by" / "road." / "There" single,
+"a-round," begin / end, "re-cen-tly" begin / middle / end, "back" bar 147 extended; 27 extends in song 5 Voices
+(0 before); no `continue` / `stop` written (MuseScore runs an `<extend/>` to the next lyric). Code kept as a
+patch for the manager; worth taking once R35 scores lyric structure.
 
 U6. **Bar lengths (user: "Anastasia 3 or 5, bars 77, 79, 87, 115, 145, 156 have a wrong length; MuseScore says the bar
 is corrupt and the note values do not add up").** It is song 5 (`results/anastasia/5`, code of 2026-11-02): Keyboard 2
