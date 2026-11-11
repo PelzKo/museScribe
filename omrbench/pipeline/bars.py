@@ -303,10 +303,45 @@ def pad_short_bar(bar: Bar, length: int) -> None:
     items.insert(last + 1, rest)
 
 
-def cut_long_bar(bar: Bar, length: int) -> None:
+def rewind_voices(bar: Bar, length: int) -> None:
+    """MuseScore adds up voices that follow each other with no <backup> between (a corrupt bar, user
+    2026-11-09): in a bar longer than the bar length, a voice's first note right after another voice's
+    note goes back to the bar start. A <backup> past the bar start stops at it."""
+    items, cur, top, seen, prev = bar.items, 0, 0, set(), None
+    for el in items:
+        d = int(el.findtext("duration", "0") or 0)
+        cur += -d if el.tag == "backup" else d if el.tag == "forward" or (
+            el.tag == "note" and el.find("chord") is None and el.find("grace") is None) else 0
+        top = max(top, cur)
+    cur, i = 0, 0
+    while i < len(items):
+        el = items[i]
+        d = int(el.findtext("duration", "0") or 0)
+        if el.tag == "backup":
+            if d > cur:
+                el.find("duration").text = str(cur)
+            cur, prev = max(cur - d, 0), None
+        elif el.tag == "forward":
+            cur, prev = cur + d, None
+        elif el.tag == "note" and el.find("chord") is None and el.find("grace") is None:
+            k = (el.findtext("staff", "1"), el.findtext("voice", "1"))
+            if top > length and cur > 0 and prev is not None and k != prev and k not in seen:
+                b = etree.Element("backup")
+                etree.SubElement(b, "duration").text = str(cur)
+                items.insert(i, b)
+                i, cur = i + 1, 0
+            seen.add(k)
+            prev, cur = k, cur + d
+        i += 1
+    for el in [e for e in items if e.tag == "backup" and e.findtext("duration") == "0"]:
+        items.remove(el)
+
+
+def cut_long_bar(bar: Bar, length: int) -> bool:
     """A bar longer than the bar length: the voice segment (after its last <backup>) that ends last
     loses the overshoot from its last rest long enough, else from its longest note (a misread value;
-    chord notes alike, <type> / <dot> dropped so MuseScore takes the duration)."""
+    chord notes alike, <type> / <dot> dropped so MuseScore takes the duration). No note that long: the
+    segment's last note goes (with its chord); the caller repeats until the bar fits. Returns True on a cut."""
     items, cur, end, last = bar.items, 0, 0, None
     for i, el in enumerate(items):
         d = int(el.findtext("duration", "0") or 0)
@@ -318,7 +353,7 @@ def cut_long_bar(bar: Bar, length: int) -> None:
                 end, last = cur, i if el.tag == "note" else None
     over = end - length
     if last is None or length <= 0 or over <= 0:
-        return
+        return False
     first = last
     while first > 0 and items[first - 1].tag != "backup":
         first -= 1
@@ -326,26 +361,33 @@ def cut_long_bar(bar: Bar, length: int) -> None:
            and items[i].find("grace") is None]
     dur = {i: int(items[i].findtext("duration", "0") or 0) for i in seg}
     if any(items[i].tag == "forward" for i in range(first, last + 1)):
-        return
+        return False
     rests = [i for i in seg if items[i].find("rest") is not None and dur[i] > over]
     k = rests[-1] if rests else max(reversed(seg), key=lambda i: dur[i])
     if dur[k] <= over:
-        return
+        if len(seg) < 2:
+            return False
+        k = seg[-1]
+        over = dur[k]
     while last + 1 < len(items) and items[last + 1].tag == "note" and items[last + 1].find("chord") is not None:
         last += 1
     nxt = next((e for e in items[last + 1:] if e.tag in ("note", "backup", "forward")), None)
     if nxt is not None:
         back = int(nxt.findtext("duration", "0") or 0) - over
         if nxt.tag != "backup" or back < 0:
-            return
+            return False
         nxt.find("duration").text = str(back)
     j = k
     while j < len(items) and (j == k or (items[j].tag == "note" and items[j].find("chord") is not None)):
+        if over == dur[k]:
+            del items[j]
+            continue
         if (d := items[j].find("duration")) is not None:
             d.text = str(dur[k] - over)
         for t in items[j].findall("type") + items[j].findall("dot"):
             items[j].remove(t)
         j += 1
+    return True
 
 
 SIM = re.compile(r"^\(?sim(ile)?\.?\)?$", re.I)

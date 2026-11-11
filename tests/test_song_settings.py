@@ -137,3 +137,29 @@ def test_long_bar_loses_the_overshoot_from_its_longest_note():
     B.cut_long_bar(bar, 8)                      # 5 quarters in a 4/4 bar
     assert [e.findtext("duration") for e in bar.items] == ["2", "6", "6", "8", "8"]
     assert bar.items[1].find("type") is None
+
+
+def test_voice_after_another_voice_without_backup_rewinds_in_a_long_bar():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    def n(step, dur, voice, staff):
+        return etree.fromstring(f"<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>{dur}"
+                                f"</duration><voice>{voice}</voice><staff>{staff}</staff></note>")
+    bar = B.Bar([n("C", 6, 5, 2), n("E", 3, 1, 1), n("F", 3, 1, 1)], "crop", staves=2)
+    B.rewind_voices(bar, 6)                     # 3/4: voice 1 starts at the bar start, not after voice 5
+    assert [(e.tag, e.findtext("duration")) for e in bar.items] == [
+        ("note", "6"), ("backup", "6"), ("note", "3"), ("note", "3")]
+    ok = B.Bar([n("C", 3, 1, 1), n("E", 3, 2, 1)], "crop")
+    B.rewind_voices(ok, 6)                      # a voice change mid-bar that fits stays
+    assert len(ok.items) == 2
+
+
+def test_long_bar_of_equal_notes_loses_its_last_notes():
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+    bar = B.Bar([etree.fromstring(f"<note><pitch><step>E</step><octave>3</octave></pitch><duration>2</duration>"
+                                  f"<voice>1</voice></note>") for _ in range(4)], "crop")
+    while B.cut_long_bar(bar, 4):               # 4 quarters in a 2/4 bar
+        pass
+    assert [e.findtext("duration") for e in bar.items] == ["2", "2"]

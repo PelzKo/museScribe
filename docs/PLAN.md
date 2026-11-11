@@ -369,7 +369,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   Its MusicXML is not the printed staff: estimated time on every crop, multi-rests written out, an empty measure
   before a repeat start (`bars.homr_as_printed` undoes all three); its dynamics win over Audiveris' in a bar; a
   second voice may cover a part of the bar (`bar_ok(side_voices=True)`). Check these again at the next bump.
-- User requests U6–U9 (2026-11-11): U8 `u8-c` **12 239** (Anastasia 9 022, Ghost 3 217), ties <= 2 bars, slurs <= 6.
+- User requests U6–U9 (2026-11-11): U8 `u8-c` **12 239** (Anastasia 9 022, Ghost 3 217), ties <= 2 bars, slurs <= 6; U6 `u6-b` **12 200**
+  (Anastasia 8 995, Ghost 3 205), no voice past the bar end.
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

@@ -104,6 +104,13 @@ voice is split by `<forward>`, so the bar's length is the sum. Plan: a last pass
 `write_score`: each voice's notes must end at or before the bar length; a voice that starts after another voice's
 end without a `<backup>` gets one (rewind to the bar start), else the overflow is cut as in `cut_long_bar`. Check:
 MuseScore converts every song without `-f` ("corrupted") where the bar counts agree.
+**Done 2026-11-11: -39** (`u8-c` 12 239 -> `u6-b` 12 200; worst part +1 Anastasia 5 Keyboard 1 / 2). `bars.rewind_voices`:
+in a bar longer than the bar length, a voice's first note right after another voice's note (no `<backup>`) goes back
+to the bar start (`u6-a` -23, Anastasia 3 Keyboard 1 -23), a `<backup>` past the bar start stops at it;
+`cut_long_bar` runs until the bar fits and, when no note is long enough for the overshoot, drops the segment's last
+note (two whole notes in a 4/4 bar, four slashes in 2/4: Ghost 4 / 5 Guitar -5 each). Still too long in `u6-b` (bar
+pass check, not MuseScore): 9 parts, a `<forward>` in the overflowing segment (drums Anastasia 3 / 4, Keyboard 1
+song 2 bar 58 / song 5 bar 145) or tuplets in PianoReduction (Anastasia 4, Ghost 13 / 20).
 
 U7. **Full-bar rests (user: "a bar of only rests gets the full-bar rest, not single rests").** Done for whole voices
 of rests in R9 (`r11-a2`, -125). Check in the refreshed outputs which bars still show several rests (likely a second
