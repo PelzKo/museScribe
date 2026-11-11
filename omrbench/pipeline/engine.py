@@ -478,8 +478,12 @@ class Pipeline(Engine):
         # MuseScore instruments: split parts / singers by name, a one-part score by the book's `sound`
         sounds = {i["name"]: i for i in sample.meta.get("instruments") or []
                   if isinstance(i, dict) and i.get("sound")}
-        sounds.update(sample.meta.get("voice_sounds") or {})
-        single = {k: sample.meta[k] for k in ("sound", "ms_name") if sample.meta.get(k)}
+        # U10: with `voice_names` a singer is shown by its label ("Dmitry") or that name (Men -> Männer)
+        voice_names = sample.meta.get("voice_names")
+        # the import name stays the sound id: labels MuseScore knows ("Voice 1") would pick another voice
+        sounds.update({k: {"sound": v, "ms_name": v, "german": voice_names.get(k, k) if voice_names else None}
+                       for k, v in (sample.meta.get("voice_sounds") or {}).items()})
+        single = {k: sample.meta[k] for k in ("sound", "ms_name", "german") if sample.meta.get(k)}
         for root in [score, *(files or {}).values()]:
             musicxml.set_sounds(root, sounds, single)
         if plain := sample.meta.get("plain"):

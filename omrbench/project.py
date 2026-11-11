@@ -168,6 +168,14 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
     if entries and not drums and "sound" not in meta and \
             (snd := {**(library.get(entries[0][0]) or {}), **entries[0][1]}.get("sound")):
         meta["sound"] = snd     # the first instrument, unless the book has its own; split parts go by name
+    if entries and not drums and "german" not in meta and \
+            (g := {**(library.get(entries[0][0]) or {}), **entries[0][1]}.get("german")):
+        meta["german"] = g
+    # U10: "Flöte {n}" takes the book's number (Reed 2 -> Flöte 2)
+    num = m.group() if (m := re.search(r"\d+$", row["file"])) else ""
+    for d in [meta, *(i for i in meta.get("instruments") or [] if isinstance(i, dict))]:
+        if isinstance(d.get("german"), str):
+            d["german"] = d["german"].format(n=num).strip()
     meta.update(extra)
     meta = {k: v for k, v in meta.items() if v is not None}  # "lyrics: null" drops a part default
     order = KEY_ORDER + [k for k in meta if k not in KEY_ORDER and k != "instruments"] + ["instruments"]

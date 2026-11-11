@@ -6,15 +6,46 @@
 #                                             workbook's `instruments` cell (the cell wins)
 # ms_name: the instrument name written for MuseScore's import when the sound id alone picks another
 # MuseScore instrument (names win over sounds; tested with MuseScore 4.7, IMPROVEMENTS U1)
+# german: the part / instrument name shown in MuseScore, as in the truths (IMPROVEMENTS U10); "{n}" = the
+# book's number (Reed 2 -> Flöte 2). voice_names: singer label -> shown name.
 anastasia:
+  parts:
+    Violin 1: {german: Violine 1}
+    Violin 2: {german: Violine 2}
+    Cello: {german: Violoncello}
+    Bass: {german: Kontrabass}
+    Horn: {german: Horn in F}
+    Trumpet: {german: Trompete in B}
+    Trombone: {german: Posaune}
+    Reed 3: {german: Fagott}
+    PianoReduction: {voice_names: {Women: Frauen, Men: Männer}}
   instruments:
-    Drum Set: {sound: drum.group.set, ms_name: Drumset (common)}      # the truths: drum-kit-5 (Schlagzeug)
+    Drum Set: {sound: drum.group.set, ms_name: Drumset (common), german: Schlagzeug}  # the truths: drum-kit-5
+    Clarinet: {german: "Klarinette in B {n}"}
+    Flute: {german: "Flöte {n}"}
+    Oboe: {german: Oboe}
+    English Horn: {german: Englisch Horn}
+    Bassoon: {german: Fagott}
+    Piccolo: {german: Piccolo}
+    Tambourine: {german: Tamburin}
+    Timpani: {german: Pauken}
+    Triangle: {german: Triangel}
+    Bell Tree: {german: Glockenbaum}
+    Mark Tree: {german: Glockenbaum}          # its sound is the bell tree (song 2's truth); song 5 below
+    Wood Block: {german: Holzblöcke}
+    Glock: {german: Glockenspiel}
+    Castanets: {german: Kastagnetten}
+    Temple Blocks: {german: Tempelblöcke}
+    Cowbell: {german: Kuhglocke}
+    Crotales: {german: Crotales}
+    Xylophone: {german: Xylophon}
+    Cymbal: {german: Splash-Becken}
   songs:
     "3":
-      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal}   # Hängendes Becken (crash-cymbal)
+      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal, german: Hängendes Becken}  # crash-cymbal
     "5":
-      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal}   # Becken (crash-cymbal)
-      Mark Tree: {sound: metal.bells.mark-tree}                        # Mark Tree (mark-tree)
+      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal, german: Hängendes Becken}  # truth "Becken"
+      Mark Tree: {sound: metal.bells.mark-tree, german: Mark Tree}                              # mark-tree
 ghost:
   instruments:
     Drum Set: {sound: drum.group.set}       # the drum legend's kit pieces alone import as a synthesizer

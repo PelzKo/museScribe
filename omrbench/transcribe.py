@@ -180,7 +180,8 @@ def combine(files: list[tuple[str, Path]], out: Path) -> Path:
         parts = r.findall("part-list/score-part")
         for sp in parts:
             pn = sp.findtext("part-name") or ""
-            labels.append(f"{name} – {pn}" if len(parts) > 1 and pn else name)
+            shown = sp.findtext("part-name-display/display-text")      # U10: the German name
+            labels.append(shown or (f"{name} – {pn}" if len(parts) > 1 and pn else name))
     score = musicxml.merge_parts(roots)
     # title/credits of the first piece don't describe the combination
     for el in score.findall("credit") + score.findall("work") + score.findall("movement-title"):

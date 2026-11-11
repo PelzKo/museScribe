@@ -378,7 +378,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   prints dropped (playing words kept); R43 `r43-a` **11 499** (Anastasia 8 351, Ghost 3 148), one-instrument
   percussion parts on the truth's line; U1 `u1-c` 11 499 (metric-neutral), percussion parts import as the truth's
   MuseScore instrument; U2 `u2-a` 11 499 (metric-neutral), "hide if empty" on every part of combined.mscz.
-  **Reference from now on: `u2-a`.**
+  U10 `u10-c` 11 499 (metric-neutral), German part / instrument names in combined.mscz.
+  **Reference from now on: `u10-c`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

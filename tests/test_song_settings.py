@@ -247,3 +247,21 @@ def test_hide_empty_staves(tmp_path):
         mscx, mss = z.read("x.mscx").decode(), z.read("score_style.mss").decode()
     assert mscx.count("<hideWhenEmpty>on</hideWhenEmpty>") == 2
     assert "<hideEmptyStaves>0<" in mss and "<dontHideStavesInFirstSystem>1<" in mss
+
+
+def test_german_names_take_the_book_number():
+    from lxml import etree
+    from omrbench.musicxml import set_sounds
+    from omrbench.project import part_meta
+    show = {"instruments": {"Clarinet": {"sound": "c", "german": "Klarinette in B {n}"},
+                            "Oboe": {"sound": "o", "german": "Oboe"}}}
+    row = {"file": "Reed 2", "pages": "1", "skip": "", "instruments": "Clarinet, Oboe", "extra": ""}
+    ins = part_meta(row, show, {})["instruments"]
+    assert [i["german"] for i in ins] == ["Klarinette in B 2", "Oboe"]
+    assert part_meta({**row, "instruments": "Clarinet"}, show, {})["german"] == "Klarinette in B 2"
+    root = etree.fromstring("<score-partwise><part-list><score-part id='P1'><part-name>Clarinet</part-name>"
+                            "</score-part></part-list><part id='P1'/></score-partwise>")
+    set_sounds(root, {"Clarinet": ins[0]})
+    assert root.findtext(".//part-name") == "Clarinet"          # bench / workbook name stays
+    assert root.findtext(".//part-name-display/display-text") == "Klarinette in B 2"
+    assert root.findtext(".//instrument-name") == "Klarinette in B 2"

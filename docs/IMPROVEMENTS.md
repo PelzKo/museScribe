@@ -181,6 +181,19 @@ singers keep their labels (Frauen, Männer for Women / Men). The number n is the
 or the truth's. Source: a `german` name per instrument in the `show.yaml` library (one place), used by
 `set_sounds` for `<part-name>` and `<instrument-name>`. Not scored (bench maps by the workbook). Check: the
 combined.mscz part list reads like the truth's.
+**Done 2026-11-11, metric-neutral user request (+0, `u2-a` 11 499 -> `u10-c` 11 499, no part changed).** The
+`german` names are in `show_overrides.yaml` (anastasia `parts:` / `instruments:` / `songs:`; data/ is read-only to
+the agents: **user, move them into show.yaml**), "{n}" = the book's number (Reed 2 -> Flöte 2; song 1's truth numbers
+the clarinets 1 / 2 from Reed 2 / 3, the output says 2 / 3). `set_sounds` writes the German name as
+`<part-name-display>` (MuseScore's part name) and `<instrument-name>`; `<part-name>` stays English, because the bench,
+the workbook truth cells, `plainArticulation` and `share_marks` go by it. `combine` labels a part by its display name.
+PianoReduction `voice_names: {Women: Frauen, Men: Männer}`: Anastasia singers are shown by their label ("Dmitry"),
+their import name stays the sound id ("Voice 1" as a name made a generic voice). Check (`u10-c`): song 4 / 5
+combined.mscz parts read Violine 1 ... Kontrabass, Piccolo, Flöte n, Oboe, Englisch Horn, Klarinette in B n, Fagott,
+Horn in F, Trompete in B, Posaune, Keyboard 1 / 2, Hängendes Becken, Crotales, Triangel, Glockenspiel, Glockenbaum,
+Pauken, Tamburin, Schlagzeug, Holzblöcke, Kastagnetten, Xylophon, Frauen, Männer, singer labels; side effect: Oboe now
+imports as `oboe` (was `baroque-oboe`). Open: singers without a `voice_sounds` entry (Anastasia 4 "Solo", "Black
+Marketeer #1") keep the long label and import as piano; Ghost keeps English names (its truths are English).
 
 U11. **Anastasia Klavierauszug piano (user 2026-11-09: "can be ignored in the future, both in generating and in
 scoring").** Scoring: done in the workbook (`Piano=-`). Generating: a `show.yaml` meta key (`piano_part: false`)

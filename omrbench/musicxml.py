@@ -586,8 +586,8 @@ UNPITCHED_MIDI = {"metal.triangle": 82, "drum.tambourine": 55, "metal.cymbal.spl
 def set_sounds(root: etree._Element, sounds: dict, single=None) -> int:
     """Give every <score-part> without instruments a <score-instrument> with its MusicXML sound id
     (`sounds` by part name; `single` for a score of one part), so MuseScore imports the right
-    instrument instead of a piano. A value is the sound id or {sound, ms_name}. The instrument name is
-    `ms_name`, else the id: a name MuseScore knows ("Bass", "Voice") wins over the sound (tested
+    instrument instead of a piano. A value is the sound id or {sound, ms_name, german}. `german` becomes the
+    <part-name-display> (MuseScore's part name). The instrument name is `ms_name`, else `german`, else the id: a name MuseScore knows ("Bass", "Voice") wins over the sound (tested
     2026-11-01). Parts with instruments only get the sound on them (drum legend). A part with unpitched notes also gets a <midi-instrument>; a one-sound one
     (UNPITCHED_MIDI) its key, and its notes play it. Returns the parts set."""
     sps = root.findall("part-list/score-part")
@@ -598,6 +598,12 @@ def set_sounds(root: etree._Element, sounds: dict, single=None) -> int:
         spec = spec if isinstance(spec, dict) or not spec else {"sound": spec}
         if not spec or not spec.get("sound"):
             continue
+        if spec.get("german"):      # U10: shown name; bench and the workbook keep using <part-name>
+            for el in sp.findall("part-name-display"):
+                sp.remove(el)
+            pd = etree.Element("part-name-display")
+            etree.SubElement(pd, "display-text").text = spec["german"]
+            sp.find("part-name").addnext(pd) if sp.find("part-name") is not None else sp.insert(0, pd)
         if (have := sp.findall("score-instrument")):
             if not any(x.find("instrument-sound") is not None for x in have):
                 for x in have:      # a drum legend's kit pieces (drumkit.apply): the kit's sound
@@ -606,7 +612,7 @@ def set_sounds(root: etree._Element, sounds: dict, single=None) -> int:
             continue
         iid = f"{sp.get('id')}-I1"
         si = etree.Element("score-instrument", id=iid)
-        etree.SubElement(si, "instrument-name").text = spec.get("ms_name") or spec["sound"]
+        etree.SubElement(si, "instrument-name").text = spec.get("ms_name") or spec.get("german") or spec["sound"]
         etree.SubElement(si, "instrument-sound").text = spec["sound"]
         head = ("part-name", "part-name-display", "part-abbreviation", "part-abbreviation-display", "group")
         sp.insert(max((i for i, c in enumerate(sp) if c.tag in head), default=-1) + 1, si)
