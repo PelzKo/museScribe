@@ -1,0 +1,20 @@
+# Keys for data/<show>/show.yaml that the agents could not write there (data/ is read-only to them).
+# omrbench/project.py merges them under the show file (show.yaml wins where both set a key); move them
+# into show.yaml when convenient and delete them here.
+#   instruments / parts / meta   as in show.yaml
+#   songs: {<song>: {<instrument>: {keys}}}   per-song instrument keys, like "Cymbal (sound: ...)" in the
+#                                             workbook's `instruments` cell (the cell wins)
+# ms_name: the instrument name written for MuseScore's import when the sound id alone picks another
+# MuseScore instrument (names win over sounds; tested with MuseScore 4.7, IMPROVEMENTS U1)
+anastasia:
+  instruments:
+    Drum Set: {sound: drum.group.set, ms_name: Drumset (common)}      # the truths: drum-kit-5 (Schlagzeug)
+  songs:
+    "3":
+      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal}   # Hängendes Becken (crash-cymbal)
+    "5":
+      Cymbal: {sound: metal.cymbal.crash, ms_name: Suspended Cymbal}   # Becken (crash-cymbal)
+      Mark Tree: {sound: metal.bells.mark-tree}                        # Mark Tree (mark-tree)
+ghost:
+  instruments:
+    Drum Set: {sound: drum.group.set}       # the drum legend's kit pieces alone import as a synthesizer

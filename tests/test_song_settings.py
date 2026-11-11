@@ -210,3 +210,24 @@ def test_hairpins_hang_on_the_nearest_note():
     assert [e.tag if e.tag == "note" else e.find("direction-type/wedge").get("type") for e in bar.items] == \
         ["crescendo", "note", "note", "note", "stop"]
     assert not any(e.find("offset") is not None for e in bar.items)
+
+
+def test_song_override_and_unpitched_sound():
+    from lxml import etree
+    from omrbench.musicxml import set_sounds
+    from omrbench.project import part_meta, under
+    show = under({"songs": {"5": {"Cymbal": {"sound": "metal.cymbal.crash", "ms_name": "Suspended Cymbal"}}}},
+                 {"instruments": {"Cymbal": {"sound": "metal.cymbal.splash"}, "Glock": {"sound": "g"}}})
+    row = {"file": "Drums", "pages": "1", "skip": "", "instruments": "Cymbal, Glock", "extra": "type: drums"}
+    assert part_meta(row, show, {"song": "1"})["instruments"][0]["sound"] == "metal.cymbal.splash"
+    cym = part_meta(row, show, {"song": "5"})["instruments"][0]
+    assert cym["sound"] == "metal.cymbal.crash" and cym["ms_name"] == "Suspended Cymbal"
+    root = etree.fromstring(
+        "<score-partwise><part-list><score-part id='P1'><part-name>Cymbal</part-name></score-part></part-list>"
+        "<part id='P1'><measure><note><unpitched><display-step>E</display-step><display-octave>4"
+        "</display-octave></unpitched><duration>4</duration><voice>1</voice></note></measure></part>"
+        "</score-partwise>")
+    assert set_sounds(root, {"Cymbal": cym}) == 1
+    assert root.findtext(".//score-instrument/instrument-name") == "Suspended Cymbal"
+    assert root.findtext(".//midi-instrument/midi-unpitched") == "58"
+    assert [c.tag for c in root.find(".//note")][2] == "instrument"

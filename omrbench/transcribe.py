@@ -481,6 +481,17 @@ def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict) -
             LOG.error(f"{mscz.name} FAILED {type(e).__name__}: {e}")
 
 
+def combine_run(cfg: dict, project: str, run: str, songs=None) -> None:
+    """Write combined.musicxml / .mscz into every song folder of results/<show>/runs/<run>/."""
+    root, groups, jobs, _ = project_jobs(cfg, project, songs)
+    for g in groups:
+        d = root / "runs" / run / g
+        files = [(Path(o).stem, d / o) for j in jobs if j.group == g
+                 for o in output_names(j.name, j.meta) if (d / o).exists()]
+        if files:
+            _combine(g, files, d, cfg)
+
+
 def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine: str, dst_run: str,
                    engine: str, force: bool = False) -> int:
     """Re-run only the pipeline assembly (with `engine`'s bench.yaml options) on the work dirs of

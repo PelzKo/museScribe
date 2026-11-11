@@ -61,6 +61,19 @@ the `<Instrument>` block of the part for the one MuseScore writes for that instr
 by MuseScore, e.g. the truth). Check: open each combined.mscz, the `<Instrument id>` of every percussion part equals
 the truth's. The metric's `instrument` category reads the output MusicXML, so it does not see this; add the check
 to the bench report (instrument id after the round trip).
+**Done 2026-11-11, metric-neutral user request (+0, `r43-a` 11 499 -> `u1-c` 11 499, no part changed); check 33 of 33
+percussion parts (Anastasia 30, Ghost 3) equal the truth's instrument id.** `musicxml.set_sounds`: a part with unpitched
+notes gets a `<midi-instrument>` (MuseScore 4.7 imports it as the synthesizer / piano without one); one-sound
+instruments (`UNPITCHED_MIDI`) get their GM key and their notes point at it, a drum set key 39 (notes keep their
+positions); reader leftover note `<instrument>` ids are dropped (they made the Xylophone a synthesizer); a drum legend's
+kit pieces get the kit's sound. `ms_name` = instrument name for the import where the sound id picks another
+instrument (names win: "Suspended Cymbal" -> crash-cymbal, "Drumset (common)" -> drum-kit-5). Show keys the agents
+could not write into `data/` are in `show_overrides.yaml` (merged under show.yaml; `songs:` = per-song instrument
+keys like the workbook brackets): Anastasia Drum Set sound + ms_name, songs 3 / 5 Cymbal crash, song 5 Mark Tree
+mark-tree; Ghost Drum Set sound. **User: move them into show.yaml / the workbook cells** ("Cymbal (sound:
+metal.cymbal.crash, ms_name: Suspended Cymbal)" in songs 3 / 5, "Mark Tree (sound: metal.bells.mark-tree)" in
+song 5). R43's one-line rule leaves a `drum.group.set` part alone. `scripts/reassemble.py --combine` writes
+combined.musicxml / .mscz into the run folder; `omrbench bench` then reports the check ("Percussion instruments").
 
 U2. **Hide empty staves (user 2026-11-09).** The truths keep the style `hideEmptyStaves` 0 and
 `dontHideStavesInFirstSystem` 1, and set `<hideWhenEmpty>on</hideWhenEmpty>` on every `<Part>` ("Hide if empty:

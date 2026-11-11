@@ -2115,10 +2115,10 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
 def one_line_position(changes: dict) -> str | None:
     """R43: the staff position of every hit of a one-instrument percussion part (no kit), as in the
     truths: the instrument's `line`, else D4 for a wood block, else E4 (MuseScore's single line). A
-    percussion instrument with no `sound` (a drum set not marked `kit`) keeps its positions."""
+    percussion instrument with no `sound` or a drum set's (not marked `kit`) keeps its positions."""
     ins = list(changes.values())
-    if not ins or any(str(x.get("clef", "")).lower() != "percussion" or x.get("kit") or not x.get("sound")
-                      for x in ins):
+    if not ins or any(str(x.get("clef", "")).lower() != "percussion" or x.get("kit")
+                      or x.get("sound") in (None, "", "drum.group.set") for x in ins):
         return None
     lines = {x.get("line") or ("D4" if x.get("sound") == "wood.wood-block" else "E4") for x in ins}
     return lines.pop() if len(lines) == 1 else None

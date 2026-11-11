@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from omrbench import config as config_mod  # noqa: E402
 from omrbench import log as logmod  # noqa: E402
-from omrbench.transcribe import reassemble_run  # noqa: E402
+from omrbench.transcribe import combine_run, reassemble_run  # noqa: E402
 
 
 def main() -> int:
@@ -27,12 +27,15 @@ def main() -> int:
     ap.add_argument("--engine", default="pipeline", help="bench.yaml engine whose options to assemble with")
     ap.add_argument("--work-engine", default="pipeline", help="engine folder of the work dirs in --from")
     ap.add_argument("--songs")
+    ap.add_argument("--combine", action="store_true", help="also write combined.musicxml / .mscz per song")
     ap.add_argument("-c", "--config", default="bench.yaml")
     a = ap.parse_args()
     cfg = config_mod.load(Path(a.config))
     logmod.setup(Path(cfg["results_dir"]) / a.show / "runs" / a.dst)
     failed = reassemble_run(cfg, a.show, a.songs.split(",") if a.songs else None, src_run=a.src,
                             work_engine=a.work_engine, dst_run=a.dst, engine=a.engine, force=True)
+    if a.combine:
+        combine_run(cfg, a.show, a.dst, a.songs.split(",") if a.songs else None)
     return 1 if failed else 0
 
 

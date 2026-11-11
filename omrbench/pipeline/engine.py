@@ -476,11 +476,12 @@ class Pipeline(Engine):
             if sample.score_type == "drums" and (kit := drumkit.kit_for(sample.meta.get("show"))):
                 LOG.info(f"drum legend: {drumkit.apply(score, kit)} notes snapped to a kit position")
         # MuseScore instruments: split parts / singers by name, a one-part score by the book's `sound`
-        sounds = {i["name"]: i["sound"] for i in sample.meta.get("instruments") or []
+        sounds = {i["name"]: i for i in sample.meta.get("instruments") or []
                   if isinstance(i, dict) and i.get("sound")}
         sounds.update(sample.meta.get("voice_sounds") or {})
+        single = {k: sample.meta[k] for k in ("sound", "ms_name") if sample.meta.get(k)}
         for root in [score, *(files or {}).values()]:
-            musicxml.set_sounds(root, sounds, sample.meta.get("sound"))
+            musicxml.set_sounds(root, sounds, single)
         if plain := sample.meta.get("plain"):
             # workbook `plainArticulation`: these parts get notes, ties and dots only (True = every part)
             for root in [score, *(files or {}).values()]:

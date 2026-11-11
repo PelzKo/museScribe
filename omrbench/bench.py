@@ -27,8 +27,11 @@ from __future__ import annotations
 import csv
 import subprocess
 import json
+import zipfile
 from datetime import datetime
 from pathlib import Path
+
+from lxml import etree
 
 from . import log as logmod
 from . import musicxml
@@ -101,6 +104,14 @@ def resolve(part: project_mod.Part, outputs: list[tuple[str, object]]) -> tuple[
                             f"{'instruments' if part.instruments else 'output parts'}; "
                             "use 'Output=Truth' entries")
     return mapping, sorted(unused.values()), problems
+
+
+def mscz_instruments(path: Path) -> list[tuple[str, str]]:
+    """(long name, MuseScore instrument id) of every part of a .mscz, in score order."""
+    with zipfile.ZipFile(path) as z:
+        root = etree.fromstring(z.read(next(n for n in z.namelist() if n.endswith(".mscx"))))
+    return [(i.findtext("longName") or "", i.get("id") or "")
+            for i in (p.find("Instrument") for p in root.iter("Part")) if i is not None]
 
 
 def _sum(rows: list[dict], variant: str) -> dict:
@@ -209,6 +220,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
              f"{'run ' + run if run else 'latest outputs'} -> {out_dir}")
 
     rows: list[dict] = []
+    instruments: list[dict] = []
     perf: list[dict] = []
     songs_out: list[dict] = []
     problems: list[str] = []
@@ -232,8 +244,16 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
             used |= unfinished
             song_rows = []
             song_roots = []
+            # U1: percussion parts of the run's combined.mscz against the truth's MuseScore instrument
+            comb = src_root / song.id / "combined.mscz"
+            out_ids = [i for _, i in mscz_instruments(comb)] if comb.exists() else []
+            truth_ids = {_norm(n): i for f in song.truth_files if f.suffix == ".mscz"
+                         for n, i in mscz_instruments(f)}
+            pos = 0                 # combined.mscz has every row's parts in workbook order
             for part in song.parts:
                 if not part.truth:
+                    pos += sum(len(musicxml.load(f).findall("part")) for n in output_names(part.name, part.meta)
+                               if (f := src_root / song.id / n).exists()) if out_ids else 0
                     continue
                 pf = _perf(root, src_root, f"{proj.name}-{song.id}--{part.name}", manifest.get(part.name) or {})
                 if pf:
@@ -249,6 +269,8 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                     song_roots += oroots
                 named = _unique([(n, p, r) for r in oroots for n, p in truth_mod.parts(r)])
                 outputs = [(n, p) for n, p, _ in named]
+                at = {n: pos + k for k, (n, _, _) in enumerate(named)}
+                pos += len(named)
                 owner = {n: r for n, _, r in named}
                 mapping, unmapped, probs = resolve(part, outputs)
                 problems += [f"{song.id}/{p}" for p in probs]
@@ -269,6 +291,11 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
                         continue
                     tn, tpart = tparts[_norm(tname)]
                     used.add(_norm(tname))
+                    if out_ids and part.meta.get("type") == "drums":
+                        for o in onames:
+                            got = out_ids[at[o]] if at[o] < len(out_ids) else None
+                            instruments.append({"song": song.id, "output": o, "truth": tn, "id": got,
+                                                "truth_id": truth_ids.get(_norm(tn))})
                     pred = [n for o in onames for n in notef1.notes(el[o])]
                     tru = notef1.notes(tpart)
                     row = {"song": song.id, "part": part.name, "outputs": onames, "truth": tn,
@@ -304,6 +331,7 @@ def bench(cfg: dict, show: str, *, songs=None, run: str | None = None, full: boo
     prev = _previous(root / "bench", out_dir)
     data = {"show": proj.name, "source": str(src_root), "time": datetime.now().isoformat(timespec="seconds"),
             "previous": prev.get("_id"), "songs": songs_out, "rows": rows, "perf": perf, "problems": problems,
+            "instruments": instruments,
             "total": {v: _sum(rows, v) for v in notef1.VARIANTS}}
     for s in songs_out:
         s["edits"] = _sum_edits([r for r in rows if r["song"] == s["song"]], [s["system"]])
@@ -448,6 +476,13 @@ def _report(data: dict, prev: dict) -> str:
     lines += [f"| {c} | {el[c]['pred']} | {el[c]['gt']} | {el[c]['tp']} | {_f(el[c]['precision'])} | "
               f"{_f(el[c]['recall'])} | {_f(el[c]['f1'])} |" for c in cats]
     lines.append("")
+    if ins := data.get("instruments"):
+        bad = [x for x in ins if x["id"] != x["truth_id"]]
+        lines += ["## Percussion instruments (combined.mscz)", "",
+                  f"MuseScore instrument id of each percussion part after the round trip: "
+                  f"**{len(ins) - len(bad)} of {len(ins)}** equal the truth's.", ""]
+        lines += [f"- {x['song']} {x['output']} → {x['truth']}: {x['id']} (truth {x['truth_id']})" for x in bad]
+        lines.append("")
     perf = data.get("perf") or []
     if perf:
         def n(x, fmt="{:.0f}"):

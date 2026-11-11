@@ -576,22 +576,56 @@ def play_techniques(root: etree._Element) -> int:
     return n
 
 
-def set_sounds(root: etree._Element, sounds: dict, single: str | None = None) -> int:
+# General MIDI key (1-based, as <midi-unpitched>) of one-sound unpitched instruments: MuseScore imports a
+# part with unpitched notes as its instrument only with a <midi-instrument> (else synthesizer / piano)
+UNPITCHED_MIDI = {"metal.triangle": 82, "drum.tambourine": 55, "metal.cymbal.splash": 56,
+                  "metal.cymbal.crash": 58, "metal.bells.bell-tree": 85, "metal.bells.mark-tree": 85,
+                  "wood.wood-block": 77, "wood.castanets": 86, "metal.cowbell": 57}
+
+
+def set_sounds(root: etree._Element, sounds: dict, single=None) -> int:
     """Give every <score-part> without instruments a <score-instrument> with its MusicXML sound id
     (`sounds` by part name; `single` for a score of one part), so MuseScore imports the right
-    instrument instead of a piano. The id is also the instrument name: a name MuseScore knows
-    ("Bass", "Voice") would win over the sound (tested 2026-11-01). Returns the parts set."""
+    instrument instead of a piano. A value is the sound id or {sound, ms_name}. The instrument name is
+    `ms_name`, else the id: a name MuseScore knows ("Bass", "Voice") wins over the sound (tested
+    2026-11-01). Parts with instruments only get the sound on them (drum legend). A part with unpitched notes also gets a <midi-instrument>; a one-sound one
+    (UNPITCHED_MIDI) its key, and its notes play it. Returns the parts set."""
     sps = root.findall("part-list/score-part")
+    parts = {p.get("id"): p for p in root.findall("part")}
     n = 0
     for sp in sps:
-        snd = sounds.get((sp.findtext("part-name") or "").strip()) or (single if len(sps) == 1 else None)
-        if not snd or sp.find("score-instrument") is not None:
+        spec = sounds.get((sp.findtext("part-name") or "").strip()) or (single if len(sps) == 1 else None)
+        spec = spec if isinstance(spec, dict) or not spec else {"sound": spec}
+        if not spec or not spec.get("sound"):
             continue
-        si = etree.Element("score-instrument", id=f"{sp.get('id')}-I1")
-        etree.SubElement(si, "instrument-name").text = snd
-        etree.SubElement(si, "instrument-sound").text = snd
+        if (have := sp.findall("score-instrument")):
+            if not any(x.find("instrument-sound") is not None for x in have):
+                for x in have:      # a drum legend's kit pieces (drumkit.apply): the kit's sound
+                    etree.SubElement(x, "instrument-sound").text = spec["sound"]
+                n += 1
+            continue
+        iid = f"{sp.get('id')}-I1"
+        si = etree.Element("score-instrument", id=iid)
+        etree.SubElement(si, "instrument-name").text = spec.get("ms_name") or spec["sound"]
+        etree.SubElement(si, "instrument-sound").text = spec["sound"]
         head = ("part-name", "part-name-display", "part-abbreviation", "part-abbreviation-display", "group")
         sp.insert(max((i for i, c in enumerate(sp) if c.tag in head), default=-1) + 1, si)
+        notes = list(parts[sp.get("id")].iter("note")) if sp.get("id") in parts else []
+        for nt in notes:        # reader leftovers ("P2-I44") make MuseScore import a synthesizer
+            for el in nt.findall("instrument"):
+                nt.remove(el)
+        unpitched = [nt for nt in notes if nt.find("unpitched") is not None]
+        if unpitched:
+            mi = etree.Element("midi-instrument", id=iid)
+            etree.SubElement(mi, "midi-channel").text = "10"
+            # a drum set needs a key to import as the named kit; its notes keep their own positions
+            if key := UNPITCHED_MIDI.get(spec["sound"]) or (39 if spec["sound"] == "drum.group.set" else None):
+                etree.SubElement(mi, "midi-unpitched").text = str(key)
+            if spec["sound"] in UNPITCHED_MIDI:
+                for nt in unpitched:
+                    at = max((i for i, c in enumerate(nt) if c.tag in ("duration", "tie")), default=-1)
+                    nt.insert(at + 1, etree.Element("instrument", id=iid))
+            si.addnext(mi)
         n += 1
     return n
 
