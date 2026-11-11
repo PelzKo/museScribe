@@ -215,11 +215,11 @@ def test_hairpins_hang_on_the_nearest_note():
 def test_song_override_and_unpitched_sound():
     from lxml import etree
     from omrbench.musicxml import set_sounds
-    from omrbench.project import part_meta, under
-    show = under({"songs": {"5": {"Cymbal": {"sound": "metal.cymbal.crash", "ms_name": "Suspended Cymbal"}}}},
-                 {"instruments": {"Cymbal": {"sound": "metal.cymbal.splash"}, "Glock": {"sound": "g"}}})
+    from omrbench.project import part_meta
+    show = {"instruments": {"Cymbal": {"sound": "metal.cymbal.splash"}, "Glock": {"sound": "g"}}}
     row = {"file": "Drums", "pages": "1", "skip": "", "instruments": "Cymbal, Glock", "extra": "type: drums"}
     assert part_meta(row, show, {"song": "1"})["instruments"][0]["sound"] == "metal.cymbal.splash"
+    row["instruments"] = "Cymbal (sound: metal.cymbal.crash, ms_name: Suspended Cymbal), Glock"   # song 5's cell
     cym = part_meta(row, show, {"song": "5"})["instruments"][0]
     assert cym["sound"] == "metal.cymbal.crash" and cym["ms_name"] == "Suspended Cymbal"
     root = etree.fromstring(

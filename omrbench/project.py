@@ -56,10 +56,6 @@ HEADER = ["file", "pages", "skip", "instruments", "extra", "truth", "plainarticu
 KEY_ORDER = ["pages", "type", "source", "transpose", "keep_staves", "skip_systems",
              "split_instruments", "doubling"]
 SHOW_FILE = "show.yaml"
-# keys for data/<show>/show.yaml that agents may not write there (data/ is read-only to them): merged
-# under the show file, which wins; `songs: {<sid>: {<instrument>: {keys}}}` acts like the workbook's
-# "Cymbal (sound: ...)" brackets, which win over it
-OVERRIDES_FILE = Path(__file__).resolve().parents[1] / "show_overrides.yaml"
 
 
 @dataclass
@@ -147,9 +143,7 @@ def part_meta(row: dict, show: dict, ctx: dict) -> dict:
     meta.update({k: _fmt(v, ctx) for k, v in (show.get("parts", {}).get(name) or {}).items()})
     if row["skip"]:
         meta["skip_systems"] = expand_range(row["skip"])
-    song_own = (show.get("songs") or {}).get(str(ctx.get("song"))) or {}
-    meta.update(song_own.get(name) or {})      # keys under the book's file name: this song's book only
-    entries = [(n, {**(song_own.get(n) or {}), **own}) for n, own in split_instruments_cell(row["instruments"])]
+    entries = split_instruments_cell(row["instruments"])
     extra = yaml.safe_load("{" + row["extra"].replace("\n", ", ") + "}") if row["extra"] else {}
     library = show.get("instruments", {})
     drums = (extra.get("type") or meta.get("type")) == "drums"
@@ -271,19 +265,9 @@ def projects(data_dir: Path) -> list[Path]:
         if Path(data_dir).is_dir() else []
 
 
-def under(base: dict, top: dict) -> dict:
-    """`top` merged over `base`, nested dicts key by key."""
-    out = dict(base)
-    for k, v in top.items():
-        out[k] = under(base[k], v) if isinstance(v, dict) and isinstance(base.get(k), dict) else v
-    return out
-
-
 def load(folder: Path) -> Project:
     folder = Path(folder).resolve()
     show = yaml.safe_load((folder / SHOW_FILE).read_text(encoding="utf-8")) or {}
-    if OVERRIDES_FILE.exists():
-        show = under((yaml.safe_load(OVERRIDES_FILE.read_text(encoding="utf-8")) or {}).get(folder.name) or {}, show)
     pdfs = folder / show.get("pdfs", "pdfs")
     workbook = folder / show.get("workbook", "songs.xlsx")
     songs = {}

@@ -382,7 +382,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   (metric-neutral), Klavierauszug piano kept for the vote only (`<song>/vote/`), no "- Piano" output. U12 `u12-a`
   **11 460** (Anastasia 8 312, Ghost 3 148), bars of an unread cut inserted at the system break.
   U13 `u13-a` 11 460 (metric-neutral), duet labels ("VLAD & DMITRY:", `singer_groups` BOTH) into both singers.
-  **Reference from now on: `u13-a`.**
+  U14 `u14-a` 11 460 (metric-neutral), `show_overrides.yaml` moved into data/ (show.yaml, workbook cells).
+  **Reference from now on: `u14-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

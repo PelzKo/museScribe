@@ -45,6 +45,7 @@ Counts below: Anastasia songs 1, 2, 3, 4, 4A, outputs `r12-a` (Klavierauszug lef
 | U11 | Anastasia Klavierauszug piano not generated | 0 (not scored since 2026-11-09) | 0; saves time | small | no |
 | U12 | Cut bars placed at the system break (align_bars) | Anastasia 5A: 4 parts × 10 bars | 5A has no truth: 0; fewer misplaced bars | small | no |
 | U13 | Duet labels into both singers (`singer_groups`, "DIMITRY") | song 6, no truth | 0 | small | no |
+| U14 | `show_overrides.yaml` moved into data/ (show.yaml, workbook cells) | 0 | 0 | tiny | no |
 
 U1. **Percussion instruments (user 2026-11-09: "they all have a midi mix instead of Glockenspiel or Bells").** The
 truths use the MuseScore instruments `crash-cymbal` (Hängendes Becken), `splash-cymbal`, `triangle`, `mark-tree`,
@@ -254,6 +255,21 @@ stayed in Vlad's part; now they are, and a split name goes onto the single label
 to "Vlad, Dmitry, Anya" (not done). Check (`u13-t` transcribe, `u13-6` reassembly, copied to `results/anastasia/6/`):
 Voices = Vlad, Dmitry, Anya; 47 bars in both Vlad and Dmitry (BOTH, 29-38, 191-215). Not read: "VLAD' & DIMITRY.."
 (colon OCR'd as "..") and the "VLAD &" line break at 191 where the text layer has no label.
+
+U14. **Overrides into data/ (user 2026-11-11: "I am giving you permission to edit the data in the data folder ... not
+the truth folders").** Move every key of `show_overrides.yaml` into `data/<show>/show.yaml` or the workbook cell it
+belongs to, delete the file and the merge code. Check: bench identical to `u13-a`.
+**Done 2026-11-12, metric-neutral (+0, `u13-a` 11 460 -> `u14-a` 11 460; every output MusicXML byte-identical).**
+data/ is gitignored, so the edits are listed here (backups of the old files in the session scratchpad):
+`data/anastasia/show.yaml`: `german` on parts Violin 1 / 2, Cello, Bass, Horn, Trumpet, Trombone, Reed 3 and on the
+instrument library (Clarinet "Klarinette in B {n}", Flute "Flöte {n}", ... Cymbal Splash-Becken), Drum Set `sound:
+drum.group.set, ms_name: Drumset (common), german: Schlagzeug`, PianoReduction `voice_names: {Women: Frauen, Men:
+Männer}` and `piano_part: false`. `data/ghost/show.yaml`: Drum Set `sound: drum.group.set`. `data/anastasia/songs.xlsx`
+(openpyxl, formatting kept): sheets 3 / 5 instruments "Cymbal (sound: metal.cymbal.crash, ms_name: Suspended Cymbal,
+german: Hängendes Becken)", sheet 5 "Mark Tree (sound: metal.bells.mark-tree, german: Mark Tree)", sheet 6
+PianoReduction `extra` "chord_names: false, singer_groups: {Both: [Vlad, Dmitry]}", `plainText` "Vlad, Dmitry, Anya"
+(the only resolved-meta change: song 6, no truth, not reassembled from h71). Code: `project.OVERRIDES_FILE`, `under`
+and the per-song `songs:` lookup in `part_meta` (book-file-name keys too: the `extra` cell does that) are gone.
 
 ## From the code and current-output review (2026-11-10)
 
