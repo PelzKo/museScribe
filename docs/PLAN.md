@@ -394,7 +394,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R45b `r45-c` **10 963** (Anastasia 8 232, Ghost 2 731), "tamb." after a Timpani bar stays a kit-passage label.
   R45c `r45-e` **10 921** (Anastasia 8 190, Ghost 2 731), groove copied over the slash bars of scanned drum books.
   R45e `r45-g` **10 883** (Anastasia 8 152, Ghost 2 731), lower-staff bars with hits on 2+ lines go to the kit.
-  **Reference from now on: `r45-g`.**
+  R45f `r45f-a` **10 784** (Anastasia 8 053, Ghost 2 731), scanned kit bars rebuilt from the `.omr` head chords.
+  **Reference from now on: `r45f-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

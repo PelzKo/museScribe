@@ -42,3 +42,24 @@ def test_kit_moves_a_bar_read_in_bass_clef_up_a_tenth():
     drumkit.apply(score, KIT)
     pos = [n.findtext("unpitched/display-step") + n.findtext("unpitched/display-octave") for n in score.iter("note")]
     assert pos == ["C5", "F4", "E3", "C5"]                 # bar 2 has a kit hit: left as read
+
+
+def test_kit_events_from_omr_chords():
+    from fractions import Fraction as F
+    from omrbench.pipeline.assemble import kit_events
+    from omrbench.pipeline.layout import Chord
+
+    def c(x, stem, steps, dur, small=False):
+        return Chord(1, x, 0, 10, 10, small, 1.0, stem, steps, dur)
+    # bass drum quarters (stems down), snare off-beat eighths (up), a flam and only one of four rests read:
+    # the bass drum alone fills the bar and places the snare hits by x
+    chords = [c(100 + 200 * k, "down", (3,), F(1)) for k in range(4)] + \
+             [c(200 + 200 * k, "up", (-1,), F(1, 2)) for k in range(4)] + [c(170, "up", (-1,), F(1), small=True)]
+    evs = kit_events(chords, [c(98, "", (), F(1, 2))], F(4), 900, 20)
+    v1 = [(e.kind, e.dur, e.pos) for e in evs if e.voice == 1]
+    assert v1 == [("rest", F(1, 2), ()), ("drum", F(1, 2), ("C5",))] * 4
+    assert [(e.dur, e.pos) for e in evs if e.voice == 2] == [(F(1), ("F4",))] * 4
+    assert kit_events(chords[:3], [], F(4), 900, 20) is None      # 3 quarters: an unread beat, no guess
+    # walk: quarter, quarter rest, half (C5 + E5)
+    evs = kit_events([c(100, "up", (-1,), F(1)), c(500, "up", (-3, -1), F(2))], [c(300, "", (), F(1))], F(4), 900, 20)
+    assert [(e.kind, e.dur, e.pos) for e in evs] == [("drum", 1, ("C5",)), ("rest", 1, ()), ("drum", 2, ("E5", "C5"))]

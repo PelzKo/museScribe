@@ -744,6 +744,112 @@ def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
                  old.key, old.time)
 
 
+def _kit_pos(step: int) -> str:
+    """Audiveris head pitch (0 = middle line, B4 on a percussion staff; up is negative) -> "C5"."""
+    n = 34 - step          # 7 * 4 + 6 = B4
+    return f"{'CDEFGAB'[n % 7]}{n // 7}"
+
+
+def _rests(gap: Fraction) -> list[Fraction]:
+    out = []
+    while gap > 0:
+        d = max((t for t in TYPES if t <= gap), default=None)
+        if d is None:
+            return []
+        out.append(d)
+        gap -= d
+    return out
+
+
+def kit_events(chords: list, rests: list, L: Fraction, right: float, il: float) -> list[SL.Event] | None:
+    """R45f: a scanned kit bar rebuilt from Audiveris' head chords (stems up = voice 1, down = voice 2)
+    when its own rhythm is broken. Onsets: walk the x-columns of chords and rests, each one as long as
+    its shortest member; if that does not add up to the bar (an unread rest), a voice whose notes alone
+    fill the bar gives the onsets and the others are placed by x between them. None: nothing that fits."""
+    cs = [c for c in chords if not c.small and c.stem and c.steps and c.dur]
+    if not cs or len(cs) < len([c for c in chords if not c.small]):
+        return None
+    evs = sorted(cs + [r for r in rests if r.dur], key=lambda c: c.x + c.w / 2)
+    cols: list[list] = []
+    for c in evs:
+        cx = c.x + c.w / 2
+        if cols and cx - (cols[-1][0].x + cols[-1][0].w / 2) < 0.6 * il:
+            cols[-1].append(c)
+        else:
+            cols.append([c])
+    xs = [col[0].x + col[0].w / 2 for col in cols]
+    on, ons = Fraction(0), []
+    for col in cols:
+        ons.append(on)
+        on += min(c.dur for c in col)
+    if on != L:
+        ons = None
+        for stem in ("down", "up"):
+            v = [k for k, col in enumerate(cols) if any(c in cs and c.stem == stem for c in col)]
+            durs = [min(c.dur for c in cols[k] if c in cs and c.stem == stem) for k in v]
+            if v and v[0] == 0 and sum(durs) == L:
+                pts = [(xs[k], sum(durs[:j])) for j, k in enumerate(v)] + [(right, L)]
+                grid = max(min(c.dur for c in cs), Fraction(1, 4))
+                ons = []
+                for x in xs:
+                    (x0, o0), (x1, o1) = next((a, b) for a, b in zip(pts, pts[1:]) if x < b[0] or b is pts[-1])
+                    t = o0 + (o1 - o0) * Fraction(max(0.0, min(1.0, (x - x0) / (x1 - x0 or 1)))).limit_denominator(64)
+                    ons.append(round(t / grid) * grid)
+                break
+        if ons is None:
+            return None
+    out: list[SL.Event] = []
+    for voice, stem in ((1, "up"), (2, "down")):
+        notes = sorted(((ons[k], col) for k, col in enumerate(cols) if any(c in cs and c.stem == stem for c in col)),
+                       key=lambda t: t[0])
+        if voice == 2 and not notes:
+            break
+        t = Fraction(0)
+        for o, col in notes:
+            mine = [c for c in col if c in cs and c.stem == stem]
+            if o < t:
+                return None
+            out += [SL.Event(0, "rest", d, voice=voice) for d in _rests(o - t)]
+            d = min(c.dur for c in mine)
+            out.append(SL.Event(0, "drum", d, voice=voice,
+                                pos=tuple(dict.fromkeys(_kit_pos(s) for c in mine for s in c.steps))))
+            t = o + d
+        if t > L:
+            return None
+        out += [SL.Event(0, "rest", d, voice=voice) for d in _rests(L - t)]
+    return out
+
+
+def kit_bars(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> None:
+    """R45f: kit bars of a scanned drum book whose reading does not fill the bar (or has fewer hits)
+    are rebuilt from the `.omr` head chords (`kit_events`)."""
+    by_page = {p.number: p for p in pages}
+    for plan in plans:
+        page = by_page.get(plan.system.page)
+        if page is None:
+            continue
+        for gi, g in plan.chosen.items():
+            staves = plan.system.groups()[gi]
+            if len(staves) != 1 or "PERCUSSION" not in staves[0].clef:
+                continue
+            st, il = staves[0], staves[0].interline
+            for i, bar in enumerate(g):
+                length = B.bar_length(plan.times[i], D)
+                if not length or i >= len(plan.xs) or any(e.find("pitch") is not None for e in bar.notes()):
+                    continue
+                l, r = plan.xs[i]
+                inside = lambda c: c.staff == st.id and l <= c.x + c.w / 2 < r   # noqa: E731
+                evs = kit_events([c for c in page.chords if inside(c)], [c for c in page.rests if inside(c)],
+                                 Fraction(length, D), r, il)
+                if not evs:
+                    continue
+                hits = lambda b: sum(1 for n in b.notes() if n.find("rest") is None and n.find("grace") is None)  # noqa: E731
+                new = slash_bar(SL.SlashBar(page.number, l, r, st.top, st.bottom, evs), bar, D)
+                if new is not None and (not B.bar_ok(bar, length) or hits(new) > hits(bar)):
+                    g[i] = new
+                    stats.notes.append(f"kit bar rebuilt from the .omr chords: system {plan.index + 1} bar {i + 1}")
+
+
 def _scan_slash(bar: B.Bar) -> bool:
     """R29: a slash bar of a scanned drum book (no slash reader there): the readers found nothing at all
     (Audiveris: no note, no rest) or homr read the slashes as rests (4 rests, never a whole-bar rest)."""

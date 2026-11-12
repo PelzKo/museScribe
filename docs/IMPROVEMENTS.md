@@ -684,6 +684,14 @@ track with the kit instead of `lower_staff` changed nothing: the song 4 workbook
 `lower_staff` instrument with unpitched hits on 2+ staff positions goes to the kit (that instrument plays one
 line). Catches 78-81 (snare + bass drum); 174-177 (hi-hat only, one position) stay Triangle, and Triangle 97 (read
 on two positions) now goes to the kit.
+**R45f (kit bars from the `.omr` head chords) done 2026-11-12: -99** (`r45-g` 10 883 -> `r45f-a` 10 784;
+Anastasia 4 Drums-Percussion -87 / -9 / -1 / +2, song 3 -4 / -1, 4A +1, worst part +2). `layout` now reads each
+chord's stem side, head pitches and value (heads, beams, flags, dots) and the rest chords; `assemble.kit_bars`
+(scanned drum books, single percussion-clef staff, unpitched bar) rebuilds a bar with stems up = voice 1, down =
+voice 2 when its reading does not fill the bar or has fewer hits. Onsets: the x-columns walked by their shortest
+member; if that does not add up (an unread rest), a voice whose notes alone fill the bar anchors the others by x.
+Grace (small) chords left out. Anastasia 4 Schlagzeug missing hits 260 -> 198, made up 149 -> 157; song 3 almost
+unchanged (82 / 92). Not done: accents of the old bar are not copied (`copy_marks` is pitch-only).
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit

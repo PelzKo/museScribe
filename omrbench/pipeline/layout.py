@@ -10,6 +10,7 @@ import re
 import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 
 
@@ -113,6 +114,9 @@ class Chord:
     h: float
     small: bool              # cue-size heads (Audiveris small-chord)
     grade: float = 0.0
+    stem: str = ""           # up | down ("" = no stem / rest)
+    steps: tuple = ()        # Audiveris pitch of each head: 0 = middle line, negative = up
+    dur: Fraction | None = None   # quarters from heads, beams, flags and dots (None: whole rest)
 
 
 @dataclass
@@ -138,6 +142,7 @@ class Page:
     systems: list[System] = field(default_factory=list)
     texts: list[Text] = field(default_factory=list)
     chords: list[Chord] = field(default_factory=list)
+    rests: list[Chord] = field(default_factory=list)
     marks: list[Mark] = field(default_factory=list)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
@@ -146,6 +151,10 @@ class Page:
                 if st.id == sid:
                     return sy, st
         return None
+
+
+REST_DUR = {"HALF": Fraction(2), "QUARTER": Fraction(1), "EIGHTH": Fraction(1, 2),
+            "ONE_16TH": Fraction(1, 4), "ONE_32ND": Fraction(1, 8)}
 
 
 def _f(el, name, default=0.0) -> float:
@@ -230,11 +239,43 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
         lid, role = owner(x, y, w, h)
         page.texts.append(Text(number, int(el.get("staff") or 0), x, y, w, h,
                                el.get("value", ""), "word", role, lid, el.get("font", "")))
-    for tag, small in (("head-chord", False), ("small-chord", True)):
+    # rhythm of each chord from its inters (R45f): heads, stem side, beams / flags, dots
+    byid = {el.get("id"): el for el in root.iter() if el.get("id")}
+    rel: dict[tuple[str, str], list] = {}
+    for r in root.iter("relation"):
+        if len(r):
+            rel.setdefault((r[0].tag, r.get("source")), []).append((r.get("target"), r[0]))
+            rel.setdefault((r[0].tag, "to " + str(r.get("target"))), []).append(r.get("source"))
+
+    def rhythm(el):
+        heads = [byid[t] for t, _ in rel.get(("containment", el.get("id")), []) if t in byid]
+        sides = [k.get("head-side") for h in heads for _, k in rel.get(("head-stem", h.get("id")), [])]
+        stems = [t for t, _ in rel.get(("chord-stem", el.get("id")), [])]
+        shapes = " ".join(h.get("shape") or "" for h in heads)
+        if "REST" in shapes:
+            dur = REST_DUR.get(shapes.split("_REST")[0].split()[-1])
+        elif "WHOLE" in shapes or "BREVE" in shapes:
+            dur = Fraction(4)
+        elif "VOID" in shapes:
+            dur = Fraction(2)
+        else:
+            n = sum(len(rel.get(("beam-stem", "to " + s), [])) for s in stems)
+            n += sum(int(byid[f].get("shape", "_0")[-1]) for s in stems
+                     for f in rel.get(("flag-stem", "to " + s), []) if f in byid
+                     and byid[f].get("shape", "")[-1:].isdigit())
+            dur = Fraction(1, 2 ** n)
+        dots = max((len(rel.get(("augmentation", "to " + h.get("id")), [])) for h in heads), default=0)
+        if dur is not None and dots:
+            dur *= 2 - Fraction(1, 2 ** dots)
+        stem = {"RIGHT": "up", "LEFT": "down"}.get(sides[0], "") if sides else ""
+        steps = tuple(sorted(int(h.get("pitch")) for h in heads if (h.get("pitch") or "").lstrip("-").isdigit()))
+        return stem, steps, dur
+
+    for tag, small in (("head-chord", False), ("small-chord", True), ("rest-chord", False)):
         for el in root.iter(tag):
             x, y, w, h = _bounds(el)
-            page.chords.append(Chord(int(el.get("staff") or 0), x, y, w, h, small,
-                                     _f(el, "grade")))
+            c = Chord(int(el.get("staff") or 0), x, y, w, h, small, _f(el, "grade"), *rhythm(el))
+            (page.rests if tag == "rest-chord" else page.chords).append(c)
     for tag in ("dynamics", "wedge"):
         for el in root.iter(tag):
             if el.get("shape"):
