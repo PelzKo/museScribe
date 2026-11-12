@@ -466,7 +466,7 @@ real implementation in `transcribe.share_marks` should land close, but must be r
 | R41 | Words only one book has are dropped (playing words kept) | simulated **-247**, worst part +1 | -200..-250 | small |
 | R42 | Dynamics / fermatas only one book has are dropped | **done 2026-11-11: -135** (`r40-w` -> `r42-df`) | -80..-150 | small |
 | R43 | One-instrument percussion parts on the truth's staff line | simulated **-69**, no part worse | -69 | tiny |
-| R44 | Drum books on vector pages: groove written over the slash bars, kit refresh, "sim." marks | Ghost 5 Drums 442 of 455 | -250..-350 | medium |
+| R44 | Drum books on vector pages: groove written over the slash bars, kit refresh, "sim." marks | Ghost 5 Drums 442 of 455; **done 2026-11-12: -412** (`u16-a` -> `r44-d`, 4 steps), Ghost 5 Drums 333 -> 70 | -250..-350 | medium |
 | R45 | Anastasia drum kit: two voices, ghost notes, routing | Schlagzeug 4: 661 of 787; 3: 252 of 448 | -300..-500 with R28 / R29 | large |
 | R46 | Marcato from the Audiveris `.omr` shape | `.omr` 238 marcatos, output 53, truth 94; 55 accents should be marcatos | -30..-50 | small |
 | R47 | Repeat signs from the `.omr` repeat dots | 980 dots (about 245 signs), output 126 repeats, truth 255 | part of R27's -76..-104, more reliable | medium |
@@ -617,6 +617,12 @@ no longer snap to the snare C5), B4 gone (no truth hit left), G5 also circle-x O
 **R44c (item 1) done 2026-11-12: -26** (`r44-b` 11 205 -> `r44-c` 11 179; Ghost 5 / 4 / 20 Drums -16 / -5 / -5, worst
 part +0). `read_drum_page` reads the accent + staccato glyph ("ﬂ" / "˘") and marks up to 7 spaces off the staff
 (beyond the stem end), and `place_sim` runs on drum books too, so `bars.apply_sim` carries the marks to bar 7.
+**R44d (the vamp bars) done 2026-11-12: -131** (`r44-c` 11 179 -> `r44-d` 11 048; Ghost 5 Bass -70, 4 Guitar -42,
+5 Drums 94 -> 70 after b/c; worst part +9 Ghost 5 Cello). `vector.read_systems` made pseudo-bars of every vector
+staff: the gap inside a ":||:" repeat barline (1-1.4 spaces), the clef / time before a start repeat and the
+courtesy signature after the last barline (3-6 spaces at a staff end). The readers have no bar there, so the bar
+contents were planned one bar off until `align_bars` dropped "extra" bars, sometimes the wrong one (Ghost 5 drums
+bar 1). Now dropped in `read_systems` (< 1.5 spaces, < 6 at a staff end).
 
 R45. **Anastasia drum kit (the part the user spends the most time on).** Schlagzeug in song 4 costs 661 of 787
 from scratch, in song 3 252 of 448. Split of the kit bars (`r13-ref`, bars aligned like the metric):

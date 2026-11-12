@@ -195,3 +195,17 @@ def test_continue_patterns_repeats_a_short_groove_over_a_longer_slash_bar():
     A.continue_patterns([plan], 4, A.Stats())
     assert [len(b.notes()) for b in plan.chosen[0]] == [2, 2, 4]
     assert plan.chosen[0][2].source == "pattern"
+
+
+def test_read_systems_skips_repeat_gaps_and_staff_end_signatures():
+    # R44d: staff 0..400 (space 2): start repeat at 10 (clef / time before it), ":||:" at 200 / 202.5,
+    # last barline 395 (courtesy time after it): two bars, 10-200 and 202.5-395
+    from types import SimpleNamespace as NS
+    pt = lambda x, y: NS(x=x, y=y)                                          # noqa: E731
+    lines = [{"type": "s", "rect": NS(height=0, width=400), "width": 0.3,
+              "items": [("l", pt(0, y), pt(400, y))]} for y in (100, 102, 104, 106, 108)]
+    lines += [{"type": "s", "rect": NS(height=8, width=0), "width": 0.3,
+               "items": [("l", pt(x, 100), pt(x, 108))]} for x in (10, 200, 202.5, 395)]
+    page = NS(get_drawings=lambda: lines, rect=NS(width=400))
+    [(top, bars)] = SL.read_systems(page, NS(width=400))
+    assert bars == [(10, 200), (202.5, 395)]

@@ -484,7 +484,12 @@ def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]]]
         left = min(x0 for x0, _, y in hlines if abs(y - st[0]) < 0.2)
         right = max(x1 for _, x1, y in hlines if abs(y - st[0]) < 0.2)
         edges = [left] + _barlines(vlines, st[0], st[4], left, right) + [right]
-        out.append((st[0] * sx, [(a * sx, b * sx) for a, b in zip(edges, edges[1:])]))
+        sp = (st[4] - st[0]) / 4
+        # no bars: the gap inside a repeat barline ":||:" (< 1.5 spaces), the clef / time before a start
+        # repeat and the courtesy signature after the last barline (< 6 spaces at a staff end; Ghost 5 drums)
+        bars = [(a, b) for k, (a, b) in enumerate(zip(edges, edges[1:]))
+                if b - a >= (6 if k in (0, len(edges) - 2) else 1.5) * sp]
+        out.append((st[0] * sx, [(a * sx, b * sx) for a, b in bars]))
     return out
 
 
