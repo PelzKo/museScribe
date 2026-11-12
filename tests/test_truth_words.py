@@ -73,6 +73,15 @@ def test_strip_marks_keeps_notes_ties_dots_tremolos():
     assert n1.find("dot") is not None and n2.find("notations") is None
 
 
+def test_drop_words_keeps_other_direction_types():
+    from lxml import etree
+    from omrbench.musicxml import drop_words
+    part = etree.fromstring(PLAIN)
+    n = drop_words(part)
+    assert n >= 1 and not part.findall(".//words")
+    assert part.find(".//rehearsal") is not None and part.find(".//dynamics") is not None
+
+
 def test_plain_cell_of_a_piano_reduction_picks_the_labels():
     from omrbench.project import Part, plain_row
     part = Part("4", "PianoReduction", Path("x.pdf"), {},

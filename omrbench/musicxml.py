@@ -636,6 +636,21 @@ def set_sounds(root: etree._Element, sounds: dict, single=None) -> int:
     return n
 
 
+def drop_words(root: etree._Element) -> int:
+    """Every <words> text goes (directions left empty with it); other direction types stay. Returns the count."""
+    n = 0
+    for w in list(root.iter("words")):
+        dt = w.getparent()
+        dt.remove(w)
+        n += 1
+        if not len(dt):
+            d = dt.getparent()
+            d.remove(dt)
+            if d.find("direction-type") is None:
+                d.getparent().remove(d)
+    return n
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plainArticulation`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,

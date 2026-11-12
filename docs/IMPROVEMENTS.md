@@ -913,6 +913,11 @@ notes is a cue.
 
 R12. **Made-up words (253).** Anastasia 4 Keyboard 1 (28), Klavierauszug labels, Frauen. Check them one by one
 (`results/errors/r3-f/errors.json`, "words: made up") and extend `_cue_text` / `_loose_text`.
+**R12 done 2026-11-12: -103** (`r47-a` 10 666 -> `r12w-a` 10 563; Anastasia -103, Ghost 0, worst part +0). The
+Anastasia Keyboard 1 / 2 truths carry no words at all in any song (Klavierauszug and the Ghost keyboards do), so the
+show.yaml parts `Keyboard 1` / `Keyboard 2` get `words: drop` (`musicxml.drop_words` after assembly: every `<words>`
+goes, metronome / dynamics stay). The made-up words left are mostly printed cue / orchestration text the truths
+leave out ("solo" 23, "div.", "to clarinet", "on to m. 8"), spread over many parts.
 
 Status 2026-10-18 evening: reference `r3-k` = **10 962**. R2 done (alias `sticks`, `kit: true` in the Anastasia show.yaml,
 `build_parts`: a label of another percussion instrument inside a kit passage takes only the hits of its bar from the

@@ -397,7 +397,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R45f `r45f-a` **10 784** (Anastasia 8 053, Ghost 2 731), scanned kit bars rebuilt from the `.omr` head chords.
   R45g `r45g-b` **10 769** (Anastasia 8 038, Ghost 2 731), "[to] 194 mf": cut mark split off a trailing dynamic.
   R47 `r47-a` **10 666** (Anastasia 7 964, Ghost 2 702), repeat signs from the `.omr` repeat dots.
-  **Reference from now on: `r47-a`.**
+  R12 `r12w-a` **10 563** (Anastasia 7 861, Ghost 2 702), no words in the Anastasia keyboard parts.
+  **Reference from now on: `r12w-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

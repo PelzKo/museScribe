@@ -509,6 +509,9 @@ class Pipeline(Engine):
                 for p in root.findall("part"):
                     if plain is True or names.get(p.get("id")) in plain:
                         musicxml.strip_marks(p)
+        if sample.meta.get("words") == "drop":
+            # R12: a book whose truths carry no expression text (Anastasia keyboards: patches, cue labels)
+            LOG.info(f"words: drop: {sum(musicxml.drop_words(r) for r in [score, *(files or {}).values()])} removed")
         if plain_text := sample.meta.get("plain_text"):
             # workbook `plainText`: lyrics sung together are printed in the first voice only
             for root in [score, *(files or {}).values()]:
