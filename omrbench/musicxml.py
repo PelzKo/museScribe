@@ -657,6 +657,20 @@ def drop_words(root: etree._Element) -> int:
     return n
 
 
+def keep_first_clef(part: etree._Element) -> int:
+    """R14: a one-staff part that starts in treble clef keeps it (no wind / string truth changes clef): later
+    clefs are misreads (mostly cue-passage bass clefs over rests) and go. Pitches stay as read. Returns the count."""
+    clefs = list(part.iter("clef"))
+    if not clefs or part.find("measure/attributes/staves") is not None and \
+            part.findtext("measure/attributes/staves").strip() != "1" or \
+            (clefs[0].findtext("sign"), clefs[0].findtext("line"), clefs[0].findtext("clef-octave-change")) \
+            != ("G", "2", None):
+        return 0
+    for c in clefs[1:]:
+        c.getparent().remove(c)
+    return sum((c.findtext("sign"), c.findtext("line")) != ("G", "2") for c in clefs[1:])
+
+
 def strip_marks(part: etree._Element) -> None:
     """A "plain" part (workbook column `plainArticulation`): notes with their dots, ties, tuplets and tremolos
     only. Articulations (staccato, accents), dynamics, hairpins, slurs, fermatas, ornaments,

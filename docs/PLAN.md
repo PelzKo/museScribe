@@ -400,7 +400,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R12 `r12w-a` **10 563** (Anastasia 7 861, Ghost 2 702), no words in the Anastasia keyboard parts.
   R27a `r27-b` **10 462** (Anastasia 7 760, Ghost 2 702), barline vote at 45 % + repeat end paired to a kept start.
   R27b `r27c-a` **10 421** (Anastasia 7 719, Ghost 2 702), double barline before a "[to] N" cut moved to bar N-1.
-  **Reference from now on: `r27c-a`.**
+  R14 `r14w-a` **10 406** (Anastasia 7 715, Ghost 2 691), one-staff treble parts keep their first clef.
+  **Reference from now on: `r14w-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

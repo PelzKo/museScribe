@@ -509,6 +509,9 @@ class Pipeline(Engine):
                 for p in root.findall("part"):
                     if plain is True or names.get(p.get("id")) in plain:
                         musicxml.strip_marks(p)
+        if sample.score_type == "part":
+            n = sum(musicxml.keep_first_clef(p) for p in score.findall("part"))
+            LOG.info(f"R14: {n} clef change(s) in treble parts removed")
         if sample.meta.get("words") == "drop":
             # R12: a book whose truths carry no expression text (Anastasia keyboards: patches, cue labels)
             LOG.info(f"words: drop: {sum(musicxml.drop_words(r) for r in [score, *(files or {}).values()])} removed")

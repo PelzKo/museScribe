@@ -955,6 +955,11 @@ until the next clef. Rule: in wind and string parts except cello, drop clef chan
 the instrument (treble for alto / tenor sax, bass for baritone sax, bass for timpani). Keyboards keep their
 changes (119 clef errors there are a different problem). Gain: the clefs plus the wrongly pitched notes in the
 passages after them.
+**R14 done 2026-11-12: -15** (`r27c-a` 10 421 -> `r14w-a` 10 406; Anastasia -4, Ghost -11, worst part +0). No truth
+wind / string part changes clef (cello aside). `musicxml.keep_first_clef` (book type `part`): a one-staff part
+starting in plain treble drops every later clef. Pitches stay as read: the made-up bass clefs sit over cue rests,
+and the few notes under them are partly right already (Ghost 5 Violin 29-31), so re-pitching was not done. Timpani
+(F4 start, Anastasia 1 Pauken 9 G2) and the keyboard clefs are untouched.
 
 R15. **Range check with the corrected ranges (expert 14, #27, #48).** Per instrument, notes far outside the written
 range (table in CORRECTION_INFORMATION 14, guitar to E6, theatre soprano to A3 / alto to E3) are suspect. A whole

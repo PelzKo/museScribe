@@ -338,3 +338,16 @@ def test_printed_hyphens_decide_the_syllabic():
     out = _printed_syllabic(st, page, ([(135, 25), (185, 25)], []), carry, 1)   # "re-cent-" to the next line
     assert [out[id(t)] for t in (found, by, re_, cent)] == ["single", "single", "begin", "middle"]
     assert carry == {(1, 1): True}
+
+
+def test_treble_part_keeps_its_first_clef():
+    from lxml import etree
+    from omrbench.musicxml import keep_first_clef
+
+    def clef(s, l):
+        return f"<attributes><clef><sign>{s}</sign><line>{l}</line></clef></attributes>"
+    xml = f"<part><measure>{clef('G', 2)}</measure><measure>{clef('F', 4)}</measure><measure>{clef('G', 2)}</measure></part>"
+    part = etree.fromstring(xml)
+    assert keep_first_clef(part) == 1 and len(part.findall(".//clef")) == 1
+    cello = etree.fromstring(xml.replace("<sign>G</sign><line>2</line>", "<sign>F</sign><line>4</line>", 1))
+    assert keep_first_clef(cello) == 0 and len(cello.findall(".//clef")) == 3
