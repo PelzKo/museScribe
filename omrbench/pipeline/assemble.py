@@ -2095,6 +2095,10 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
                 if (gi, i) in p.pending:
                     pend[L] = p.pending[(gi, i)]
                 name = cur[L]
+                if L > 1 and kit and name == lower and name != kit and len(
+                        {(u.findtext("display-step"), u.findtext("display-octave"))
+                         for u in (n.find("unpitched") for n in bar.notes()) if u is not None}) >= 2:
+                    name = kit      # the `lower_staff` instrument plays one line; hits on 2+ lines are the kit
                 owner[L][pos + i] = name
                 if name not in used:
                     used.append(name)

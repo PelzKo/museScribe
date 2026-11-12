@@ -679,6 +679,11 @@ later fallback, not yet in the plan at this step), 44-45 (no groove before them 
 track with the kit instead of `lower_staff` changed nothing: the song 4 workbook sets Triangle as `lower_staff`
 (right for 90-97, wrong for 78-81 and 174-177, about 45 kit hits). Needs the "sticks" label under the kit staff at
 174 (not in Audiveris' text) or the staff's notehead positions (kit positions vs. one line) to tell them apart.
+**R45e (the positions variant) done 2026-11-12: -38** (`r45-e` 10 921 -> `r45-g` 10 883; Anastasia 4 Schlagzeug
+537 -> 511, Triangel 22 -> 11, song 3 Drums-Percussion +4 / -4, worst part +4). `build_parts`: a bar of the
+`lower_staff` instrument with unpitched hits on 2+ staff positions goes to the kit (that instrument plays one
+line). Catches 78-81 (snare + bass drum); 174-177 (hi-hat only, one position) stay Triangle, and Triangle 97 (read
+on two positions) now goes to the kit.
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
