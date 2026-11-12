@@ -407,7 +407,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R51 `r51-e` **9 892** (Anastasia 7 365, Ghost 2 527), `.omr` articulations placed on homr's notes by `imgpos` x.
   R52 `r52-a` **9 820** (Anastasia 7 365, Ghost 2 455), "sim." 4-5 interlines below the staff placed (Ghost 5 Guitar).
   R54 `r54-c` **9 801** (Anastasia 7 346, Ghost 2 455), `.omr` dynamics (grade >= 0.8) by `imgpos` x where a bar staff has none.
-  **Reference from now on: `r54-c`.**
+  R56 `r56-b` **9 674** (Anastasia 7 218, Ghost 2 456), hairpins placed by homr's `imgpos` x, start on the nearest note.
+  **Reference from now on: `r56-b`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

@@ -892,6 +892,17 @@ against `r54-c` 9 801 (worst part +2 Anastasia 5 Reed 1): few dynamics move, and
 27 -> 31 while made up go 455 -> 451. homr's and the exported dynamics already sit on the onset of the glyph in
 almost every case (U3: all 228 with an offset were on a note onset); what is left of "wrong bar" is not this.
 
+R56. **Hairpins placed by homr's x (`imgpos`).** `vocal._positions` matched Audiveris chord x to homr's onsets only
+when the counts agreed, else spread the onsets evenly over the bar; it now takes homr's own head x (`imgpos` + crop
+left edge) when every onset has one. The R40 hairpin start went to the first note "at or after" the wedge's left
+end (1.5 interlines slack); a wedge opening right of the last note started at the bar end and was then dropped as
+empty (`(i1, on1) <= (i0, on0)`). It now starts on the nearest note. Against `r54-c` 9 801: `imgpos` only `r56-a`
+-13; nearest start only `r56-c` -114; both `r56-b` -127; + stop slack 0.5 interline `r56-d` -125. Error report
+(`r56-b`): hairpins missing 395 -> 299, at the wrong beat 144 -> 105, made up 138 -> 161.
+**Done 2026-11-12: `r54-c` -> `r56-b` -127** (9 801 -> 9 674; Anastasia 7 346 -> 7 218, Ghost 2 455 -> 2 456; best
+Anastasia 5 Violin 1 -12, 4 PianoReduction -11, 5 Violin 2 -9; worst part +4 Anastasia 3 Trombone (sparse truth),
++3 Anastasia 3 Bass, Ghost 4 / Anastasia 5 PianoReduction).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

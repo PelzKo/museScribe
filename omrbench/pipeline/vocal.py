@@ -55,7 +55,13 @@ def _positions(plan, gi: int, i: int, staves: list[Staff], page: Page, D: int,
         if not xs or cx - xs[-1] >= 0.8 * il:
             xs.append(cx)
     ons = sorted(notes)
-    if len(xs) != len(ons):
+    from .assemble import _imgpos_x
+    img = [_imgpos_x(notes[on]) for on in ons]
+    if None not in img:
+        # R56: homr's own head x (crop pixels + the crop's left edge, as `_crop_jobs` cuts it)
+        left = max(0, int(min(s.left for s in staves) - 3 * il))
+        xs = [left + x for x in img]
+    elif len(xs) != len(ons):
         length = B.bar_length(plan.times[i], D) or ons[-1] + 1
         lo, hi = l + 0.04 * (r - l), r - 0.04 * (r - l)
         xs = [lo + (hi - lo) * on / length for on in ons]
@@ -238,13 +244,8 @@ def _system_of(page: Page, plans_on_page, y: float):
     return best
 
 
-def _nearest_onset(pos, x: float, il: float, at_or_after: bool = False) -> int | None:
+def _nearest_onset(pos, x: float, il: float) -> int | None:
     if not pos:
-        return None
-    if at_or_after:
-        later = [p for p in pos if p[0] >= x - 1.5 * il]
-        if later:
-            return later[0][1]
         return None
     return min(pos, key=lambda p: abs(p[0] - x))[1]
 
@@ -304,8 +305,8 @@ def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] 
                 stats.marks_unplaced += 1
                 continue
             pos0 = _positions(plan, gi, i0, g, page, D)
-            on0 = _nearest_onset(pos0, mk.x, il, at_or_after=True)
-            if on0 is None:                 # opens after the bar's last note
+            on0 = _nearest_onset(pos0, mk.x, il)    # R56: nearest, not "at or after" (-114, r56-c)
+            if on0 is None:                 # no notes in the bar
                 on0 = B.bar_length(plan.times[i0], D) or 0
             if i1 is None:                  # runs to the system end
                 i1 = max(k for k in range(plan.n) if plan.xs[k][1] > plan.xs[k][0])

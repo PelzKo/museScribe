@@ -73,3 +73,16 @@ def test_place_dynamics_by_imgpos():
     assert dyn == [(1, "p")]
     place_dynamics([plan], [page], Stats())     # the bar has a dynamic now: no second one
     assert sum(el.tag == "direction" for el in bar.items) == 1
+
+
+def test_positions_from_imgpos():
+    from lxml import etree
+    from omrbench.pipeline.vocal import _positions
+    page = _parse_sheet(ET.fromstring(DYN_SHEET), 1)
+    sy = System(1, 1, [Staff(1, 0, 20, 60, 100, 1000)], [Stack(1, 100, 1000)])
+    plan = SysPlan(sy, 0, 1, [(100, 1000)])
+    notes = [etree.fromstring(f"<note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration>"
+                              f"<staff>1</staff><!-- imgpos: {x}, 40 --></note>") for x in (100, 232)]
+    plan.chosen = {0: [B.Bar(notes, "crop")]}
+    # homr's x plus the crop's left edge (staff left 100 - 3 interlines = 70), not spread over the bar
+    assert [(x, on) for x, on, _ in _positions(plan, 0, 0, sy.staves, page, 1)] == [(170, 0), (302, 1)]
