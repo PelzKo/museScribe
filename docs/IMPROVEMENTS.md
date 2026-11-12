@@ -703,6 +703,11 @@ the ride F5 read as G5 / E5 in 197-204.
 +22 / +2, 5 +4 / +1).** Replacing a reading that fills the bar with the `.omr` rebuild when both have as many hits
 loses: homr's / Audiveris' filled bars are better than the x-placed onsets there. R45f keeps "fewer hits or not
 filled".
+**Kit accents onto the R45f rebuilt bars rejected 2026-11-12, measured +20 (`kacc-a`: the old bar's articulations
+onto the first hit at the same onset; Anastasia 4 Drums-Percussion +19 / -2, song 3 +3 / +1) and +6 (`kacc-b`: accents
+only; Anastasia 4 Drums-Percussion +11 / -2, 3 -2, 4A -1).** The rebuilt bars replace readings that do not fill the
+bar, so the old onsets are off and the accents land on the wrong hits; carry them by x (`.omr` ACCENT inters of the
+kit chords) instead if this comes back.
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
