@@ -959,6 +959,18 @@ anchor (`range(pj + 1, ...)`). **Rejected 2026-11-12, measured +19 (`r63-a` agai
 the system start (that misread number agrees with the anchors by chance, so it looks like a confirmed bar too). Needs
 a way to tell a system-start bar number from a misread cut label (position / OCR text), not attempted.
 
+R64. **Bar and keyboard clusters left on `r62-a` (analysis 2026-11-12, no code).** Bars cost 406 actions, but most
+insert + delete pairs are not bar errors: the alignment trades a bar for delete + insert when its contents differ
+a lot. (a) Anastasia 3 Cello / Bass / Trombone / Trumpet 130-136: notes right, the truth has none of the printed
+dynamics / accents (likely incomplete truth). (b) Anastasia 4 Schlagzeug (19 + 19): kit bar contents. (c) Ghost 4
+Klavier 2-10 / 41-46: the truth keeps only the left hand (the RH 16th figure is not in the truth). (d) Anastasia 4
+Violin 1 98-100 / 121-124 / 202-205: gap rests placed at the system break before a numbered bar (R63). (e) Anastasia
+3 Männer 202-225 ("All" staff: men read in treble, octave / two staves under one label). Keyboards: Ghost 5 Piano
+(1-4 sixteenths read as eighths by homr; 5-12 "%" of a 2-bar figure "continue arpeggio" not written out; 20-22 E1
+read as B1; 25-27 RH read in bass clef after a bass-clef passage, the return to treble missed), Anastasia 4 Keyboard 1
+(31 / 42 / 137 low LH ledger notes and second-voice beats misread), Anastasia 4 Keyboard 2 82-84 (truth LH an octave
+below the print: TRUTH_DEVIATIONS). All engine-level misreads, each a few bars; no shared rule found.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
