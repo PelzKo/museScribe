@@ -869,6 +869,13 @@ staff took it and bars 11-14 kept no marks. The window below the staff is now 5 
 bottom still wins). The truth writes accent + staccato on both notes of bars 10-14, as bar 10 is read.
 **Done 2026-11-12: `r51-e` -> `r52-a` -72** (9 892 -> 9 820; Ghost 5 Guitar -72, no part worse).
 
+R53. **Anastasia 4A Violine 1 / 2: 62 tenutos missing in bars 1-4 (`am2-b`).** Checked 2026-11-12: the print
+(crop `s01-g1`) has a tenuto over every eighth of bars 1-4, thin broken dashes right under the slur. homr reads
+2 of 32 per part, Audiveris' `.omr` 14 (Violine 1) as TENUTO inters, and exports them only partly; the onset +
+pitch match of `copy_marks` placed almost none. R51 (`.omr` marks by `imgpos`) now puts 16 / 32 (Violine 1) and
+29 / 32 (Violine 2) on the notes (`r51-e`: 4A Violin 1 -13, Violin 2 -30). The rest are dashes no reader detects;
+no further change (a "fill the slurred run" rule would be a guess).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
