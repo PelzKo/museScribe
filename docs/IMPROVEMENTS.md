@@ -838,6 +838,12 @@ R50. **Clusters of missing articulations and notes in `r25w-a`** (largest by par
   `Bar.time` is its carried time, not a printed one) on pages where the vector reader found any time.
   **Done 2026-11-12: `r25w-a` -> `am1-a` -164** (10 401 -> 10 237; Ghost 5 Cello -63, Bass -56, Guitar -34), no part
   worse. Ghost 5 Guitar still has 2-note 4/4 bars where its crop failed (only Audiveris' reading).
+- R50b. **"ALL MEN" was read as a spelling of "ALL WOMEN".** `_canonical_singers` merges labels with Levenshtein
+  ratio >= 0.85 (0.875 here), so on Anastasia 3 (bars 88-127, 176-201) both choir staves got the singer "ALL WOMEN"
+  and the men's staff was dropped as a clash (73 bars; Männer 148 notes missing). Labels where only one names a
+  male voice (`MALE_VOICES`) are no longer merged; workbook song 3 PianoReduction cell: `All Men=Männer` added
+  (and to its plainText list). **Done 2026-11-12: `am1-a` -> `am2-b` -82** (10 237 -> 10 155; Anastasia 3
+  PianoReduction Männer -78, Frauen -4), no part worse. Code alone (`am2-a`, no workbook entry): -4. 12 clash bars left.
 
 ## Round 4 (2026-10-18): ranked by expected gain
 

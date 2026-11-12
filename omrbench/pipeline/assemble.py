@@ -2297,10 +2297,12 @@ def _canonical_singers(plans: list[SysPlan]) -> dict[str, str]:
     import Levenshtein
 
     counts = Counter(name for p in plans for v in p.singers.values() for _, name in v)
+    male = re.compile(MALE_VOICES, re.I)
     out: dict[str, str] = {}
     for name, _ in counts.most_common():
-        out[name] = next((c for c in out.values() if c == out.get(c) and
-                          Levenshtein.ratio(c, name) >= 0.85), name)
+        # "ALL MEN" is no spelling of "ALL WOMEN" (ratio 0.875, Anastasia 3: the men's line was lost)
+        out[name] = next((c for c in out.values() if c == out.get(c) and Levenshtein.ratio(c, name) >= 0.85
+                          and bool(male.search(c)) == bool(male.search(name))), name)
     return out
 
 

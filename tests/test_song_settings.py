@@ -304,3 +304,12 @@ def test_duet_and_group_labels_go_to_the_known_singers():
     assert A._singers_of("BOTH", known) == ["BOTH"]
     from omrbench.pipeline import text as T
     assert T.parse_label("VLAD & DIMITRY:", False) == ("VLAD & DIMITRY", "")
+
+
+def test_canonical_singers_keeps_men_apart_from_women():
+    # R50b: "ALL MEN" is 0.875 like "ALL WOMEN" but no OCR spelling of it; "DIMITRY" is one of "DMITRY"
+    from types import SimpleNamespace as NS
+    plans = [NS(singers={(0, 0): [(0, "ALL WOMEN"), (0, "ALL WOMEN")], (1, 0): [(0, "ALL MEN")],
+                         (2, 0): [(0, "DMITRY"), (0, "DMITRY")], (2, 1): [(0, "DIMITRY")]})]
+    canon = A._canonical_singers(plans)
+    assert canon["ALL MEN"] == "ALL MEN" and canon["DIMITRY"] == "DMITRY"
