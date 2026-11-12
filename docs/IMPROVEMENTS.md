@@ -675,6 +675,10 @@ drum books) copies the last bar with 2+ hit onsets over it; a printed rest bar o
 With the rule "the pattern bar must add up" (`r45-d`) it gave only -7 (FAIL, +4 song 3): Audiveris' kit voices
 rarely fill the bar, so the scan mode takes partial grooves too. Still empty: 34-38 (the crop's 4 rests are a
 later fallback, not yet in the plan at this step), 44-45 (no groove before them that is read), 80-85.
+**R45d (kit on the lower staff) rejected 2026-11-12, measured +0 (`r45-f`).** `build_parts` starting a lower
+track with the kit instead of `lower_staff` changed nothing: the song 4 workbook sets Triangle as `lower_staff`
+(right for 90-97, wrong for 78-81 and 174-177, about 45 kit hits). Needs the "sticks" label under the kit staff at
+174 (not in Audiveris' text) or the staff's notehead positions (kit positions vs. one line) to tell them apart.
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
