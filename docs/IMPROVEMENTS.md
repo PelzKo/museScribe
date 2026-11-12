@@ -667,6 +667,14 @@ clef and played the kit before. Left in that passage: the output is 2-5 bars off
 ride read as G5 / E5. Not done: the lower staff of the two-staff systems 78-81 and 174-177 (Glock / Xylophone +
 kit) starts as Triangle (the next unused instrument; "sticks" on the kit staff is not read), about 45 kit hits; a
 kit default for lower staves would break 93-97 (boxed "Triangle" read by OCR as "Triangie").
+**R45c (R29 on scans) done 2026-11-12: -42** (`r45-c` 10 963 -> `r45-e` 10 921; Anastasia 4 Schlagzeug 584 -> 537,
+worst part +4 Anastasia 3 Drums-Percussion). The scans have no slash reader and "etc." is not read on page 14, so
+the trigger is the bar itself (`assemble._scan_slash`): a kit bar where Audiveris found nothing at all (no note,
+no rest) or homr read the slashes as 4+ rests (never a whole-bar rest). `continue_patterns(scan=True)` (scanned
+drum books) copies the last bar with 2+ hit onsets over it; a printed rest bar or a pitched bar ends the groove.
+With the rule "the pattern bar must add up" (`r45-d`) it gave only -7 (FAIL, +4 song 3): Audiveris' kit voices
+rarely fill the bar, so the scan mode takes partial grooves too. Still empty: 34-38 (the crop's 4 rests are a
+later fallback, not yet in the plan at this step), 44-45 (no groove before them that is read), 80-85.
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit

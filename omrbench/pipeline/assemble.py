@@ -744,20 +744,34 @@ def slash_bar(sb: SL.SlashBar, old: B.Bar, D: int) -> B.Bar | None:
                  old.key, old.time)
 
 
-def continue_patterns(plans: list[SysPlan], D: int, stats: Stats) -> None:
+def _scan_slash(bar: B.Bar) -> bool:
+    """R29: a slash bar of a scanned drum book (no slash reader there): the readers found nothing at all
+    (Audiveris: no note, no rest) or homr read the slashes as rests (4 rests, never a whole-bar rest)."""
+    rests = [e for e in bar.items if e.tag == "note" and e.find("rest") is not None]
+    return bar.source in ("audiveris", "crop") and bar.rest_only and (
+        not rests or (bar.source == "crop" and len(rests) >= 4))
+
+
+def continue_patterns(plans: list[SysPlan], D: int, stats: Stats, scan: bool = False) -> None:
     """Slash bars after a written-out pattern ("cont. in same style ... still fingerpicking", Ghost 4
     guitar) repeat the last written bar while the slashes last; the slash bar's chord symbols and
-    text stay (user 2026-10-18)."""
+    text stay (user 2026-10-18). scan: drum book scans, slash bars by `_scan_slash`; a pitched bar
+    (Xylophone on the drum staff) ends the pattern."""
     last: dict[int, tuple[B.Bar, int]] = {}      # track -> (pattern bar, its length)
     for p in plans:
         for gi, g in p.chosen.items():
             L = p.system.logical[gi]
             for i, bar in enumerate(g):
                 length = B.bar_length(p.times[i], D)
-                if bar.source != "slash":
+                if scan and (any(e.find("pitch") is not None for e in bar.items if e.tag == "note")
+                             or (bar.rest_only and not _scan_slash(bar))):
+                    last.pop(L, None)       # a printed rest or a pitched bar ends the groove
+                    continue
+                if not (_scan_slash(bar) if scan else bar.source == "slash"):
                     # a pattern has a rhythm; a held note (Ghost 4 guitar 39-40) is none, and neither is a
                     # bar that does not add up (homr >= 0.7.1 reads slashes as notes on the middle line)
-                    if B.bar_ok(bar, length) and len({on for on, el in B.onsets(bar)
+                    # scans: Audiveris' drum voices rarely fill the bar; a partial groove beats an empty bar
+                    if (scan or B.bar_ok(bar, length)) and len({on for on, el in B.onsets(bar)
                                                       if el.tag == "note" and el.find("rest") is None}) >= 2:
                         last[L] = (bar, length)
                     continue

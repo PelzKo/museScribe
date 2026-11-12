@@ -209,3 +209,14 @@ def test_read_systems_skips_repeat_gaps_and_staff_end_signatures():
     page = NS(get_drawings=lambda: lines, rect=NS(width=400))
     [(top, bars)] = SL.read_systems(page, NS(width=400))
     assert bars == [(10, 200), (202.5, 395)]
+
+
+def test_scan_slash_bars_of_drum_books():
+    from lxml import etree
+    rest = lambda t: etree.fromstring(f"<note><rest/><duration>2</duration><type>{t}</type></note>")  # noqa: E731
+    assert A._scan_slash(B.Bar([], "audiveris"))                                  # nothing read at all
+    assert A._scan_slash(B.Bar([rest("quarter") for _ in range(4)], "crop"))      # homr: slashes as rests
+    assert not A._scan_slash(B.Bar([rest("whole")], "crop"))                      # a printed rest
+    assert not A._scan_slash(B.Bar([rest("quarter") for _ in range(4)], "audiveris"))
+    assert not A._scan_slash(B.Bar([], "rest"))                                   # multi-rest filler
+    assert not A._scan_slash(_bar())

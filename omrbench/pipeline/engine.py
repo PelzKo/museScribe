@@ -430,6 +430,8 @@ class Pipeline(Engine):
         if not is_scan(sample.pdf) and sample.score_type != "piano_reduction" and (sample.score_type == "drums" or
                 SL.read_lines(sample.pdf, pages, re.compile(r".*(same style|fingerpicking)", re.I))):
             A.continue_patterns(plans, D, stats)
+        elif is_scan(sample.pdf) and sample.score_type == "drums":
+            A.continue_patterns(plans, D, stats, scan=True)   # R29: the groove over the "etc." slash bars
         credits, instruments = A.place_text(
             plans, pages, D, stats, sample.meta, split, estimate, symbols,
             SL.read_lines(sample.pdf, pages, re.compile(r"[A-Z].*[:;]"), left=True)
