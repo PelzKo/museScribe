@@ -699,6 +699,10 @@ Drums-Percussion -15, worst part +0). Drum book p. 18 prints "[to] 194" with "mf
 following text measured +313 (`r45g-a`: Anastasia 4 Violin 2 +207, 3 Trumpet +135, 2 Reed 3 +61). Left: around
 180-190 the kit output is still 2-5 bars ahead (extra E5 groove bars 182-184 next to the 182-184 multi-rest), and
 the ride F5 read as G5 / E5 in 197-204.
+**R45h (kit rebuild also on equal hits) rejected 2026-11-12, measured +33 (`r45h-a`; Anastasia 3 Drums-Percussion
++22 / +2, 5 +4 / +1).** Replacing a reading that fills the bar with the `.omr` rebuild when both have as many hits
+loses: homr's / Audiveris' filled bars are better than the x-placed onsets there. R45f keeps "fewer hits or not
+filled".
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
