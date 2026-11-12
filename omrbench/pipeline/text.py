@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 
 from .layout import Page, Staff, System, Text
+from .ocr import DYNAMIC
 
 RANGE = re.compile(r"^\[?(\d{1,4})\s*[-–—]\s*(\d{1,4})\]?$")
 NUMBER = re.compile(r"^\d{1,4}$")
@@ -401,6 +402,15 @@ def classify(page: Page, vocal: bool = False, running: set[str] | None = None) -
             res.rehearsals.append((Placed(Line(ln.page, atoms[:1]), sy, staff, above),
                                    atoms[0].value))
             ln = Line(ln.page, atoms[1:])
+            t = ln.text
+        # a cut mark joined with the dynamic after it ("[to] 194 mf", Anastasia 4 drums)
+        k = next((k for k in range(len(atoms) - 1, 0, -1)
+                  if to_bar(Line(ln.page, atoms[:k]).text) is not None), 0)
+        if k and len(ln.atoms) == len(atoms) and all(DYNAMIC.fullmatch(a.value) for a in atoms[k:]):
+            cut = Placed(Line(ln.page, atoms[:k]), sy, staff, above)
+            res.jumps.append((cut, to_bar(cut.line.text)))
+            res.words.append(cut)
+            ln = Line(ln.page, atoms[k:])
             t = ln.text
         pl = Placed(ln, sy, staff, above)
         if (target := to_bar(t)) is not None:

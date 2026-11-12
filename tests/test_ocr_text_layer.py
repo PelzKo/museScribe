@@ -22,3 +22,17 @@ def test_vector_page_bar_number_from_text_layer(tmp_path):
     assert [w["text"] for w in words[0]] == ["12"]
     assert ocr.supplement(lp, words[0]) == 1
     assert lp.texts[-1].value == "12" and lp.texts[-1].kind == "number"
+
+
+def test_cut_mark_joined_with_a_dynamic():
+    from omrbench.pipeline import text as T
+    from omrbench.pipeline.layout import Text
+    # "[to] 194 mf" read as one line below the staff (Anastasia 4 drums p. 6): the cut mark still counts
+    staves = [Staff(1, 0, 600, 680, 100, 1100), Staff(2, 0, 900, 980, 100, 1100)]
+    page = Page(number=1, width=1200, height=1600,
+                systems=[System(page=1, id=1, staves=staves[:1], stacks=[]),
+                         System(page=1, id=2, staves=staves[1:], stacks=[])])
+    page.texts = [Text(1, 1, 111, 720, 32, 30, "to]", "word", "", 7), Text(1, 1, 157, 721, 49, 23, "194", "number", "", 7),
+                  Text(1, 1, 215, 700, 66, 49, "mf", "syllable", "", 7)]
+    pt = T.classify(page)
+    assert [j for _, j in pt.jumps] == [(194, "")]

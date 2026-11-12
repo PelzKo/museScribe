@@ -692,6 +692,13 @@ voice 2 when its reading does not fill the bar or has fewer hits. Onsets: the x-
 member; if that does not add up (an unread rest), a voice whose notes alone fill the bar anchors the others by x.
 Grace (small) chords left out. Anastasia 4 Schlagzeug missing hits 260 -> 198, made up 149 -> 157; song 3 almost
 unchanged (82 / 92). Not done: accents of the old bar are not copied (`copy_marks` is pitch-only).
+**R45g (cut mark joined with a dynamic) done 2026-11-12: -15** (`r45f-a` 10 784 -> `r45g-b` 10 769; Anastasia 4
+Drums-Percussion -15, worst part +0). Drum book p. 18 prints "[to] 194" with "mf" right after it; OCR returns
+"to] 194 mf" as one line, so it was no cut mark and the 8 cut bars (186-193) were inserted before 197 instead.
+`text.classify` now splits a leading cut mark off a line when the rest is only dynamics. Splitting it off any
+following text measured +313 (`r45g-a`: Anastasia 4 Violin 2 +207, 3 Trumpet +135, 2 Reed 3 +61). Left: around
+180-190 the kit output is still 2-5 bars ahead (extra E5 groove bars 182-184 next to the 182-184 multi-rest), and
+the ride F5 read as G5 / E5 in 197-204.
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit
