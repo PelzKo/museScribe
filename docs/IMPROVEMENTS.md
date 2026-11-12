@@ -658,6 +658,15 @@ song 3 / 4 truths: C5 snare, F4 bass drum, D4 pedal hi-hat x, E5 tom, F5 ride x,
 `r45-a`: notes are scored by position, it only sets the MuseScore instrument / notehead). With it, `drumkit.apply`
 moves a bar read in bass clef up a tenth when that puts every hit on the kit (Anastasia 3 Schlagzeug 83-87 and
 96-103, 4 bars 33 and 115: C5 read as E3, F4 as A2, G5 as B3).
+**R45b (routing, R28 part) done 2026-11-12: -52** (`r45-b` 11 015 -> `r45-c` 10 963; Anastasia 4 Drums-Percussion
+-21 / -31 (Schlagzeug 615 -> 584, Tamburin 93 -> 72), worst part +0). Anastasia 4 drum book p. 18: Timpani bar 177,
+then "tamb." at 178 on the kit staff. The R2 rule only applied while the track's instrument was the kit, so after
+the Timpani bar "tamb." took the whole rest of the song (kit bars 179-206 in Tamburin). `build_parts` now also
+treats a percussion label as a one-bar label when the track comes back from a pitched instrument to the percussion
+clef and played the kit before. Left in that passage: the output is 2-5 bars off around 182-206 (bar count), F5
+ride read as G5 / E5. Not done: the lower staff of the two-staff systems 78-81 and 174-177 (Glock / Xylophone +
+kit) starts as Triangle (the next unused instrument; "sticks" on the kit staff is not read), about 45 kit hits; a
+kit default for lower staves would break 93-97 (boxed "Triangle" read by OCR as "Triangie").
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit

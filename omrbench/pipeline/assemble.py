@@ -2059,7 +2059,10 @@ def build_parts(plans: list[SysPlan], split: bool, instruments: list[dict],
                     continue
                 cls = _clef_class(bar)
                 label = p.labels.get((gi, i))
-                if label and kit and cur.get(L) == kit and label != kit and klass.get(label) == "perc":
+                # back from a pitched instrument (Timpani) to a track that played the kit: still a kit passage
+                back_to_kit = cls == "perc" and track_cls.get(L) == "pitched" and played[(L, kit)] > 0
+                if label and kit and (cur.get(L) == kit or back_to_kit) and label != kit \
+                        and klass.get(label) == "perc":
                     hits[(L, pos + i)] = (label, p.label_on.get((gi, i), 0))
                     if label not in used:
                         used.append(label)
