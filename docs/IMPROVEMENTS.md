@@ -717,6 +717,10 @@ backward) and 255 in the truths (136 / 119); Audiveris' export has 120. So the d
 are detected, they are just not turned into a barline. Read the dots in `layout.py` (bounds, staff): two dots
 right of a barline = forward, left = backward; feed them into `Bar.barlines` before the book vote of
 `share_barlines`. R27's pairing rule (an end without a start gets one) stays as the fallback.
+**R47 done 2026-11-12: -103** (`r45g-b` 10 769 -> `r47-a` 10 666; Anastasia -74, Ghost -29, worst part +0).
+`layout` reads each repeat dot with the barline of its `repeat-dot-bar` relation (all 718 dots of the h71 work dirs
+have one: 366 left = end, 352 right = start); `assemble.repeat_dots` adds the mark to the bar at the dot's x in every
+group of the system, before the song vote of `share_barlines` (gains spread over all parts, 1-3 each).
 
 R48. **Incomplete truth parts distort the acceptance rule.** User 2026-11-10: the missing articulations in
 Anastasia 3 Bass, Trombone, Trumpet, Keyboard 2 and Anastasia 4 Trumpet, Trombone are gaps in the truth. Today a

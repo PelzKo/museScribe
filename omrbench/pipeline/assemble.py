@@ -850,6 +850,21 @@ def kit_bars(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> N
                     stats.notes.append(f"kit bar rebuilt from the .omr chords: system {plan.index + 1} bar {i + 1}")
 
 
+def repeat_dots(plans: list[SysPlan], pages: list[Page]) -> None:
+    """R47: repeat signs from the `.omr` repeat dots (Audiveris exports far fewer than it detects),
+    added to the bar's read marks of every group of the system before the song vote."""
+    by_page = {p.number: p for p in pages}
+    for plan in plans:
+        page = by_page.get(plan.system.page)
+        ids = {st.id for st in plan.system.staves}
+        for staff, x, mark in page.repeats if page and plan.xs else ():
+            if staff in ids:
+                i = _bar_at(plan, x)
+                for g in plan.chosen.values():
+                    if i < len(g):
+                        g[i].barlines = g[i].barlines | {mark}
+
+
 def _scan_slash(bar: B.Bar) -> bool:
     """R29: a slash bar of a scanned drum book (no slash reader there): the readers found nothing at all
     (Audiveris: no note, no rest) or homr read the slashes as rests (4 rests, never a whole-bar rest)."""

@@ -144,6 +144,7 @@ class Page:
     chords: list[Chord] = field(default_factory=list)
     rests: list[Chord] = field(default_factory=list)
     marks: list[Mark] = field(default_factory=list)
+    repeats: list[tuple[int, float, str]] = field(default_factory=list)  # (staff, x, repeat-start | repeat-end)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
         for sy in self.systems:
@@ -276,6 +277,15 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
             x, y, w, h = _bounds(el)
             c = Chord(int(el.get("staff") or 0), x, y, w, h, small, _f(el, "grade"), *rhythm(el))
             (page.rests if tag == "rest-chord" else page.chords).append(c)
+    # R47: repeat dots right of their barline start a repeat, left of it end one
+    bars = {el.get("id"): el for el in root.iter("barline")}
+    for el in root.iter("repeat-dot"):
+        b = next((bars.get(t) for t, _ in rel.get(("repeat-dot-bar", el.get("id")), [])), None)
+        if b is not None:
+            x, _, w, _ = _bounds(el)
+            bx, _, bw, _ = _bounds(b)
+            page.repeats.append((int(el.get("staff") or 0), x + w / 2,
+                                 "repeat-start" if x + w / 2 > bx + bw / 2 else "repeat-end"))
     for tag in ("dynamics", "wedge"):
         for el in root.iter(tag):
             if el.get("shape"):
