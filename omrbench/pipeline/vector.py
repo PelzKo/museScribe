@@ -20,7 +20,8 @@ GLYPHS = {   # font -> {char: (kind, quarters)}
                         "Œ": ("rest", Fraction(1)), "œ": ("head", None),
                         "Ï": ("head", None), "ú": ("head", None), "w": ("head", None),
                         "J": ("flag", None), "j": ("flag", None), ".": ("dot", None),
-                        ">": ("accent", None), "-": ("tenuto", None), "≈": ("rest", Fraction(1, 4))},
+                        ">": ("accent", None), "-": ("tenuto", None), "≈": ("rest", Fraction(1, 4)),
+                        "ﬂ": ("accent-staccato", None), "˘": ("accent-staccato", None)},  # one glyph, both marks
     # drum heads: black normal / x heads take their value from the stem; ⊗ half (X), ⊗ / normal whole
     "MaestroPercussion": {"œ": ("drum", None), "x": ("drum", None), "X": ("drum", Fraction(2)),
                           "Y": ("drum", Fraction(4)), "w": ("drum", Fraction(4))},
@@ -205,7 +206,9 @@ def read_drum_page(pdf_page, page) -> list[SlashBar]:
         left = min(x0 for x0, _, y in hlines if abs(y - top) < 0.2)
         right = max(x1 for _, x1, y in hlines if abs(y - top) < 0.2)
         edges = [left] + _barlines(vthin, top, bottom, left, right) + [right]
-        mine = [g for g in glyphs if top - 4 * sp <= g[1] <= bottom + 4 * sp]
+        # marks sit beyond the stem end (Ghost 5: accent + staccato 6 spaces below the staff)
+        mine = [g for g in glyphs if top - 4 * sp <= g[1] <= bottom + 4 * sp
+                or (g[3] in ("accent", "tenuto", "accent-staccato") and top - 7 * sp <= g[1] <= bottom + 7 * sp)]
         chords: dict = {}           # stem (or the head itself) -> [heads]
         for g in mine:
             if g[3] != "drum":
@@ -234,10 +237,10 @@ def read_drum_page(pdf_page, page) -> list[SlashBar]:
                 if any(g[3] == "dot" and x + w <= g[0] <= x + w + 2 * sp and abs(g[1] - y) <= sp for g in mine):
                     rest.dur *= Fraction(3, 2)
                 evs.append(rest)
-            elif kind in ("accent", "tenuto"):
+            elif kind in ("accent", "tenuto", "accent-staccato"):
                 near = [e for e in evs if e.kind == "drum" and abs(e.x - x) < sp and (e.voice == 1) == (y < mid)]
                 if near:
-                    near[0].marks.append(kind)
+                    near[0].marks.extend(kind.split("-"))
         notes = sorted((e for e in evs if e.kind == "drum"), key=lambda e: e.x)
         for x0, x1, y0, y1 in curves:   # ties: a curve from one head to the next of its voice (above = 1)
             if not (top - 3 * sp <= y0 <= bottom + 3 * sp):

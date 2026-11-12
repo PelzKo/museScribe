@@ -614,6 +614,9 @@ of its length. The groove still sits at C5 (item 3) and the bars are scored by s
 **R44b (item 3) done 2026-11-12: -194** (`r44-a` 11 399 -> `r44-b` 11 205; Ghost 5 Drums 288 -> 94, worst part +0).
 `scripts/derive_drumkit.py ghost` re-run with the Ghost 4 / 5 / 20 truths: D5 Low-Mid Tom added (the groove's toms
 no longer snap to the snare C5), B4 gone (no truth hit left), G5 also circle-x Open Hi-Hat.
+**R44c (item 1) done 2026-11-12: -26** (`r44-b` 11 205 -> `r44-c` 11 179; Ghost 5 / 4 / 20 Drums -16 / -5 / -5, worst
+part +0). `read_drum_page` reads the accent + staccato glyph ("ﬂ" / "˘") and marks up to 7 spaces off the staff
+(beyond the stem end), and `place_sim` runs on drum books too, so `bars.apply_sim` carries the marks to bar 7.
 
 R45. **Anastasia drum kit (the part the user spends the most time on).** Schlagzeug in song 4 costs 661 of 787
 from scratch, in song 3 252 of 448. Split of the kit bars (`r13-ref`, bars aligned like the metric):
