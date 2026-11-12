@@ -863,6 +863,12 @@ only `r51-a` -189; + every staccato `r51-b` -226 (song 5 parts +2..+10); staccat
 4 Keyboard 1 -115, 4A Violin 2 -30 / Violin 1 -13, 4 Keyboard 2 -24, 3 Keyboard 1 -22, 4 Violin 2 -20; worst part
 +8 Anastasia 5 Keyboard 2, 3 Keyboard 2 +7, 5 Keyboard 1 +5: staccatos the truth does not have).
 
+R52. **Ghost 5 Guitar bar 10: "sim." never reached `apply_sim`.** `vector.read_lines` finds it (text top
+1331.04), but `place_sim` only looked 4 interlines below a staff (staff bottom 1248 + 4 x 20.75 = 1331.0), so no
+staff took it and bars 11-14 kept no marks. The window below the staff is now 5 interlines (the nearest staff
+bottom still wins). The truth writes accent + staccato on both notes of bars 10-14, as bar 10 is read.
+**Done 2026-11-12: `r51-e` -> `r52-a` -72** (9 892 -> 9 820; Ghost 5 Guitar -72, no part worse).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

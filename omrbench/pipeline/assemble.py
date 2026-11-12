@@ -1073,7 +1073,8 @@ def place_sim(plans: list[SysPlan], lines: list[tuple]) -> None:
         for plan in plans:
             if plan.system.page != page or not plan.n:
                 continue
-            st = min((s for s in plan.system.staves if s.top - 2 * s.interline <= y <= s.bottom + 4 * s.interline),
+            # y is the text's top: Ghost 5 Guitar bar 10 "sim." starts 4.002 interlines below its staff
+            st = min((s for s in plan.system.staves if s.top - 2 * s.interline <= y <= s.bottom + 5 * s.interline),
                      key=lambda s: abs(y - s.bottom), default=None)
             if st is None:
                 continue
