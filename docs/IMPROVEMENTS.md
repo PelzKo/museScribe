@@ -844,6 +844,11 @@ R50. **Clusters of missing articulations and notes in `r25w-a`** (largest by par
   male voice (`MALE_VOICES`) are no longer merged; workbook song 3 PianoReduction cell: `All Men=Männer` added
   (and to its plainText list). **Done 2026-11-12: `am1-a` -> `am2-b` -82** (10 237 -> 10 155; Anastasia 3
   PianoReduction Männer -78, Frauen -4), no part worse. Code alone (`am2-a`, no workbook entry): -4. 12 clash bars left.
+- R50c. **Lower-staff staccatos of keyboards (Anastasia 4 Keyboard 1: truth 289 on staff 2, output 209; staff-2
+  accents 78 vs 28).** Tried: `copy_marks` also copies Audiveris' staccato onto staff-2 homr notes. **Rejected
+  2026-11-12, measured +12 (`am3-a` against `am2-b`):** Anastasia 4 Keyboard 1 unchanged, other keyboards +1..+4
+  (made-up Audiveris dots, as in R5 `r7-a`). The missing staff-2 marks of song 4 Keyboard 1 do not reach the homr
+  notes by onset + staff + pitch (homr's voices / chord split differ from Audiveris'); needs placing by x (`imgpos`).
 
 ## Round 4 (2026-10-18): ranked by expected gain
 
