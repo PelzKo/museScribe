@@ -710,6 +710,11 @@ where the truth has a marcato. `bars.copy_marks` only adds Audiveris marks to no
 homr read wins over Audiveris' marcato. Rule: where Audiveris has MARCATO on the note (same onset, staff, pitch)
 and the reader has an accent, write the marcato. homr 0.7.1 also has a strong-accent token (8 on the Anastasia 4
 Horn crops where 0.7.0 gave none): a second vote. No shape analysis of the crop needed.
+**R46 rejected 2026-11-12, measured +1 (`r46-a` against `r47-a`; Anastasia 3 Reed 1 +1).** All 260 MARCATO inters
+of the h71 work dirs hang on a chord (`chord-articulation`), and the output already has a marcato on almost every one
+of them (song 4: 128 of 146 matched onsets, the other 18 have no mark at all): an accent at an `.omr` MARCATO
+occurs twice in all Anastasia songs. The output accents where the truth has a marcato are read as ACCENT by Audiveris
+too, so the `.omr` shape gives no evidence there; only homr 0.7.1's strong-accent token or a crop shape check could.
 
 R47. **Repeat signs from the `.omr` repeat dots (R27, first bullet).** The `.omr` files hold 980 `repeat-dot`
 inters (4 dots per sign on these staves: about 245 signs) against 126 repeat marks in the output (69 forward, 57
