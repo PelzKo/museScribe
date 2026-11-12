@@ -402,7 +402,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R27b `r27c-a` **10 421** (Anastasia 7 719, Ghost 2 702), double barline before a "[to] N" cut moved to bar N-1.
   R14 `r14w-a` **10 406** (Anastasia 7 715, Ghost 2 691), one-staff treble parts keep their first clef.
   R25 `r25w-a` **10 401** (Anastasia 7 710, Ghost 2 691), exact duplicate directions removed.
-  **Reference from now on: `r25w-a`.**
+  R50a `am1-a` **10 237** (Anastasia 7 710, Ghost 2 527), printed time signatures of vector pages.
+  **Reference from now on: `am1-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

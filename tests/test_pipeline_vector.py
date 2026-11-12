@@ -206,9 +206,9 @@ def test_read_systems_skips_repeat_gaps_and_staff_end_signatures():
               "items": [("l", pt(0, y), pt(400, y))]} for y in (100, 102, 104, 106, 108)]
     lines += [{"type": "s", "rect": NS(height=8, width=0), "width": 0.3,
                "items": [("l", pt(x, 100), pt(x, 108))]} for x in (10, 200, 202.5, 395)]
-    page = NS(get_drawings=lambda: lines, rect=NS(width=400))
-    [(top, bars)] = SL.read_systems(page, NS(width=400))
-    assert bars == [(10, 200), (202.5, 395)]
+    page = NS(get_drawings=lambda: lines, rect=NS(width=400), get_text=lambda kind: {"blocks": []})
+    [(top, bars, times)] = SL.read_systems(page, NS(width=400))
+    assert bars == [(10, 200), (202.5, 395)] and times == []
 
 
 def test_scan_slash_bars_of_drum_books():
@@ -220,3 +220,11 @@ def test_scan_slash_bars_of_drum_books():
     assert not A._scan_slash(B.Bar([rest("quarter") for _ in range(4)], "audiveris"))
     assert not A._scan_slash(B.Bar([], "rest"))                                   # multi-rest filler
     assert not A._scan_slash(_bar())
+
+
+def test_time_sigs_on_staff_lines():
+    # R50a: staff lines 100..120 (space 5); "4" over "4" at x 50, "12" over "8" at x 200, a multi-rest "2" above
+    st = [100, 105, 110, 115, 120]
+    chars = [(50, 105, 4, "4"), (50, 115, 4, "4"), (200, 105, 4, "1"), (204, 105, 4, "2"), (202, 115, 4, "8"),
+             (300, 95, 4, "2")]
+    assert SL._time_sigs(chars, st) == [(50, ("4", "4")), (200, ("12", "8"))]

@@ -371,14 +371,16 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
             for gi, group in enumerate(groups):
                 bar = B.rest_bar(len(group), B.bar_length(cur_time, D), D)
                 h_bars[gi] = [bar]
-        vx = None
+        vx, vt, v_times = None, [], False
         if not raw and vector_bars and len(sy.staves) == 1:
             # born-digital part: the printed barlines are the bar count and the bar x ranges
             # (multi-staff systems: piano and vocal staves are barred apart, not handled)
             top = sy.staves[0].top
-            vx = next((xs for t, xs in vector_bars.get(sy.page, ()) if abs(t - top) < il), None)
+            vx, vt = next(((xs, ts) for t, xs, ts in vector_bars.get(sy.page, ()) if abs(t - top) < il), (None, []))
             if vx:
                 n, how = len(vx), "vector"
+                # the page's time signatures are read from its glyphs
+                v_times = any(ts for *_, ts in vector_bars.get(sy.page, ()))
             else:
                 vx = None
         stats.systems[how] += 1
@@ -410,11 +412,17 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
         plan.aud = a_src
         for i in range(n):
             t = h_src[i].time if h_src and h_src[i].time else None
+            # born-digital: the time signature printed in the bar (homr and Audiveris miss
+            # some changes, Ghost 5 2/4 -> 4/4, and the bars of the missed time win the vote)
+            printed_t = next((tt for x, tt in vt if plan.xs[i][0] <= x < plan.xs[i][1]), None) if vx else None
+            if v_times and cur_time:
+                t = None        # homr's Bar.time is the time it carries, not one printed here
+            t = printed_t or t
             if t is None:
                 t = cur_time or (a_src[i].time if a_src else None)
             if allowed and t not in allowed:
                 t = main_time       # the song never has this time: a misread
-            run = run + 1 if t == cur_time and not (h_src and h_src[i].time) else 1
+            run = run + 1 if t == cur_time and not (h_src and h_src[i].time) and not printed_t else 1
             if allowed and t != main_time and t in max_run and run > max_run[t]:
                 t = main_time
             plan.times.append(t)

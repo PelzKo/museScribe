@@ -472,6 +472,7 @@ real implementation in `transcribe.share_marks` should land close, but must be r
 | R47 | Repeat signs from the `.omr` repeat dots | 980 dots (about 245 signs), output 126 repeats, truth 255 | part of R27's -76..-104, more reliable | medium |
 | R48 | Incomplete truth parts: skip their articulations in the score | about 500 actions that are not errors | 0 (measurement) | small |
 | R49 | homr 0.7.1 (dynamics, marcato, ties, tremolo, two voices, note positions) | **done 2026-11-11: -1 312** (`r14-h70` 13 555 -> `r14-h71` 12 243), see below | `imgpos`, drum kit voices still open | medium–large |
+| R50 | Clusters of missing articulations / notes in `r25w-a` (time signatures, singer labels, lower-staff marks) | Ghost 5 4/4 bars ~200, Anastasia 3 Männer 148 notes | see R50a-c | small |
 
 R40. **Audiveris already finds the hairpins and dynamics; they are lost at its MusicXML export.** The backlog said
 "Audiveris never sees them, a detector is needed" (U3, U4, R7, #33). That is wrong. Counted over all Anastasia scan
@@ -827,6 +828,16 @@ note (`<!-- imgpos: x, y -->`). Hairpins and "arco" / "pizz." are not in its voc
   `results/<show>/runs/x-h71/pipeline/` (work dirs copied from `r3`, `s3`, `20261102-064211`; other margins only
   for crops that failed, like the pipeline; reassemble with `scripts/reassemble.py <show> --from x-h71 --to NEW`),
   so the adaptation can be developed without re-reading.
+
+R50. **Clusters of missing articulations and notes in `r25w-a`** (largest by part and cause).
+- R50a. **Printed time signatures of vector pages.** Ghost 5 (Bass, Cello, Guitar, ...): the 2/4 -> 4/4 change at
+  bar 14 is missed by homr and Audiveris, so the time 2/4 is carried, Audiveris' 2-quarter bars pass the 2/4 length
+  check, homr's full 4-quarter bars fail it, and `apply_song_time` later pads the bars to 4/4 with a rest (2 notes
+  and their marks missing per bar). `vector.read_systems` now also reads the time signatures (full-size music-font
+  digits on the 2nd / 4th staff line, same x); `plan_systems` takes the printed time per bar and carries it (homr's
+  `Bar.time` is its carried time, not a printed one) on pages where the vector reader found any time.
+  **Done 2026-11-12: `r25w-a` -> `am1-a` -164** (10 401 -> 10 237; Ghost 5 Cello -63, Bass -56, Guitar -34), no part
+  worse. Ghost 5 Guitar still has 2-note 4/4 bars where its crop failed (only Audiveris' reading).
 
 ## Round 4 (2026-10-18): ranked by expected gain
 

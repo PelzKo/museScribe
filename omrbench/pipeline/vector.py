@@ -463,9 +463,28 @@ def read_lines(pdf, pages: list, pattern, left: bool = False) -> list[tuple[int,
     return out
 
 
-def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]]]]:
-    """(staff top, [(left, right) of every printed bar]) of each staff, in the coordinates of `page`:
-    the exact bar count and bar x ranges of a born-digital page."""
+def _time_sigs(chars: list[tuple[float, float, float, str]], st: list[float]) -> list[tuple[float, tuple[str, str]]]:
+    """(x, (beats, beat-type)) of the time signatures printed on staff `st`: music-font digits
+    with their baseline (Finale fonts: the glyph centre) on the second line (beats) over digits on the fourth line, same x."""
+    sp = (st[4] - st[0]) / 4
+
+    def row(y: float) -> list[tuple[float, float, str]]:
+        cs = sorted((x, x + w, c) for x, base, w, c in chars if abs(base - y) < sp / 2)
+        out: list[tuple[float, float, str]] = []
+        for x0, x1, c in cs:        # "12": adjacent digits are one number
+            if out and x0 - out[-1][1] < sp / 2:
+                out[-1] = (out[-1][0], x1, out[-1][2] + c)
+            else:
+                out.append((x0, x1, c))
+        return out
+    dens = row(st[3])
+    return [(x0, (num, den)) for x0, x1, num in row(st[1])
+            for d0, d1, den in dens if abs((x0 + x1) - (d0 + d1)) / 2 < sp]
+
+
+def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]], list]]:
+    """(staff top, [(left, right) of every printed bar], [(x, time signature)]) of each staff, in the
+    coordinates of `page`: the exact bar count, bar x ranges and printed times of a born-digital page."""
     sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
     hlines, vlines = [], []
     for d in pdf_page.get_drawings():
@@ -479,6 +498,13 @@ def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]]]
                     vlines.append((a.x, min(a.y, b.y), max(a.y, b.y)))
         if d["type"] == "f" and r.height > 4 * r.width:
             vlines.append(((r.x0 + r.x1) / 2, r.y0, r.y1))
+    # full-size music-font digits (x, baseline, width, char): time signatures and multi-rest counts
+    spans = [sp for b in pdf_page.get_text("rawdict")["blocks"] for ln in b.get("lines", []) for sp in ln["spans"]
+             if sp["font"].split("+")[-1].startswith(("Maestro", "EngraverFontSet"))
+             and "Times" not in sp["font"] and "Percussion" not in sp["font"]]
+    big = max((sp["size"] for sp in spans), default=0)
+    chars = [(c["bbox"][0], c["origin"][1], c["bbox"][2] - c["bbox"][0], c["c"]) for sp in spans
+             if sp["size"] > 0.9 * big for c in sp["chars"] if c["c"].isdigit()]
     out = []
     for st in _staves(hlines):
         left = min(x0 for x0, _, y in hlines if abs(y - st[0]) < 0.2)
@@ -489,7 +515,7 @@ def read_systems(pdf_page, page) -> list[tuple[float, list[tuple[float, float]]]
         # repeat and the courtesy signature after the last barline (< 6 spaces at a staff end; Ghost 5 drums)
         bars = [(a, b) for k, (a, b) in enumerate(zip(edges, edges[1:]))
                 if b - a >= (6 if k in (0, len(edges) - 2) else 1.5) * sp]
-        out.append((st[0] * sx, [(a * sx, b * sx) for a, b in bars]))
+        out.append((st[0] * sx, [(a * sx, b * sx) for a, b in bars], [(x * sx, t) for x, t in _time_sigs(chars, st)]))
     return out
 
 
