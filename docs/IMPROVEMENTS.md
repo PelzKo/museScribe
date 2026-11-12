@@ -909,6 +909,17 @@ R57. **R56's `imgpos` x only for instrument parts (the vocal / PianoReduction pa
 the lyrics are what moved (Ghost 4 / Anastasia 5 PianoReduction -3 each, Anastasia 4 PianoReduction +19 over its
 voices); the vocal dynamics / hairpins gain from `imgpos` (Ghost 20 PianoReduction +2 without it).
 
+R58. **Made-up dynamics by source (429 on `r56-b`): Audiveris' exported dynamics copied onto homr's bars.** Measured
+with temporary `src` tags on every output dynamic / wedge (`x-src`, `x-src2`) and the error report's made-up
+matching per bar. Anastasia dynamics, kept / made up: homr (crop) 670 / 211, Audiveris copied onto a homr bar where
+homr has none 77 / 160 (131 of them with the same bar count, so not a bar-mapping slip), Audiveris bars 24 / 14,
+`.omr` R54 46 / 22, OCR text 14 / 9, vocal layout 12 / 10; Ghost (vector) 31 made up in all. Made-up homr dynamics
+are mostly Keyboard (70), Posaune (29), Trompete (26), Cello / Kontrabass (36). Change: `plan_systems` copies no
+Audiveris dynamics onto non-Audiveris bars (wedges, tempo still); R54's `.omr` dynamics fill those bars.
+**Done 2026-11-12: `r56-b` -> `r58-a` -127** (9 674 -> 9 547; Anastasia 7 218 -> 7 092, Ghost 2 456 -> 2 455; best
+Anastasia 4 Keyboard 1 -22, Cello -20, Bass -14, Violin 2 -11; worst part +3 Anastasia 4 Violin 1). R42's lone-dynamic
+thresholds not changed (see R60).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

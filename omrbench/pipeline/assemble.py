@@ -6,7 +6,7 @@ Per system:
 2. per staff group and bar: the crop reading if its bar count matches and the bar's voices fill
    the time signature, else Audiveris (and vice versa, order is configurable)
 3. clef/key from the group's primary source, time signature from the crops where printed
-4. Audiveris dynamics/wedges/tempo and layout text are attached by bar and onset
+4. Audiveris wedges/tempo and layout text are attached by bar and onset
 5. multi-measure rests are expanded from printed bar ranges ("15-17"), counts printed
    above the rest, or the crops' <multiple-rest>
 6. bars are lined up with the printed bar numbers and cut marks ("[to] 97"): missing
@@ -531,17 +531,16 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
                     B.respell(bar, int(a_key))
                     bar.key = bar.read_key = a_key
                     stats.keys_respelled += 1
-                # Audiveris directions (dynamics, wedges, tempo) onto non-Audiveris bars
+                # Audiveris directions (wedges, tempo; R58: no dynamics) onto non-Audiveris bars
                 if s != "audiveris" and bar.source != "audiveris" and a_n:   # a fallback bar may be Audiveris'
                     src = a_bars.get(gi)
                     if src:
                         j = i if len(src) == n else min(len(src) - 1, round(i * len(src) / n))
-                        # homr >= 0.7.1 reads dynamics too: where it has one in the bar, its reading
-                        # stands (all truth songs: writing both +370, Audiveris' only +304 against this)
-                        own = any(e.tag == "direction" and e.find("direction-type/dynamics") is not None
-                                  for e in bar.items)
                         for on, el in B.onsets(src[j]):
-                            if own and el.tag == "direction" and el.find("direction-type/dynamics") is not None:
+                            # no Audiveris dynamics: homr's reading stands where it has one (writing both
+                            # +370), and where it has none they are two thirds made up (R58: 160 of 237 on
+                            # `r56-b`, -127 without them); the `.omr` ones (R54) fill those bars instead
+                            if el.tag == "direction" and el.find("direction-type/dynamics") is not None:
                                 continue
                             if el.tag == "direction":
                                 st = el.findtext("staff")
