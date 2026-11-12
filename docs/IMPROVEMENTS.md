@@ -924,6 +924,24 @@ R59. **R42's lone-dynamic rule with fewer Audiveris dynamics (R58).** Dynamics o
 at least 3 books play (was 4). **Rejected 2026-11-12, measured +1** (`r59-a` against `r58-a` 9 547; +-1 in nine
 parts). Threshold 4 stays.
 
+R60. **Missing dynamics (456 on `r56-b`) / hairpins (299): what the readers have, and a cross-part vote (U3 idea 3).**
+Below the R54 grade: the truth songs' `.omr` hold 278 dynamics glyphs under ctx-grade 0.8 (1 177 above); placing all
+grades (`r54-a`) added 102 more, 49 right and 49 made up, so at most ~50 missing ones sit under the threshold. Hairpins
+have no grade threshold: every `.omr` wedge is already placed (grades 0.6-0.8 only); the missing ones are wedges no
+reader finds (or unplaced ones). Vote tried (`musicxml.share_dynamics` in `share_marks` after R42, `plain` parts out):
+a dynamic that at least half / three quarters of the books playing in a bar have (>= 4 playing, >= 2 having it) goes
+before the first note of every playing book without a dynamic in that bar. **Rejected 2026-11-12, measured +57**
+(`r60-a`, half, 196 added) / **+23** (`r60-b`, three quarters, 79 added) against `r58-a` 9 547: drums, bass, cello
+and the PianoReduction get dynamics the truths do not write (worst Anastasia 4 / 3 Drums-Percussion +6, 3 Cello +6).
+Dynamics differ per instrument too often for a vote.
+
+R61. **Made-up hairpins (161 on `r56-b`): grade / size filter.** Checked with the `src` tags of R58 (`x-src2`): the
+R40 wedges on instrument parts are 560 kept / 128 made up; made up by ctx-grade 0.6 45 / 255, 0.7 83 / 433 (no grade
+above 0.8 on these scans); by width < 6 interlines 11 / 59, 6-12 33 / 229, >= 12 84 / 400. Every class is ~80 %
+right, so any grade or size cut drops about four right hairpins per made-up one. Not tried; made-up ones are spread
+over the brass / low strings (Posaune 25, Fagott 19, Cello 16, Kontrabass 15) and may be truth gaps or wedges hung on
+the wrong staff, not a grade class.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
