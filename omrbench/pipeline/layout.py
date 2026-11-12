@@ -121,13 +121,14 @@ class Chord:
 
 @dataclass
 class Mark:
-    kind: str                # dynamics | wedge
-    shape: str               # DYNAMICS_MF, CRESCENDO, DIMINUENDO, ...
+    kind: str                # dynamics | wedge | articulation
+    shape: str               # DYNAMICS_MF, CRESCENDO, DIMINUENDO, STACCATO, ...
     x: float
     y: float
     w: float
     h: float
     grade: float = 0.0
+    staff: int = 0           # articulation: staff id of its (full-size) chord
 
     @property
     def cy(self) -> float:
@@ -144,6 +145,7 @@ class Page:
     chords: list[Chord] = field(default_factory=list)
     rests: list[Chord] = field(default_factory=list)
     marks: list[Mark] = field(default_factory=list)
+    arts: list[Mark] = field(default_factory=list)          # articulations of full-size chords
     repeats: list[tuple[int, float, str]] = field(default_factory=list)  # (staff, x, repeat-start | repeat-end)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
@@ -277,6 +279,12 @@ def _parse_sheet(root: ET.Element, number: int) -> Page:
             x, y, w, h = _bounds(el)
             c = Chord(int(el.get("staff") or 0), x, y, w, h, small, _f(el, "grade"), *rhythm(el))
             (page.rests if tag == "rest-chord" else page.chords).append(c)
+    for (tag, cid), targets in rel.items():
+        if tag == "chord-articulation" and byid.get(cid) is not None and byid[cid].tag == "head-chord":
+            for t, _ in targets:
+                if (a := byid.get(t)) is not None and a.get("shape"):
+                    page.arts.append(Mark("articulation", a.get("shape"), *_bounds(a), _f(a, "ctx-grade"),
+                                          int(byid[cid].get("staff") or 0)))
     # R47: repeat dots right of their barline start a repeat, left of it end one
     bars = {el.get("id"): el for el in root.iter("barline")}
     for el in root.iter("repeat-dot"):

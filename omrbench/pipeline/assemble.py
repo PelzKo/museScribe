@@ -88,6 +88,7 @@ class Stats:
     dynamics: int = 0              # placed from the layout (vocal score)
     wedges: int = 0
     marks_unplaced: int = 0
+    arts_by_x: int = 0             # .omr articulations placed on homr notes by image x (imgpos)
     chord_marks_deduped: int = 0   # repeated staccatos etc. on the notes of one chord
     dynamics_text: int = 0         # dynamics read as text (OCR) written as <dynamics>
     slurs_to_ties: int = 0         # slurs between two equal pitches written as ties
@@ -555,6 +556,72 @@ def plan_systems(pages: list[Page], aud: dict, crop: dict, D: int, prefer: list[
     return plans
 
 
+ART_TAG = {"ACCENT": "accent", "TENUTO": "tenuto", "MARCATO": "strong-accent",
+           "MARCATO_BELOW": "strong-accent", "STACCATO": "staccato"}
+STACCATO_GRADE = 0.8    # Audiveris makes up dots: below this ctx-grade +37 more (r51-b vs r51-d)
+IMGPOS = re.compile(r"imgpos:\s*(-?\d+(?:\.\d+)?),")
+
+
+def _imgpos_x(note: etree._Element) -> float | None:
+    for c in note:
+        if c.tag is etree.Comment and (m := IMGPOS.search(c.text or "")):
+            return float(m.group(1))
+    return None
+
+
+def place_arts(plans: list[SysPlan], pages: list[Page], stats: Stats,
+               kinds: tuple[str, ...] = ("accent", "strong-accent", "tenuto", "staccato")) -> None:
+    """R51: the `.omr` articulations onto homr's notes by image x (homr's `imgpos` comment, crop
+    pixels, plus the crop's left edge as `_crop_jobs` cuts it) on the same staff, where that onset
+    has no such mark yet; staccatos only from ctx-grade STACCATO_GRADE up. Onset + pitch matching (`copy_marks`) misses them where homr splits
+    voices / chords differently from Audiveris."""
+    by_page = {p.number: p for p in pages}
+    for plan in plans:
+        page = by_page.get(plan.system.page)
+        if page is None or not plan.chosen or plan.system.skip:
+            continue
+        for gi, g in enumerate(plan.system.groups()):
+            if gi not in plan.chosen:
+                continue
+            il = g[0].interline
+            # shortcut: page and 300 dpi image pixels taken as equal (Audiveris reads the same raster)
+            left = max(0, int(min(s.left for s in g) - 3 * il))
+            sid = {st.id: si for si, st in enumerate(g, start=1)}
+            notes = []      # (page x, staff, onset, note, bar)
+            for bar in plan.chosen[gi]:
+                for on, n in B.onsets(bar):
+                    if n.tag == "note" and n.find("rest") is None and n.find("grace") is None \
+                            and (x := _imgpos_x(n)) is not None:
+                        notes.append((left + x, int(n.findtext("staff", "1") or 1), on, n, bar))
+            if not notes:
+                continue
+            for a in page.arts:
+                tag = ART_TAG.get(a.shape)
+                if tag not in kinds or a.staff not in sid:
+                    continue
+                if tag == "staccato" and a.grade < STACCATO_GRADE:
+                    continue
+                cx = a.x + a.w / 2
+                cand = [t for t in notes if t[1] == sid[a.staff]]
+                if not cand:
+                    continue
+                x, staff, on, n, bar = min(cand, key=lambda t: abs(t[0] - cx))
+                if abs(x - cx) > 0.8 * il:
+                    continue
+                same = [m for o, m in B.onsets(bar) if o == on and m.tag == "note"
+                        and int(m.findtext("staff", "1") or 1) == staff]
+                if any(m.find(f"notations/articulations/{tag}") is not None for m in same):
+                    continue
+                nt = n.find("notations")
+                if nt is None:
+                    nt = etree.SubElement(n, "notations")
+                arts = nt.find("articulations")
+                if arts is None:
+                    arts = etree.SubElement(nt, "articulations")
+                etree.SubElement(arts, tag)
+                stats.arts_by_x += 1
+
+
 def _rested_cues(bar: B.Bar, staff: int, length: int | None) -> set[int]:
     """Onsets of the notes on `staff` when another voice there rests the whole bar: the
     player rests, the notes above the rest are a cue (printed full size in these parts)."""
@@ -819,7 +886,7 @@ def kit_events(chords: list, rests: list, L: Fraction, right: float, il: float) 
                 return None
             out += [SL.Event(0, "rest", d, voice=voice) for d in _rests(o - t)]
             d = min(c.dur for c in mine)
-            out.append(SL.Event(0, "drum", d, voice=voice,
+            out.append(SL.Event(mine[0].x + mine[0].w / 2, "drum", d, voice=voice,
                                 pos=tuple(dict.fromkeys(_kit_pos(s) for c in mine for s in c.steps))))
             t = o + d
         if t > L:
@@ -851,6 +918,13 @@ def kit_bars(plans: list[SysPlan], pages: list[Page], D: int, stats: Stats) -> N
                                  Fraction(length, D), r, il)
                 if not evs:
                     continue
+                played = [e for e in evs if e.kind != "rest"]
+                for a in page.arts:     # R51: the kit chords' accents by x (the old bar's onsets are off)
+                    tag = ART_TAG.get(a.shape)
+                    if tag in ("accent", "strong-accent") and inside(a) and played:
+                        e = min(played, key=lambda e: abs(e.x - (a.x + a.w / 2)))
+                        if abs(e.x - (a.x + a.w / 2)) <= 0.8 * il and tag not in e.marks:
+                            e.marks.append(tag)
                 hits = lambda b: sum(1 for n in b.notes() if n.find("rest") is None and n.find("grace") is None)  # noqa: E731
                 new = slash_bar(SL.SlashBar(page.number, l, r, st.top, st.bottom, evs), bar, D)
                 if new is not None and (not B.bar_ok(bar, length) or hits(new) > hits(bar)):

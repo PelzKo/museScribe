@@ -850,6 +850,19 @@ R50. **Clusters of missing articulations and notes in `r25w-a`** (largest by par
   (made-up Audiveris dots, as in R5 `r7-a`). The missing staff-2 marks of song 4 Keyboard 1 do not reach the homr
   notes by onset + staff + pitch (homr's voices / chord split differ from Audiveris'); needs placing by x (`imgpos`).
 
+R51. **`.omr` articulations onto homr's notes by x (`imgpos`, open from R49 / R50c).** `layout` loads the
+articulation inters of full-size head chords (`Page.arts`: shape, bounds, ctx-grade, chord staff);
+`assemble.place_arts` (scans, after `repeat_dots`) turns homr's `<!-- imgpos: x, y -->` into page x (crop left =
+leftmost staff - 3 interlines, as `_crop_jobs` cuts; page = 300 dpi pixels) and puts each accent / marcato / tenuto /
+staccato on the homr note of that staff nearest in x (<= 0.8 interline) whose onset lacks that mark. Staccatos only
+from ctx-grade 0.8 (Audiveris' made-up dots). `kit_bars` (R45f rebuilt drum bars) gives its events the chord x and
+takes the kit chords' accents / marcatos the same way. Variants (against `am2-b` 10 155): accent / marcato / tenuto
+only `r51-a` -189; + every staccato `r51-b` -226 (song 5 parts +2..+10); staccatos on lower staves only `r51-c`
+-244; staccatos from grade 0.8 `r51-d` -250; + kit accents `r51-e` -263 (kit bars -13, no part worse).
+**Done 2026-11-12: `am2-b` -> `r51-e` -263** (10 155 -> 9 892; Anastasia 7 628 -> 7 365, Ghost unchanged; Anastasia
+4 Keyboard 1 -115, 4A Violin 2 -30 / Violin 1 -13, 4 Keyboard 2 -24, 3 Keyboard 1 -22, 4 Violin 2 -20; worst part
++8 Anastasia 5 Keyboard 2, 3 Keyboard 2 +7, 5 Keyboard 1 +5: staccatos the truth does not have).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

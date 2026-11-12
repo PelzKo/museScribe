@@ -404,6 +404,8 @@ class Pipeline(Engine):
             A.kit_bars(plans, pages, D, stats)      # R45f: kit bars from the .omr head chords
         if repairs:
             A.repeat_dots(plans, pages)             # R47: repeat signs from the .omr repeat dots
+        if repairs and is_scan(sample.pdf):
+            A.place_arts(plans, pages, stats)    # R51: .omr articulations onto homr's notes by imgpos
         if not is_scan(sample.pdf) and sample.score_type != "drums":
             A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
         if not is_scan(sample.pdf):         # drum books too (R44: Ghost 5 bass drum 3-7)
