@@ -884,6 +884,14 @@ Against `r52-a` 9 820: every grade `r54-a` +1 (102 added, 49 right / 49 made up)
 **Done 2026-11-12: `r52-a` -> `r54-c` -19** (9 820 -> 9 801; Anastasia 7 365 -> 7 346, Ghost unchanged; worst part
 +2 Anastasia 4 Reed 2).
 
+R55. **Dynamics moved to the note under their `.omr` glyph (the old U3 placement, now with `imgpos` x).** In
+`place_dynamics`: a dynamic (homr's or exported) of the same token as an `.omr` glyph moves to the homr note nearest
+the glyph's x when it sits at another onset of that bar, or in a neighbour bar (that has no such glyph) while the
+glyph's bar has none. **Rejected 2026-11-12, measured +1** (`r55-a`, every grade) / **+0** (`r55-b`, grade >= 0.8)
+against `r54-c` 9 801 (worst part +2 Anastasia 5 Reed 1): few dynamics move, and dynamics at the wrong beat go
+27 -> 31 while made up go 455 -> 451. homr's and the exported dynamics already sit on the onset of the glyph in
+almost every case (U3: all 228 with an offset were on a note onset); what is left of "wrong bar" is not this.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
