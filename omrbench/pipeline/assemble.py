@@ -762,10 +762,12 @@ def continue_patterns(plans: list[SysPlan], D: int, stats: Stats) -> None:
                         last[L] = (bar, length)
                     continue
                 pat = last.get(L)
-                if pat is None or pat[1] != length:
+                if pat is None or not length or length % pat[1]:
                     continue
                 keep = [e for e in bar.items if e.tag in ("direction", "harmony")]
-                notes = [copy.deepcopy(e) for e in pat[0].items if e.tag not in ("direction", "harmony")]
+                # a 2/4 pattern twice over a 4/4 slash bar (Ghost 5 drums 8 -> 14-22)
+                notes = [copy.deepcopy(e) for _ in range(length // pat[1])
+                         for e in pat[0].items if e.tag not in ("direction", "harmony")]
                 g[i] = B.Bar(keep + notes, "pattern", bar.staves, dict(bar.clefs), bar.key, bar.time)
                 stats.notes.append(f"pattern bar written over the slashes of system {plans.index(p) + 1} bar {i + 1}")
 
@@ -784,7 +786,11 @@ def place_slashes(plans: list[SysPlan], slash_bars: list[SL.SlashBar], D: int, s
                 break
             i = _bar_at(plan, (sb.x0 + sb.x1) / 2)
             if sb.length * D != B.bar_length(plan.times[i], D):
-                break
+                # a bar the readers left without notes in a misread time (Ghost 5 drums 14-21: 4/4 slashes
+                # planned 2/4): the printed slashes give the length
+                if not plan.chosen[gi][i].rest_only or sb.length.denominator != 1:
+                    break
+                plan.times[i] = (str(sb.length), "4")
             bar = slash_bar(sb, plan.chosen[gi][i], D)
             if bar is not None:
                 plan.chosen[gi][i] = bar

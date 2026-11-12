@@ -385,7 +385,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   U14 `u14-a` 11 460 (metric-neutral), `show_overrides.yaml` moved into data/ (show.yaml, workbook cells).
   U15 `u15-a` 11 460 (metric-neutral), "hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off).
   U16 `u16-a` 11 460 (metric-neutral), singers without a `voice_sounds` entry import as a voice.
-  **Reference from now on: `u16-a`.**
+  R44a `r44-a` **11 399** (Anastasia 8 312, Ghost 3 087), drum grooves written over the slash bars after them.
+  **Reference from now on: `r44-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

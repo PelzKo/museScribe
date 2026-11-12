@@ -606,6 +606,11 @@ bar appears later; log "dropped 5 extra bar(s)"), so the groove bar lands in bar
 alone only gave -42. Fix the vamp bars first. Bars 23 ff. (12/8, cymbal rolls with ⊗ heads, tremolos, the 11-bar
 rest) score about 60 of the 442. Expected with all four: 442 -> about 100. The same mechanism (groove + slashes)
 is R29 on the Anastasia scans; build one function for both.
+**R44a (item 2) done 2026-11-12: -61** (`u16-a` 11 460 -> `r44-a` 11 399; Ghost 5 Drums 333 -> 288, Ghost 20 Drums
+-9, worst part +0). Drum books read the slash bars too (`vector.read_page` next to `read_drum_page`), a slash bar
+the readers left without notes in a misread time takes its length from the slashes (Ghost 5 14-21 were planned
+2/4), and `continue_patterns` runs on every vector drum book, repeating the pattern when the slash bar is a multiple
+of its length. The groove still sits at C5 (item 3) and the bars are scored by staff position.
 
 R45. **Anastasia drum kit (the part the user spends the most time on).** Schlagzeug in song 4 costs 661 of 787
 from scratch, in song 3 252 of 448. Split of the kit bars (`r13-ref`, bars aligned like the metric):

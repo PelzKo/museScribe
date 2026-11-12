@@ -184,3 +184,14 @@ def test_tie_curves_pair_a_head_with_the_same_height_in_the_next_column():
               (76, 199, 106, 109)]                         # last column off the system end
     found = list(_ties(curves, groups, st, lambda y: st, right=200))
     assert found == [(0, a), (2, groups[2][0])]
+
+
+def test_continue_patterns_repeats_a_short_groove_over_a_longer_slash_bar():
+    # R44: a 2/4 groove goes on over the 2/4 and 4/4 slash bars after it
+    from types import SimpleNamespace as NS
+    plan = A.SysPlan(NS(logical={0: 0}), 0, n=3, times=[("2", "4"), ("2", "4"), ("4", "4")])
+    groove = _bar(notes=("D5", "F4"))                      # two quarters at D=4
+    plan.chosen = {0: [groove, B.Bar([], "slash"), B.Bar([], "slash")]}
+    A.continue_patterns([plan], 4, A.Stats())
+    assert [len(b.notes()) for b in plan.chosen[0]] == [2, 2, 4]
+    assert plan.chosen[0][2].source == "pattern"
