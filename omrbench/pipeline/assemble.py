@@ -2483,6 +2483,14 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats, male: re.Patte
     canon = _canonical_singers(plans)
     known = {c for c in canon.values() if len(_DUET.split(c)) == 1}
     piano = OutPart("Piano", 2, [None] * total)
+    # before its first label a staff sings for the singer of that first label (Anastasia 3: the
+    # unlabelled choir staves of bars 39-65 are ALL WOMEN / ALL MEN later)
+    first: dict[int, str] = {}
+    for p in plans:
+        for (gi, i), labels in sorted(p.singers.items(), key=lambda t: t[0][1]):
+            if labels and gi in p.chosen and gi != p.system.piano_group:
+                name = min(labels, key=lambda t: t[0])[1]
+                first.setdefault(p.system.logical[gi], canon.get(name, name))
     voices: dict[str, OutPart] = {}
     cur: dict[int, str] = {}
     texts: dict[int, list[etree._Element]] = {}
@@ -2520,7 +2528,7 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats, male: re.Patte
                     if name is None:
                         if piece.rest_only:
                             continue
-                        name = f"Voice {L}"
+                        name = first.get(L, f"Voice {L}")
                     # a duet label ("DOWAGER+ANASTASIA") puts the line into each singer's part
                     for k, single in enumerate(_singers_of(name, known, groups)):
                         part = voices.setdefault(single, OutPart(T.singer_name(single), 1,

@@ -942,6 +942,15 @@ right, so any grade or size cut drops about four right hairpins per made-up one.
 over the brass / low strings (Posaune 25, Fagott 19, Cello 16, Kontrabass 15) and may be truth gaps or wedges hung on
 the wrong staff, not a grade class.
 
+R62. **Unlabelled choir staves (bars clusters of `r58-a`).** Anastasia 3 bars 39-65: the two choir staves carry no
+label before "ALL WOMEN" / "ALL MEN" at bar 88, so `build_vocal_parts` named them "Voice 1" / "Voice 2", and the
+workbook maps both to Frauen and Männer: each truth part got both staves overlaid (doubled unisons, the other
+voice's notes; the alignment then trades bars for insert + delete, 24 + 13 bar ops in Männer / Frauen). Now a staff
+before its first label takes the singer of that first label (the men's staff also gets the treble-8vb octave).
+**Done 2026-11-12: `r58-a` -> `r62-a` -104** (9 547 -> 9 443; Anastasia 3 Männer -72, Frauen -70; worst part +31
+Ghost 4 Sam: the unlabelled vocal line of bars 3-9 before "SAM:" is now in Sam, the truth leaves it out; Ghost 5
+Frauen +7). Test `test_unlabelled_vocal_staff_takes_its_first_later_label`.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

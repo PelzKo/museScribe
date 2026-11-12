@@ -313,3 +313,25 @@ def test_canonical_singers_keeps_men_apart_from_women():
                          (2, 0): [(0, "DMITRY"), (0, "DMITRY")], (2, 1): [(0, "DIMITRY")]})]
     canon = A._canonical_singers(plans)
     assert canon["ALL MEN"] == "ALL MEN" and canon["DIMITRY"] == "DMITRY"
+
+
+def test_unlabelled_vocal_staff_takes_its_first_later_label():
+    # R62 (Anastasia 3 bars 39-65): choir staves before their first label go to that label's singer
+    from types import SimpleNamespace as NS
+    from lxml import etree
+    from omrbench.pipeline import bars as B
+
+    note = "<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice></note>"
+    system = NS(page=1, stacks=[], piano_group=None, logical={0: 1, 1: 2}, groups=lambda: [0, 1])
+
+    def plan(k, singers):
+        p = A.SysPlan(system, k, n=1, times=[("4", "4")])
+        p.chosen = {g: [B.Bar([etree.fromstring(note)], "crop")] for g in (0, 1)}
+        p.singers = singers
+        return p
+
+    plans = [plan(0, {}), plan(1, {(0, 0): [(0, "ALL WOMEN")], (1, 0): [(0, "ALL MEN")]})]
+    parts, _, _ = A.build_vocal_parts(plans, 1, A.Stats())
+    names = {p.name: p for p in parts}
+    assert "Voice 1" not in names and "Voice 2" not in names
+    assert all(b is not None and not b.rest_only for p in parts for b in p.bars)
