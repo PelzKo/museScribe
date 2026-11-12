@@ -517,7 +517,13 @@ def share_barlines(books: list[list[etree._Element]], bars: int | None = None) -
         nbooks += any(p in voters for p in b)
         for k in mine:
             votes[k] = votes.get(k, 0) + 1
-    keep = {k for k, n in votes.items() if 2 * n >= nbooks}
+    keep = {k for k, n in votes.items() if n >= 0.45 * nbooks}     # R27: 6 of 13 books (song 4) count
+    # R27: a kept repeat start without an end before the next start gets the end most books have there
+    starts = sorted(i for i, mark in keep if mark == "repeat-start")
+    for a, b in zip(starts, starts[1:] + [common]):
+        ends = [(n, -j) for (j, mark), n in votes.items() if mark == "repeat-end" and a <= j < b]
+        if ends and not any((j, "repeat-end") in keep for j in range(a, b)):
+            keep.add((-max(ends)[1], "repeat-end"))     # a tie: the first one
     written = 0
     for p in parts:
         if nbooks < 2 and p in voters:

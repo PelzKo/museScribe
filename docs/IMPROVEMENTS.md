@@ -1122,6 +1122,13 @@ R27. **Barline and repeat vote (barlines 424 + structure 111).** Almost all of i
   1 bar 3 (before the key change at 4; 22 parts), song 2 bars 29 and 65 (65 before the key change at 66; 19 parts
   each), song 3 bar 229 (before "Slower" 230; 20 parts) and probably song 3 bar 66 (key change at 67, page not
   checked; 16 parts). The output has them; about 115 actions are truth gaps.
+**R27a done 2026-11-12: -101** (`r12w-a` 10 563 -> `r27-b` 10 462; all in Anastasia 4, worst part +0). Votes logged
+per song (song 4: 13 voting books): the double barlines at 38 and 182 (truth 177) and the repeat start at 158
+(truth 153) had 6 of 13. `share_barlines` keeps a mark at >= 45 % of the books (6 of 13; same as half for 3-9 and
+14 books), and a kept repeat start without a kept end before the next start gets the end with the most votes in
+between, the first on a tie (159 and 160 had 5 each; the later one cost -25 instead of -101, `r27-a`). Left: the cut
+rule (third bullet, song 1 bar 11 -> 13), song 3 bars 4 / 22 / 46 / 87 and song 5 bar 124 (9-12 of 14 / 13 books
+read a double barline the truth lacks: printed? not checked).
 
 R28. **Anastasia 4 kit routed into Tamburin.** Schlagzeug has 48 truth bars with notes where the output kit has none
 (290 actions). Bars 179–186 and 199–211 (printed 174–181 / 194–206, drum book page 18: "tamb." at 178, "pick up

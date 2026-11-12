@@ -280,6 +280,15 @@ def test_barline_vote_needs_two_books():
     a, b, c = part(3), part(3), part(3, mark_at=1)
     assert musicxml.share_barlines([[a], [b], [c]], 3) == 3     # 2 of 3 books: bar 1 in all 3, bar 2 out
     assert all(p[0].find("barline/repeat") is not None and p[1].find("barline") is None for p in (a, b, c))
+    # R27: a kept start without a kept end gets the first of the ends with the most votes
+    fwd = '<barline location="left"><bar-style>heavy-light</bar-style><repeat direction="forward"/></barline>'
+
+    def marks(n, start, end):
+        return etree.fromstring('<part>' + ''.join(
+            f'<measure>{fwd if i == start else ""}{rep if i == end else ""}</measure>' for i in range(n)) + '</part>')
+    books = [[marks(4, 0, 1)], [marks(4, 0, 2)], [marks(4, 9, 9)], [marks(4, 9, 9)]]
+    musicxml.share_barlines(books, 4)
+    assert [i for i, m in enumerate(books[2][0]) if m.find("barline/repeat[@direction='backward']") is not None] == [1]
 
 
 def test_tie_over_three_bars_and_slur_over_seven_are_dropped():
