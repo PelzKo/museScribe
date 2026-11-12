@@ -918,7 +918,11 @@ are mostly Keyboard (70), Posaune (29), Trompete (26), Cello / Kontrabass (36). 
 Audiveris dynamics onto non-Audiveris bars (wedges, tempo still); R54's `.omr` dynamics fill those bars.
 **Done 2026-11-12: `r56-b` -> `r58-a` -127** (9 674 -> 9 547; Anastasia 7 218 -> 7 092, Ghost 2 456 -> 2 455; best
 Anastasia 4 Keyboard 1 -22, Cello -20, Bass -14, Violin 2 -11; worst part +3 Anastasia 4 Violin 1). R42's lone-dynamic
-thresholds not changed (see R60).
+thresholds not changed (R59).
+
+R59. **R42's lone-dynamic rule with fewer Audiveris dynamics (R58).** Dynamics only one book has are dropped where
+at least 3 books play (was 4). **Rejected 2026-11-12, measured +1** (`r59-a` against `r58-a` 9 547; +-1 in nine
+parts). Threshold 4 stays.
 
 ## Round 4 (2026-10-18): ranked by expected gain
 
