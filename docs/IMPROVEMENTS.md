@@ -1129,6 +1129,9 @@ per song (song 4: 13 voting books): the double barlines at 38 and 182 (truth 177
 between, the first on a tie (159 and 160 had 5 each; the later one cost -25 instead of -101, `r27-a`). Left: the cut
 rule (third bullet, song 1 bar 11 -> 13), song 3 bars 4 / 22 / 46 / 87 and song 5 bar 124 (9-12 of 14 / 13 books
 read a double barline the truth lacks: printed? not checked).
+**R27b (cut rule) done 2026-11-12: -41** (`r27-b` 10 462 -> `r27c-a` 10 421; Anastasia 1, 2 per part, worst part
++0). `align_bars`: when rest bars are inserted for a cut mark, a double barline read on the bar before them moves to
+the last inserted bar (song 1: 11 -> 13).
 
 R28. **Anastasia 4 kit routed into Tamburin.** Schlagzeug has 48 truth bars with notes where the output kit has none
 (290 actions). Bars 179–186 and 199–211 (printed 174–181 / 194–206, drum book page 18: "tamb." at 178, "pick up

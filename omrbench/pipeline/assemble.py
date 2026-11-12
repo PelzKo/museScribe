@@ -2000,6 +2000,12 @@ def align_bars(plans: list[SysPlan], D: int, stats: Stats, log=None, letters: li
             # between systems: at the end of the previous one (where the cut is printed)
             k, i = flat[j - 1][0], flat[j - 1][1] + 1
         _insert_rests(plans[k], i, d, D)
+        if why.startswith("cut mark") and i > 0:
+            # R27: the double barline printed before the cut goes to the last skipped bar (the truths)
+            for g in plans[k].chosen.values():
+                if "double" in g[i - 1].barlines:
+                    g[i - 1].barlines -= {"double"}
+                    g[i + d - 1].barlines |= {"double"}
         stats.alignment_bars_added += d
         msg = f"bar numbers: {d} rest bar(s) inserted before {at(min(j, len(flat) - 1))} ({why})"
         stats.notes.append(msg)
