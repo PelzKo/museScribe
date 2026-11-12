@@ -903,6 +903,12 @@ empty (`(i1, on1) <= (i0, on0)`). It now starts on the nearest note. Against `r5
 Anastasia 5 Violin 1 -12, 4 PianoReduction -11, 5 Violin 2 -9; worst part +4 Anastasia 3 Trombone (sparse truth),
 +3 Anastasia 3 Bass, Ghost 4 / Anastasia 5 PianoReduction).
 
+R57. **R56's `imgpos` x only for instrument parts (the vocal / PianoReduction path kept Audiveris' chord x).**
+`_positions` is also used by `attach_lyrics` and the vocal `place_marks`. **Rejected 2026-11-12, measured +14**
+(`r57-a`, `imgpos` only on the R40 wedge path) / **+12** (`r57-b`, off only for lyrics) against `r56-b` 9 674:
+the lyrics are what moved (Ghost 4 / Anastasia 5 PianoReduction -3 each, Anastasia 4 PianoReduction +19 over its
+voices); the vocal dynamics / hairpins gain from `imgpos` (Ghost 20 PianoReduction +2 without it).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
