@@ -29,6 +29,13 @@ def _step(pos: str) -> int:
     return STEPS.index(pos[0]) + 7 * int(pos[1:])
 
 
+def _at(u: etree._Element) -> str:
+    return f"{u.findtext('display-step', 'C')}{u.findtext('display-octave', '4')}"
+
+
+BASS = 12           # staff steps from a bass-clef reading to the same line in the percussion clef
+
+
 def _pos(step: int) -> str:
     return f"{STEPS[step % 7]}{step // 7}"
 
@@ -55,9 +62,18 @@ def apply(score: etree._Element, kit: dict) -> int:
             mi = etree.SubElement(sp, "midi-instrument", id=f"{pid}-{ids[pos]}")
             etree.SubElement(mi, "midi-channel").text = "10"
             etree.SubElement(mi, "midi-unpitched").text = str(e["midi"])
+        for m in part.iter("measure"):
+            # a bar read in bass clef (Anastasia 3 Schlagzeug 83-87: C5 -> E3, F4 -> A2): a tenth up when
+            # that puts every hit of the bar on the kit
+            us = [n.find("unpitched") for n in m.iter("note") if n.find("rest") is None]
+            if us and all(_pos(_step(_at(u)) + BASS) in kit and _at(u) not in kit for u in us):
+                for u in us:
+                    p = _pos(_step(_at(u)) + BASS)
+                    u.find("display-step").text, u.find("display-octave").text = p[0], p[1:]
+                snapped += len(us)
         for n in notes:
             u = n.find("unpitched")
-            pos = f"{u.findtext('display-step', 'C')}{u.findtext('display-octave', '4')}"
+            pos = _at(u)
             if pos not in kit:
                 near = [p for p in kit if abs(_step(p) - _step(pos)) == 1]
                 if len(near) != 1:

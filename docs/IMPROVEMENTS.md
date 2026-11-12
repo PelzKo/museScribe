@@ -652,6 +652,12 @@ from scratch, in song 3 252 of 448. Split of the kit bars (`r13-ref`, bars align
 - Tremolos on drums: 24 missing in Anastasia 3 Schlagzeug, 20 in Anastasia 4, 15 in Anastasia 5 Becken (rolls).
   Audiveris has no tremolo inter in these `.omr` files; homr 0.7.1 has a tremolo token (no stroke count: write 3
   strokes on half / whole notes, the only value the drum truths use besides Anastasia 5 Violins' 1).
+**R45a (first step) done 2026-11-12: -33** (`r44-d` 11 048 -> `r45-b` 11 015; Anastasia 3 / 4 Drums-Percussion
+-20 / -8, Ghost 5 Drums -5, worst part +0). `scripts/derive_drumkit.py anastasia` re-run (Schlagzeug kit from the
+song 3 / 4 truths: C5 snare, F4 bass drum, D4 pedal hi-hat x, E5 tom, F5 ride x, G5 hi-hat x; alone it measured +0,
+`r45-a`: notes are scored by position, it only sets the MuseScore instrument / notehead). With it, `drumkit.apply`
+moves a bar read in bass clef up a tenth when that puts every hit on the kit (Anastasia 3 Schlagzeug 83-87 and
+96-103, 4 bars 33 and 115: C5 read as E3, F4 as A2, G5 as B3).
 
 R46. **Marcato vs accent from the Audiveris shape (R31).** The `.omr` files of the Anastasia truth songs hold 238
 MARCATO inters; Audiveris' MusicXML has 122 `strong-accent`, our output 53, the truths 94; 55 output accents sit

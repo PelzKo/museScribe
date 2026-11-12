@@ -5,12 +5,14 @@ anastasia:
       from:
       - '1'
       - '2'
+      - '3'
+      - '5'
       positions:
         E4:
           notehead: normal
           instrument: Glissando Down
           midi: 85
-          count: 2
+          count: 5
     Splash-Becken:
       from:
       - '1'
@@ -29,12 +31,133 @@ anastasia:
     Triangel:
       from:
       - '2'
+      - '3'
+      - '4'
+      - '5'
       positions:
         E4:
           notehead: normal
           instrument: Open Triangle
           midi: 82
-          count: 4
+          count: 20
+          also:
+          - notehead: x
+            instrument: Mute Triangle
+            midi: 81
+            count: 3
+    Hängendes Becken:
+      from:
+      - '3'
+      positions:
+        E4:
+          notehead: normal
+          instrument: Suspended Cymbal
+          midi: 58
+          count: 28
+    Tamburin:
+      from:
+      - '3'
+      - '4'
+      positions:
+        E4:
+          notehead: normal
+          instrument: Tambourine
+          midi: 55
+          count: 62
+          also:
+          - notehead: diamond
+            instrument: Instrument 52
+            midi: 52
+            count: 8
+          - notehead: normal
+            instrument: Instrument 82
+            midi: 82
+            count: 3
+    Schlagzeug:
+      from:
+      - '3'
+      - '4'
+      positions:
+        C5:
+          notehead: normal
+          instrument: Snare
+          midi: 39
+          count: 640
+        D4:
+          notehead: x
+          instrument: Pedal Hi-Hat
+          midi: 45
+          count: 18
+        E5:
+          notehead: normal
+          instrument: High Tom
+          midi: 51
+          count: 6
+        F4:
+          notehead: normal
+          instrument: Bass Drum
+          midi: 37
+          count: 340
+        F5:
+          notehead: x
+          instrument: Ride Cymbal
+          midi: 52
+          count: 11
+        G5:
+          notehead: x
+          instrument: Closed Hi-Hat
+          midi: 43
+          count: 60
+          also:
+          - notehead: circle-x
+            instrument: Open Hi-Hat
+            midi: 47
+            count: 2
+    Holzblöcke:
+      from:
+      - '4'
+      positions:
+        D4:
+          notehead: normal
+          instrument: Low Wood Block
+          midi: 78
+          count: 5
+    Kastagnetten:
+      from:
+      - '4'
+      positions:
+        E4:
+          notehead: normal
+          instrument: Castanets
+          midi: 86
+          count: 8
+    Becken:
+      from:
+      - '5'
+      positions:
+        E4:
+          notehead: normal
+          instrument: Suspended Cymbal
+          midi: 58
+          count: 22
+          also:
+          - notehead: normal
+            instrument: Instrument 56
+            midi: 56
+            count: 4
+          - notehead: x
+            instrument: Instrument 80
+            midi: 80
+            count: 2
+    Mark Tree:
+      from:
+      - '5'
+      positions:
+        E4:
+          notehead: normal
+          instrument: Glissando Down
+          midi: 85
+          count: 1
   notes: []
 ghost:
   kits:

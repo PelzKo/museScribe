@@ -390,7 +390,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R44c `r44-c` **11 179** (Anastasia 8 312, Ghost 2 867), drum-page accent + staccato glyphs, "sim." on drum books.
   R44d `r44-d` **11 048** (Anastasia 8 312, Ghost 2 736), no pseudo-bars from repeat barlines / staff-end signatures
   on vector pages.
-  **Reference from now on: `r44-d`.**
+  R45a `r45-b` **11 015** (Anastasia 8 284, Ghost 2 731), Anastasia kit legend + drum bars read in bass clef.
+  **Reference from now on: `r45-b`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

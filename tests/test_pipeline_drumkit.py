@@ -32,3 +32,13 @@ def test_kit_for_needs_a_drum_set(tmp_path):
     f.write_text("a:\n  kits:\n    Triangel:\n      positions: {E4: {notehead: normal, instrument: T, midi: 82}}\n")
     assert drumkit.kit_for("a", f) is None and drumkit.kit_for("b", f) is None
     assert drumkit.kit_for("ghost") is not None
+
+
+def test_kit_moves_a_bar_read_in_bass_clef_up_a_tenth():
+    score = etree.fromstring(
+        '<score-partwise><part-list><score-part id="P1"><part-name>Drums</part-name></score-part></part-list>'
+        f'<part id="P1"><measure number="1">{note("E3")}{note("A2")}</measure>'
+        f'<measure number="2">{note("E3")}{note("C5")}</measure></part></score-partwise>')
+    drumkit.apply(score, KIT)
+    pos = [n.findtext("unpitched/display-step") + n.findtext("unpitched/display-octave") for n in score.iter("note")]
+    assert pos == ["C5", "F4", "E3", "C5"]                 # bar 2 has a kit hit: left as read
