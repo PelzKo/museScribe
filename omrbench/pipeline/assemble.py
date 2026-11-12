@@ -622,6 +622,46 @@ def place_arts(plans: list[SysPlan], pages: list[Page], stats: Stats,
                 stats.arts_by_x += 1
 
 
+DYN_GRADE = 0.8    # R54: all grades +1 (r54-a), from 0.6 -11, from 0.8 / 0.9 -19 (r54-c / r54-d)
+
+
+def place_dynamics(plans: list[SysPlan], pages: list[Page], stats: Stats) -> None:
+    """R54: the `.omr` dynamics Audiveris drops at its export, onto the homr note of their staff
+    nearest in image x (`imgpos`) inside the bar the glyph's x lies in, only where that staff of
+    the bar has no dynamic yet (homr's and the exported ones win, R40 / R49)."""
+    from . import vocal as V
+    on_page: dict[int, list] = {}
+    for p in plans:
+        if p.n and p.chosen and not p.system.skip:
+            on_page.setdefault(p.system.page, []).append(p)
+    for page in pages:
+        for mk in page.marks:
+            if mk.kind != "dynamics" or mk.grade < DYN_GRADE:
+                continue
+            plan = V._system_of(page, on_page.get(page.number, []), mk.cy)
+            if plan is None:
+                continue
+            sy = plan.system
+            gi, staff, placement = V._owner(sy, mk.cy)
+            i = V._bar_index(plan, mk.x + mk.w / 2)
+            if gi not in plan.chosen or i is None or i >= len(plan.chosen[gi]):
+                continue
+            g = sy.groups()[gi]
+            bar = plan.chosen[gi][i]
+            if any(e.tag == "direction" and e.find("direction-type/dynamics") is not None
+                   and int(e.findtext("staff", "1") or 1) == staff for e in bar.items):
+                continue
+            left = max(0, int(min(s.left for s in g) - 3 * g[0].interline))
+            cand = [(left + x, on) for on, n in B.onsets(bar)
+                    if n.tag == "note" and n.find("rest") is None and n.find("grace") is None
+                    and int(n.findtext("staff", "1") or 1) == staff and (x := _imgpos_x(n)) is not None]
+            if not cand:
+                continue
+            on = min(cand, key=lambda t: abs(t[0] - (mk.x + mk.w / 2)))[1]
+            B.add_direction(bar, V._dynamics_el(mk.shape, placement), on, staff)
+            stats.dynamics += 1
+
+
 def _rested_cues(bar: B.Bar, staff: int, length: int | None) -> set[int]:
     """Onsets of the notes on `staff` when another voice there rests the whole bar: the
     player rests, the notes above the rest are a cue (printed full size in these parts)."""

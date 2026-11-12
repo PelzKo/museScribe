@@ -876,6 +876,14 @@ pitch match of `copy_marks` placed almost none. R51 (`.omr` marks by `imgpos`) n
 29 / 32 (Violine 2) on the notes (`r51-e`: 4A Violin 1 -13, Violin 2 -30). The rest are dashes no reader detects;
 no further change (a "fill the slurred run" rule would be a guess).
 
+R54. **`.omr` dynamics placed by x (`imgpos`).** `assemble.place_dynamics` (scanned single-staff parts, after the R40
+hairpins): every `.omr` dynamics inter goes to the homr note of its owner staff nearest in image x, inside the bar
+the glyph's x lies in, only where that staff of the bar has no dynamic yet (homr's and the exported ones win).
+Against `r52-a` 9 820: every grade `r54-a` +1 (102 added, 49 right / 49 made up); ctx-grade >= 0.6 `r54-b` -11;
+>= 0.8 `r54-c` -19; >= 0.9 `r54-d` -19.
+**Done 2026-11-12: `r52-a` -> `r54-c` -19** (9 820 -> 9 801; Anastasia 7 365 -> 7 346, Ghost unchanged; worst part
++2 Anastasia 4 Reed 2).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

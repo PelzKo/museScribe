@@ -418,6 +418,7 @@ class Pipeline(Engine):
             # R40: the hairpins Audiveris finds but drops at its export, placed by x; its dynamics
             # stay as exported (the `.omr` ones cost more than they fix next to homr's)
             V.place_marks(plans, pages, D, stats, kinds=("wedge",))
+            A.place_dynamics(plans, pages, stats)   # R54: .omr dynamics by imgpos where none
         if sample.meta.get("cues") == "drop":
             A.drop_cues(plans, pages, D, stats)
             A.drop_play_cues(plans, pages, stats, None if is_scan(sample.pdf)
