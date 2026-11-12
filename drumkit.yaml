@@ -40,23 +40,20 @@ ghost:
   kits:
     Drum Kit:
       from:
+      - '4'
+      - '5'
       - '20'
       positions:
         A4:
           notehead: normal
           instrument: High Floor Tom
           midi: 44
-          count: 21
+          count: 26
         A5:
           notehead: x
           instrument: Crash Cymbal 1
           midi: 50
-          count: 11
-        B4:
-          notehead: normal
-          instrument: Low Tom
-          midi: 46
-          count: 3
+          count: 15
         B5:
           notehead: x
           instrument: Crash Cymbal 2
@@ -66,22 +63,37 @@ ghost:
           notehead: normal
           instrument: Acoustic Snare
           midi: 39
-          count: 266
+          count: 1145
+        D5:
+          notehead: normal
+          instrument: Low-Mid Tom
+          midi: 48
+          count: 197
         F4:
           notehead: normal
           instrument: Bass Drum 1
           midi: 37
-          count: 394
+          count: 631
         F5:
           notehead: x
           instrument: Ride Cymbal 1
           midi: 52
-          count: 96
+          count: 108
+          also:
+          - notehead: normal
+            instrument: High Tom
+            midi: 51
+            count: 2
         G5:
           notehead: x
           instrument: Closed Hi-Hat
           midi: 43
-          count: 526
+          count: 530
+          also:
+          - notehead: circle-x
+            instrument: Open Hi-Hat
+            midi: 47
+            count: 23
   notes:
   - 'Drums #20 prints ''Open H.H.'' (bars 1, 41) and ''70''s disco; H.H. Open & closed'';
     the truth writes every hi-hat as Closed Hi-Hat (G5, x). Follow the truth (user
