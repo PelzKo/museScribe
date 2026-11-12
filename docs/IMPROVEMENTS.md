@@ -968,6 +968,10 @@ has that pitch at the same onset (the crop took a neighbour's note): then drop i
 head position, #48). Targets "wrong by more than a third" (246) and part of "note made up" (192, Anastasia 4
 Keyboard 1, Klarinette 2). Also a guard for double flats / sharps: plausible only in keys with 4+ accidentals of
 that kind (expert 4.5), so never "fix" them there.
+**R15 checked 2026-11-12, not done:** in `r47-a` no note of a violin / trumpet / clarinet / flute / oboe / horn part
+lies more than a whole tone outside its written range, and the non-keyboard "wrong by more than a third" errors are
+40, spread over 15 parts. The 190 such errors are keyboard / piano parts (Ghost 5 Piano 40, Ghost 20 Piano 24),
+where a range check finds nothing. Nothing to gain without a neighbour-staff test on keyboards (not attempted).
 
 R16. **Hairpins over 2 bars (expert K4.6).** `max_wedge_bars: 2` drops longer hairpins as misread pairings. The
 2-bar rule is no fixed rule. Truth hairpins are mostly 0–1 bars, so the gain is small and dropping fewer may add
@@ -978,6 +982,8 @@ voice sit above the staff, of the lower voice below. Assign a mark by its side o
 vector glyphs on Ghost, Audiveris on scans). Targets Ghost drum kits (hands up / feet down: accents at the wrong
 beat 35 on Ghost 4 Drum Kit, made-up staccatos on drums 56), keyboard parts with two voices, fermatas on the
 lower voice. Best done together with R5.
+**R17 not started 2026-11-12:** left in `r25w-a`: Ghost 4 Drum Kit accents at the wrong beat 15 (was 35); needs the
+mark's y per voice (medium effort), small gain.
 
 R18. **Token lists (expert 11.3, 18.1).** `ocr.DYNAMIC` knows p..fff, mp, mf, sfz, sf, fp, sfp: add pf, rf, rfz,
 fz, sffz. `chords.KINDS` lacks add11, add13, m9, maj9, 7sus4, 7b9 / 7#9 / 7#11: a chord with such a suffix does
