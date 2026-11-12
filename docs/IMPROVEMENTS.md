@@ -951,6 +951,14 @@ before its first label takes the singer of that first label (the men's staff als
 Ghost 4 Sam: the unlabelled vocal line of bars 3-9 before "SAM:" is now in Sam, the truth leaves it out; Ghost 5
 Frauen +7). Test `test_unlabelled_vocal_staff_takes_its_first_later_label`.
 
+R63. **Gap rests not before a numbered system start.** Anastasia 4 Violin 1 bars 98-101: "98" is read at system 27
+bar 1, "[to] 101" only as "101" at bar 2; `align_bars` (U12) puts the 2 missing bars at the system break, i.e. before
+the confirmed bar 98 (output 98-99 empty, the notes of 98 at 100). Tried: the break search starts after the previous
+anchor (`range(pj + 1, ...)`). **Rejected 2026-11-12, measured +19 (`r63-a` against `r62-a`):** Anastasia 4 Violin 1
+-3, Horn -3, but Anastasia 3 Horn +11, 5 Cello +5, 2 Cello +4; it also breaks U12's case of "[to] 16" read as "6" at
+the system start (that misread number agrees with the anchors by chance, so it looks like a confirmed bar too). Needs
+a way to tell a system-start bar number from a misread cut label (position / OCR text), not attempted.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

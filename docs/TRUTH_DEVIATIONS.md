@@ -35,6 +35,7 @@ not decided.
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4 | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28). Not done in the 2026-11-11 pass (needs every scan page). 4A checked 2026-11-11 as a trial: its books print no "sim." and no %, nothing to change |
 | Anastasia | 3 | Posaune | 38, 47, 57, 63–65 | mp + hairpin (38), mf (47, 57), cresc. 63–64 to f (65) | no dynamics | open: sparse part (incomplete truth, user 2026-11-10); only the tenutos of 63 were added |
+| Anastasia | 4 | Keyboard 2 | 82–84 | LH bass clef C♯3 / G♯2 (box "RH: Bassoon - sounding 8vb" names the RH only) | LH an octave lower (C♯2 / G♯1), RH as printed | open: octave of the LH (found 2026-11-12, R64 keyboard clusters) |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
 | Anastasia | 4 | Männer | 65–71 | "(BASS SOLO:)" over a plain treble staff, bar 66 starts C5 | in Männer (treble-8vb) at C3 sounding: two octaves below the print | open: which octave (user checks later) |
 | Ghost | 4 | Bass | 15–16 | G3 dotted half tied to a quarter, straight slide line into C3 | tie + slur G3–C3 | question (minor): slide as slur? |
