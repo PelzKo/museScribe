@@ -351,3 +351,12 @@ def test_treble_part_keeps_its_first_clef():
     assert keep_first_clef(part) == 1 and len(part.findall(".//clef")) == 1
     cello = etree.fromstring(xml.replace("<sign>G</sign><line>2</line>", "<sign>F</sign><line>4</line>", 1))
     assert keep_first_clef(cello) == 0 and len(cello.findall(".//clef")) == 3
+
+
+def test_duplicate_direction_at_the_same_onset_goes():
+    from lxml import etree
+    from omrbench.musicxml import drop_duplicate_directions
+    mp = "<direction><direction-type><dynamics><mp/></dynamics></direction-type></direction>"
+    note = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note>"
+    root = etree.fromstring(f"<part><measure>{mp}{mp}{note}{mp}</measure></part>")
+    assert drop_duplicate_directions(root) == 1 and len(root.findall(".//direction")) == 2

@@ -1049,6 +1049,9 @@ R24. **"gedämpft" / "offen" with playback (found 2026-11-01).** The truth expor
 R25. **Duplicate dynamics / words at the same position.** 26 bars of the outputs have the same `<direction>` twice
 (PianoReduction mostly; Ghost 4 Bass "mp twice" is a known truth case). Drop exact duplicates at the same onset and
 staff in the same last pass as R20.
+**R25 done 2026-11-12: -5** (`r14w-a` 10 406 -> `r25w-a` 10 401; worst part +0). Only 10 duplicates were left in
+`r47-a`. `musicxml.drop_duplicate_directions` after assembly: a direction equal to an earlier one of its measure
+at the same onset and staff goes.
 
 R26. **`plainArticulation` = shared marks dropped, unique marks kept (user 2026-11-02).** The flag does not mean "no
 marks". The arranger (or truth writer) leaves out a mark that another instrument already has at the same time, and

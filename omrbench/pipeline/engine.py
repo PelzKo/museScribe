@@ -509,6 +509,8 @@ class Pipeline(Engine):
                 for p in root.findall("part"):
                     if plain is True or names.get(p.get("id")) in plain:
                         musicxml.strip_marks(p)
+        n = sum(musicxml.drop_duplicate_directions(r) for r in [score, *(files or {}).values()])
+        LOG.info(f"R25: {n} duplicate direction(s) removed")
         if sample.score_type == "part":
             n = sum(musicxml.keep_first_clef(p) for p in score.findall("part"))
             LOG.info(f"R14: {n} clef change(s) in treble parts removed")

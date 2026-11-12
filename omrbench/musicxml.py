@@ -657,6 +657,26 @@ def drop_words(root: etree._Element) -> int:
     return n
 
 
+def drop_duplicate_directions(root: etree._Element) -> int:
+    """R25: a direction equal to an earlier one of its measure at the same onset and staff goes. Returns the count."""
+    n = 0
+    for m in root.iter("measure"):
+        pos, seen = 0, set()
+        for el in list(m):
+            if el.tag == "note" and el.find("chord") is None and el.find("grace") is None:
+                pos += int(el.findtext("duration") or 0)
+            elif el.tag in ("backup", "forward"):
+                pos += int(el.findtext("duration") or 0) * (-1 if el.tag == "backup" else 1)
+            elif el.tag == "direction":
+                key = (pos + int(el.findtext("offset") or 0), el.findtext("staff"),
+                       b"".join(etree.tostring(d) for d in el.findall("direction-type")))
+                if key in seen:
+                    m.remove(el)
+                    n += 1
+                seen.add(key)
+    return n
+
+
 def keep_first_clef(part: etree._Element) -> int:
     """R14: a one-staff part that starts in treble clef keeps it (no wind / string truth changes clef): later
     clefs are misreads (mostly cue-passage bass clefs over rests) and go. Pitches stay as read. Returns the count."""
