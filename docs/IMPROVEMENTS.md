@@ -971,6 +971,19 @@ read as B1; 25-27 RH read in bass clef after a bass-clef passage, the return to 
 (31 / 42 / 137 low LH ledger notes and second-voice beats misread), Anastasia 4 Keyboard 2 82-84 (truth LH an octave
 below the print: TRUTH_DEVIATIONS). All engine-level misreads, each a few bars; no shared rule found.
 
+R65. **Slurs and lyrics clusters on `r62-a` (analysis 2026-11-12/13).** Made-up slurs 413 / missing 227 by the
+error report's alignment: truth bar has no slur 222, truth part has no slur at all 80 (Anastasia 5 Bass 29, 2 Bass
+22, 4 Bass 10, drums 9 + 4 + 3), a tie in the truth at the same note 55 (Ghost 20 Piano 11: tie + slur on one
+note), two equal slurs at one onset 25 (Ghost 20 Electric Piano 6, choir staves). Made-up slurs are mostly printed
+slurs the truths leave out (Anastasia 4 Trumpet 52-55, TRUTH_DEVIATIONS), and grace-note slurs (Anastasia 4 Fagott
+106-110: the truth has none). Missing lyrics 416 (by bar): no lyric in a bar with notes 190, partly 184, no output
+part 21 (Ghost 5 Frauen); Ghost 4 Sam / Molly 145: Audiveris' OCR misses whole lyric lines of the vector pages
+(page 11 system 1), the PDF text layer has them (R66); verse 2 instead of 1 46 (the truths use verse 1 only).
+(a) Slurs that start or stop on a rest are dropped (`drop_long_curves`; homr's bass "l.v." curves to a rest).
+**Done 2026-11-13: `r62-t` -> `r65-a` -40** (9 444 -> 9 404, bench id `r65-t`; Anastasia 2 Bass -18, 5 Bass -16,
+4 Bass -3, 1 Drums -3; worst part +0). Test `test_slur_to_a_rest_is_dropped`. `r62-t` = `r62-a` benched again
+after the user's Anastasia 4 Keyboard 2 truth fix (+1).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,

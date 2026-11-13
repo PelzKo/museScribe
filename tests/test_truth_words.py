@@ -316,6 +316,16 @@ def test_tie_over_three_bars_and_slur_over_seven_are_dropped():
     assert drop_long_curves(root) == 0
 
 
+def test_slur_to_a_rest_is_dropped():
+    from lxml import etree
+    from omrbench.musicxml import drop_long_curves
+    rest = '<note><rest/><duration>4</duration><voice>1</voice><notations><slur type="stop" number="1"/></notations></note>'
+    root = etree.fromstring("<score-partwise><part id='P1'><measure number='1'>" + _n("E", 3, ("start", 1)) + rest
+                            + _n("F", 3, ("start", 1)) + _n("G", 3, ("stop", 1)) + "</measure></part></score-partwise>")
+    assert drop_long_curves(root) == 1          # E -> rest goes, F -> G stays
+    assert len(root.findall(".//slur")) == 2
+
+
 def test_one_instrument_percussion_part_on_the_single_line():
     from omrbench.pipeline.assemble import one_line_position
     tamb = {"name": "Tambourine", "clef": "percussion", "sound": "drum.tambourine"}

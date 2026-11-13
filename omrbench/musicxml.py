@@ -262,7 +262,8 @@ def drop_long_curves(root: etree._Element, tie_bars: int = 1, slur_bars: int = 5
                         slurs[num] = (mi, sl)
                     elif sl.get("type") == "stop" and num in slurs:
                         a, start = slurs.pop(num)
-                        if mi - a > slur_bars:
+                        # R65: a curve to / from a rest is no slur (bass l.v. curves; the truths have none)
+                        if mi - a > slur_bars or n.find("rest") is not None or start.getparent().getparent().find("rest") is not None:
                             start.getparent().remove(start)
                             sl.getparent().remove(sl)
                             dropped += 1
