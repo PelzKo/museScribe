@@ -55,6 +55,7 @@ class SysPlan:
     # of the voices not on a vocal staff (dialogue, stage directions)
     singers: dict[tuple[int, int], list[tuple[int, str]]] = field(default_factory=dict)
     voice_text: dict[int, list[etree._Element]] = field(default_factory=dict)
+    cue_groups: set[int] = field(default_factory=set)   # vocal groups with an instrument cue text ("Vc. (pizz)")
 
 
 @dataclass
@@ -1318,6 +1319,17 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
             i, on = _label_onset(plan, page, staff.id, x, D)
             plan.singers.setdefault((gi, i), []).append((on, label))
             stats.singer_labels += 1
+        # an instrument cue on a vocal staff ("Vc. (pizz)", "Fl."): the line is no singer's (Ghost 4 bars 3-9)
+        cues = [(t.x, t.y, t.value) for t in page.texts] + [(x, y, t) for pn, x, y, t in vector_lines if pn == page.number]
+        for x, y, t in cues:
+            if not INSTR_CUE.search(t):
+                continue
+            for system in systems:
+                st = min(system.staves, key=lambda st: max(st.top - y, y - st.bottom, 0))
+                if st.top - 4 * il <= y <= st.bottom + 4 * il and (plan := by_sys.get(id(system))):
+                    gi, _ = _group_of(system, st.id)
+                    if gi != system.piano_group:
+                        plan.cue_groups.add(gi)
         texts = [(pl, t, True) for pl, t in pt.spoken] + [(pl, pl.line.text, False) for pl in pt.stage]
         for pl, t, spoken in texts:
             stats.spoken += spoken
@@ -1328,6 +1340,7 @@ def _place_vocal_text(classified: list[T.PageText], pages: list[Page], by_sys: d
             plan.voice_text.setdefault(i, []).append(B.words_direction(t, "above"))
 
 
+INSTR_CUE = re.compile(r"^\(?(Vc|Vcl|Vln|Vla|Cb|Fl|Picc|Ob|Cl|Bsn|Hn|Tpt|Tbn|Gtr|Bs|Kbd|Pno|Perc)\.|\bpizz\b")
 SINGER_LABEL = re.compile(r"^[A-Z][A-Z0-9 .#'&+-]*:")              # "DMITRY:", "BLACK MARKETEER #3:"
 SHOW_FLOW = re.compile(r"\b(attacca|segue|applause|safety|jump on cue)\b", re.I)    # stage-management notes
 ORCH_CUE = re.compile(r"^(\+\s*\w|w/)|\b[A-Z][a-z]{0,3}\.? ?\d? ?/ ?[A-Z][a-z]{1,3}\b")   # "+ Kbd", "w/ Hn", "Cl 2/Bsn"
@@ -2491,6 +2504,7 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats, male: re.Patte
             if labels and gi in p.chosen and gi != p.system.piano_group:
                 name = min(labels, key=lambda t: t[0])[1]
                 first.setdefault(p.system.logical[gi], canon.get(name, name))
+    cue_lines = {p.system.logical[gi] for p in plans for gi in p.cue_groups}
     voices: dict[str, OutPart] = {}
     cur: dict[int, str] = {}
     texts: dict[int, list[etree._Element]] = {}
@@ -2528,7 +2542,7 @@ def build_vocal_parts(plans: list[SysPlan], D: int, stats: Stats, male: re.Patte
                     if name is None:
                         if piece.rest_only:
                             continue
-                        name = first.get(L, f"Voice {L}")
+                        name = f"Voice {L}" if L in cue_lines else first.get(L, f"Voice {L}")
                     # a duet label ("DOWAGER+ANASTASIA") puts the line into each singer's part
                     for k, single in enumerate(_singers_of(name, known, groups)):
                         part = voices.setdefault(single, OutPart(T.singer_name(single), 1,

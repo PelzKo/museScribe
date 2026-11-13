@@ -412,7 +412,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   R62 `r62-a` **9 443** (Anastasia 6 950, Ghost 2 493), unlabelled vocal staves take their first later label.
   `r62-t` **9 444** (Anastasia 6 951, Ghost 2 493): `r62-a` benched after the user's Anastasia 4 Keyboard 2 truth fix.
   R65a `r65-a` (bench `r65-t`) **9 404** (Anastasia 6 911, Ghost 2 493), slurs to / from a rest dropped.
-  **Reference from now on: `r65-a` (bench id `r65-t`).**
+  R67 `r67-a` **9 366** (Anastasia 6 911, Ghost 2 455), instrument cue staves ("Vc. (pizz)") stay out of the singers.
+  **Reference from now on: `r67-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

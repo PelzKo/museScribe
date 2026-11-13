@@ -335,3 +335,9 @@ def test_unlabelled_vocal_staff_takes_its_first_later_label():
     names = {p.name: p for p in parts}
     assert "Voice 1" not in names and "Voice 2" not in names
     assert all(b is not None and not b.rest_only for p in parts for b in p.bars)
+    # R67: a staff with an instrument cue text ("Vc. (pizz)", Ghost 4 bars 3-9) stays out of the singer
+    plans = [plan(0, {}), plan(1, {(0, 0): [(0, "ALL WOMEN")], (1, 0): [(0, "ALL MEN")]})]
+    plans[0].cue_groups = {0}
+    names = {p.name for p in A.build_vocal_parts(plans, 1, A.Stats())[0]}
+    assert "Voice 1" in names and "Voice 2" not in names
+    assert A.INSTR_CUE.search("Vc. (pizz)") and A.INSTR_CUE.search("Fl.") and not A.INSTR_CUE.search("ALL MEN:")

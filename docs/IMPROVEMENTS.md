@@ -984,6 +984,14 @@ part 21 (Ghost 5 Frauen); Ghost 4 Sam / Molly 145: Audiveris' OCR misses whole l
 4 Bass -3, 1 Drums -3; worst part +0). Test `test_slur_to_a_rest_is_dropped`. `r62-t` = `r62-a` benched again
 after the user's Anastasia 4 Keyboard 2 truth fix (+1).
 
+R67. **Instrument cue staves stay out of the singers (R62's +31 on Ghost 4 Sam).** Ghost 4 bars 3-9: the unlabelled
+line before "SAM:" is a cello cue (printed "Vc. (pizz)", later "Fl."), R62 put it into Sam. `_place_vocal_text` now
+marks a vocal group with an instrument cue text within 4 interlines of its staff (`INSTR_CUE`: "Vc.", "Fl.", "Gtr.",
+..., "pizz"; Audiveris texts and the PDF text layer); such a line keeps "Voice <n>" before its first label instead of
+taking R62's first later label. **Done 2026-11-13: `r65-t` -> `r67-a` -38** (9 404 -> 9 366; Ghost 4 PianoReduction
+-31, Ghost 5 -7; Anastasia unchanged, R62's gain on Anastasia 3 kept; worst part +0). Test in
+`test_unlabelled_vocal_staff_takes_its_first_later_label`.
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
