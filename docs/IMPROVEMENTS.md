@@ -992,6 +992,15 @@ taking R62's first later label. **Done 2026-11-13: `r65-t` -> `r67-a` -38** (9 4
 -31, Ghost 5 -7; Anastasia unchanged, R62's gain on Anastasia 3 kept; worst part +0). Test in
 `test_unlabelled_vocal_staff_takes_its_first_later_label`.
 
+R68. **Anastasia 4 drum book: lower staff Triangle vs. kit (user: "decide what's best").** 90-97 the lower staff is
+Triangle, 78-81 and 174-177 the kit (R45e moves 2-line bars to the kit). In `r67-a` the hi-hat bars 174-177 (one
+line, x heads) land in Xylophone (the system's mallet label), not in Triangle. Tried in `build_parts`: a bar with
+only unpitched hits never goes to a pitched instrument; with a kit it goes to the kit. **Rejected 2026-11-13,
+measured +0 (`r68-a`, clef class of the bar: the bars carry no clef) / +10 (`r68-c`, by the notes' `unpitched`;
+Anastasia 4 Drums-Percussion one part +12, another -8)** against `r67-a` 9 366: the hi-hat hits move into the kit
+but the kit's bars there do not match the truth's (count / beats), so the gain is lost. Left as is; the workbook
+`lower_staff: Triangle` stays (right for 90-97).
+
 ## Round 4 (2026-10-18): ranked by expected gain
 
 Reference: bench `r3-f` = **11 946** actions over all 10 truth songs (Anastasia 1, 2, 4, 4A; Ghost 1a, 4, 5, 11a, 13,
