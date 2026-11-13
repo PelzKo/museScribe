@@ -175,7 +175,8 @@ def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats, syllabic:
         if not pos:
             stats.lyrics_unplaced += len(here)
             continue
-        for verse in sorted({t.verse for t in here}):
+        # R69: the bar's lyric lines numbered from 1 (the truths have verse 1 only; OCR puts a lone line at 2)
+        for rank, verse in enumerate(sorted({t.verse for t in here}), start=1):
             last = -1
             for t in (t for t in here if t.verse == verse):
                 cx = t.x + t.w / 2
@@ -186,7 +187,7 @@ def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats, syllabic:
                     continue
                 k = min(cands, key=lambda k: abs(pos[k][0] - cx))
                 note = pos[k][2]
-                if any(ly.get("number") == str(verse) for ly in note.findall("lyric")):
+                if any(ly.get("number") == str(rank) for ly in note.findall("lyric")):
                     stats.lyrics_unplaced += 1
                     continue
                 if lines is None:
@@ -194,7 +195,9 @@ def _attach_staff(plan, gi: int, st: Staff, page: Page, D: int, stats, syllabic:
                 else:       # U5: a printed line from the syllable's end at its baseline
                     extend = any(-0.25 * il <= x0 - (t.x + t.w) <= 1.5 * il and x1 - x0 >= il
                                  and t.y <= y <= t.y + t.h + 0.5 * il for x0, x1, y in lines)
-                _put(note, _lyric(t, extend, (syllabic or {}).get(id(t))))
+                ly = _lyric(t, extend, (syllabic or {}).get(id(t)))
+                ly.set("number", str(rank))
+                _put(note, ly)
                 stats.lyrics += 1
                 last = k
 

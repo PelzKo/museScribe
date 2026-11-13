@@ -995,6 +995,13 @@ Anastasia 6 911 -> 6 791, Ghost 2 455 -> 2 351; Ghost 4 PianoReduction -64 / -31
 line above the "dah" lyrics becomes verse 1 and the lyrics verse 2, R69). Test
 `test_text_layer_words_become_the_staffs_syllables`.
 
+R69. **Lyric lines numbered from 1 per bar (R65: 46 lyrics in verse 2 instead of 1; R66's +38 on Anastasia 3
+Frauen).** The truths use verse 1 only; a stray text line above the lyrics (or OCR) makes the real line verse 2.
+`vocal._attach_staff` numbers the bar's lyric lines 1, 2, ... in order (a bar whose only line is verse 2 gets 1).
+**Done 2026-11-13: `r66-a` -> `r69-a` -31** (9 142 -> 9 111; Anastasia 6 791 -> 6 762, Ghost 2 351 -> 2 349;
+Anastasia 3 Frauen -29, Ghost 4 -2; worst part +0). Left: bars with a stray line and the lyrics both (Anastasia 4
+Frauen "(I tenor)" / "p" as verse 1 / 2).
+
 R67. **Instrument cue staves stay out of the singers (R62's +31 on Ghost 4 Sam).** Ghost 4 bars 3-9: the unlabelled
 line before "SAM:" is a cello cue (printed "Vc. (pizz)", later "Fl."), R62 put it into Sam. `_place_vocal_text` now
 marks a vocal group with an instrument cue text within 4 interlines of its staff (`INSTR_CUE`: "Vc.", "Fl.", "Gtr.",
