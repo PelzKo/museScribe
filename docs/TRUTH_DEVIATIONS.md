@@ -38,7 +38,7 @@ not decided.
 | Anastasia | 3 | Posaune | 38, 47, 57, 63–65 | mp + hairpin (38), mf (47, 57), cresc. 63–64 to f (65) | no dynamics | open: sparse part (incomplete truth, user 2026-11-10); only the tenutos of 63 were added |
 | Anastasia | 4 | Keyboard 2 | 82–84 | LH bass clef C♯3 / G♯2 (box "RH: Bassoon - sounding 8vb" names the RH only) | LH an octave lower (C♯2 / G♯1), RH as printed | fixed by user 2026-11-13 (the octave was in the wrong hand) |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
-| Anastasia | 4 | Trompete | 52–55 (and more, R65) | 2-note slurs (52 B♭–A, 53 A–B♭, 54 A–G, E–F) | no slurs | open: printed slurs left out (18 made-up slurs in the part) |
+| Anastasia | 4 | Trompete | 52–55 (and more, R65) | 2-note slurs (52 B♭–A, 53 A–B♭, 54 A–G, E–F) | no slurs | to fix in the truth (user 2026-11-13): add the printed slurs; the pipeline keeps them (18 made-up slurs in the part; other parts may lack printed 2-note slurs too, R65) |
 | Anastasia | 4 | Männer | 65–71 | "(BASS SOLO:)" over a plain treble staff, bar 66 starts C5 | in Männer (treble-8vb) at C3 sounding: two octaves below the print | open: which octave (user checks later) |
 | Anastasia | 5 | all | 124 | double barline (user confirmed 2026-11-13) | single barline | open: the truth lacks the printed double barline |
 | Ghost | 4 | Bass | 15–16 | G3 dotted half tied to a quarter, straight slide line into C3 | tie + slur G3–C3 | question (minor): slide as slur? |

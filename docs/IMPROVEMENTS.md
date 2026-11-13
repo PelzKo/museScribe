@@ -1002,6 +1002,11 @@ Frauen).** The truths use verse 1 only; a stray text line above the lyrics (or O
 Anastasia 3 Frauen -29, Ghost 4 -2; worst part +0). Left: bars with a stray line and the lyrics both (Anastasia 4
 Frauen "(I tenor)" / "p" as verse 1 / 2).
 
+R70. **Grace-note slurs (idea, user 2026-11-13; R65).** Made-up slurs on grace notes: Anastasia 4 Fagott 106-110
+has printed grace-note slurs the truth leaves out, Anastasia 3 Violin 1 26 (homr reads the grace notes as 16ths).
+Idea: drop a slur whose start or end is a grace note. Risk: some truths keep grace-note slurs, so measure first;
+count the grace-note slurs in the truths before writing the rule.
+
 R67. **Instrument cue staves stay out of the singers (R62's +31 on Ghost 4 Sam).** Ghost 4 bars 3-9: the unlabelled
 line before "SAM:" is a cello cue (printed "Vc. (pizz)", later "Fl."), R62 put it into Sam. `_place_vocal_text` now
 marks a vocal group with an instrument cue text within 4 interlines of its staff (`INSTR_CUE`: "Vc.", "Fl.", "Gtr.",
