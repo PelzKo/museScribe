@@ -984,6 +984,17 @@ part 21 (Ghost 5 Frauen); Ghost 4 Sam / Molly 145: Audiveris' OCR misses whole l
 4 Bass -3, 1 Drums -3; worst part +0). Test `test_slur_to_a_rest_is_dropped`. `r62-t` = `r62-a` benched again
 after the user's Anastasia 4 Keyboard 2 truth fix (+1).
 
+R66. **Lyrics from the PDF text layer on vector pages (R65 lyrics cluster).** Audiveris' OCR misses whole lyric lines
+of the vector PianoReductions (Ghost 4 page 11 system 1: no syllable at all) and misreads others ("derﬁir", "w111",
+"cs"). `vector.read_lyric_marks` now also returns the text-layer words in the book's lyric font (the most common
+font / size of spans with 3+ letters); `vocal._layer_syllables` makes the words under a vocal staff (closer to its
+bottom than to the next staff's top) that staff's syllables, one verse per text line, replacing Audiveris' ones
+(nothing changes where the layer has no word). **Done 2026-11-13: `r67-a` -> `r66-a` -224** (9 366 -> 9 142;
+Anastasia 6 911 -> 6 791, Ghost 2 455 -> 2 351; Ghost 4 PianoReduction -64 / -31, Anastasia 4 -54 / -51 / -30 /
+-16, song 5 -12; lyrics missing 416 -> 232, made up 384 -> 291 by bar; worst part +38 Anastasia 3 Frauen: a text
+line above the "dah" lyrics becomes verse 1 and the lyrics verse 2, R69). Test
+`test_text_layer_words_become_the_staffs_syllables`.
+
 R67. **Instrument cue staves stay out of the singers (R62's +31 on Ghost 4 Sam).** Ghost 4 bars 3-9: the unlabelled
 line before "SAM:" is a cello cue (printed "Vc. (pizz)", later "Fl."), R62 put it into Sam. `_place_vocal_text` now
 marks a vocal group with an instrument cue text within 4 interlines of its staff (`INSTR_CUE`: "Vc.", "Fl.", "Gtr.",

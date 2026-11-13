@@ -540,6 +540,7 @@ def read_lyric_marks(pdf, pages: list) -> dict[int, tuple[list, list]]:
     from ..rasterize import FITZ_LOCK
     out = {}
     with FITZ_LOCK, fitz.open(pdf) as doc:
+        font = _lyric_font(doc)
         for i, p in enumerate(doc):
             if i >= len(pages) or not p.get_fonts() or classify_page(p, i + 1).kind != "vector":
                 continue
@@ -549,5 +550,20 @@ def read_lyric_marks(pdf, pages: list) -> dict[int, tuple[list, list]]:
                        for sp in line["spans"] if sp["text"].strip() == "-"]
             lines = [(r.x0 * sx, r.x1 * sx, r.y0 * sx) for d in p.get_drawings()
                      if (r := d["rect"]).height < 1 and r.width > 0]
-            out[pages[i].number] = (hyphens, lines)
+            # R66: the text-layer words in the lyric font (Audiveris' OCR misses whole lyric lines)
+            spans = [sp for block in p.get_text("dict")["blocks"] for line in block.get("lines", [])
+                     for sp in line["spans"]]
+            words = [(w[0] * sx, w[1] * sx, (w[2] - w[0]) * sx, (w[3] - w[1]) * sx, w[4]) for w in p.get_text("words")
+                     if any(sp["font"] == font[0] and abs(sp["size"] - font[1]) < 0.06 and fitz.Rect(sp["bbox"]).contains(
+                         fitz.Point((w[0] + w[2]) / 2, (w[1] + w[3]) / 2)) for sp in spans)] if font else []
+            out[pages[i].number] = (hyphens, lines, words)
     return out
+
+
+def _lyric_font(doc) -> tuple[str, float] | None:
+    """The book's most common (font, size) of text spans with three letters or more: the lyrics."""
+    from collections import Counter
+    c = Counter((sp["font"], round(sp["size"], 1)) for p in doc for block in p.get_text("dict")["blocks"]
+                for line in block.get("lines", []) for sp in line["spans"]
+                if sum(ch.isalpha() for ch in sp["text"]) >= 3)
+    return c.most_common(1)[0][0] if c else None

@@ -106,10 +106,32 @@ def attach_lyrics(plans, pages: list[Page], D: int, stats, printed: dict | None 
         for gi, g in enumerate(sy.groups()):
             if gi != sy.piano_group and gi in plan.chosen:
                 marks = (printed or {}).get(sy.page)
+                if marks and len(marks) > 2:
+                    _layer_syllables(by_page[sy.page], g[0], marks[2])
                 syllabic = _printed_syllabic(g[0], by_page[sy.page], marks, carry,
                                              sy.logical[gi] if gi < len(sy.logical) else gi) if marks else {}
                 _attach_staff(plan, gi, g[0], by_page[sy.page], D, stats, syllabic,
                               marks[1] if marks else None)
+
+
+def _layer_syllables(page: Page, st: Staff, words: list) -> None:
+    """R66 (vector pages): the staff's syllables are the text-layer words under it (closer to its bottom
+    than to the next staff's top), one verse per text line; Audiveris' OCR syllables of the staff go.
+    Nothing changes when the layer has no lyric-font word there."""
+    il = st.interline
+    below = [s.top for sy in page.systems for s in sy.staves
+             if s.top > st.bottom and s.left < st.right and s.right > st.left]
+    nxt = min(below, default=page.height)
+    mine = sorted((w for w in words if st.left <= w[0] + w[2] / 2 <= st.right
+                   and st.bottom - il <= w[1] + w[3] / 2 < (st.bottom + nxt) / 2), key=lambda w: (w[1], w[0]))
+    if not mine:
+        return
+    verse, top, new = 0, None, []
+    for x, y, w, h, value in mine:
+        if top is None or y - top > 0.7 * h:
+            verse, top = verse + 1, y
+        new.append(Text(page.number, st.id, x, y, w, h, value, "syllable", "Lyrics", 0, "", "single", verse))
+    page.texts[:] = [t for t in page.texts if not (t.staff == st.id and t.kind == "syllable")] + new
 
 
 def _printed_syllabic(st: Staff, page: Page, marks, carry: dict, track) -> dict[int, str]:

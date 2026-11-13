@@ -413,7 +413,8 @@ with the current truth. Revisit only with new readers or truth of new score type
   `r62-t` **9 444** (Anastasia 6 951, Ghost 2 493): `r62-a` benched after the user's Anastasia 4 Keyboard 2 truth fix.
   R65a `r65-a` (bench `r65-t`) **9 404** (Anastasia 6 911, Ghost 2 493), slurs to / from a rest dropped.
   R67 `r67-a` **9 366** (Anastasia 6 911, Ghost 2 455), instrument cue staves ("Vc. (pizz)") stay out of the singers.
-  **Reference from now on: `r67-a`.**
+  R66 `r66-a` **9 142** (Anastasia 6 791, Ghost 2 351), lyrics from the PDF text layer on vector pages.
+  **Reference from now on: `r66-a`.**
 - Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
   homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
 - MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps

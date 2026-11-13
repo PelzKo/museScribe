@@ -370,3 +370,15 @@ def test_duplicate_direction_at_the_same_onset_goes():
     note = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note>"
     root = etree.fromstring(f"<part><measure>{mp}{mp}{note}{mp}</measure></part>")
     assert drop_duplicate_directions(root) == 1 and len(root.findall(".//direction")) == 2
+
+
+def test_text_layer_words_become_the_staffs_syllables():
+    # R66: vector pages: the text-layer words under a vocal staff replace Audiveris' OCR syllables, one verse per line
+    from omrbench.pipeline.layout import Page, Staff, System, Text
+    from omrbench.pipeline.vocal import _layer_syllables
+    st, low = Staff(1, 0, 100, 140, 0, 1000), Staff(2, 1, 300, 340, 0, 1000)
+    page = Page(1, 1000, 1000, [System(1, 1, [st, low], [])],
+                [Text(1, 1, 50, 160, 40, 20, "w1th", "syllable", verse=2)])
+    words = [(50, 160, 40, 20, "with"), (120, 161, 30, 20, "me"), (50, 190, 40, 20, "two"), (50, 290, 40, 20, "Fl.")]
+    _layer_syllables(page, st, words)
+    assert [(t.value, t.verse) for t in page.texts] == [("with", 1), ("me", 1), ("two", 2)]
