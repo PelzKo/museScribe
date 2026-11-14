@@ -35,8 +35,10 @@ not decided.
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4 | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28). Not done in the 2026-11-11 pass (needs every scan page). 4A checked 2026-11-11 as a trial: its books print no "sim." and no %, nothing to change |
 | Anastasia | 3 | all | 4, 22, 46, 87 | double barline (user confirmed 2026-11-13) | single barline | open: the truth lacks the printed double barlines |
+| Anastasia | 3, 4 | Kontrabass, Trompete, Posaune, Keyboard 2 (song 3); Trompete in B, Posaune (song 4) | whole parts | articulations, dynamics, hairpins, slurs | about half of them missing | to fix: sparse parts, the user completes them (2026-11-14); counts and the check against the top-most-staff rule in section 4 |
 | Anastasia | 3 | Posaune | 38, 47, 57, 63–65 | mp + hairpin (38), mf (47, 57), cresc. 63–64 to f (65) | no dynamics | open: sparse part (incomplete truth, user 2026-11-10); only the tenutos of 63 were added |
 | Anastasia | 4 | Keyboard 2 | 82–84 | LH bass clef C♯3 / G♯2 (box "RH: Bassoon - sounding 8vb" names the RH only) | LH an octave lower (C♯2 / G♯1), RH as printed | fixed by user 2026-11-13 (the octave was in the wrong hand) |
+| Anastasia | 4 | Fagott, Posaune, Keyboard 2, Klarinette 2, Flöte 2 | section 3 "plain rows" (Fagott 31, 32, 42, 43, 70, 85, 93, 135, 136, 177, 185, 202, 206; ...) | marcato (^) | accent (&gt;) | to fix: these rows were skipped in the 2026-11-01 marcato fix because the parts were `plain`; the flags are gone since 2026-11-09, so `r69-a` charges 65 "marcato instead of accent" (Fagott 38, Posaune 7, Keyboard 2 7) |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
 | Anastasia | 4 | Trompete | 52–55 (and more, R65) | 2-note slurs (52 B♭–A, 53 A–B♭, 54 A–G, E–F) | no slurs | to fix in the truth (user 2026-11-13): add the printed slurs; the pipeline keeps them (18 made-up slurs in the part; other parts may lack printed 2-note slurs too, R65) |
 | Anastasia | 4 | Männer | 65–71 | "(BASS SOLO:)" over a plain treble staff, bar 66 starts C5 | in Männer (treble-8vb) at C3 sounding: two octaves below the print | open: which octave (user checks later) |
@@ -110,3 +112,46 @@ truth has no mark there) and the plain rows (no beat / pitch given); Xylophon 27
 - Plain rows (not scored, no marks by convention; listed only for completeness): Klar 2 27, 32, 43, 85, 93, 136,
   177; Flöte 2 202; Keyboard 2 51, 81, 177, 185, 194; Fagott 31, 32, 42, 43, 70, 85, 93, 135, 136, 177, 185, 202,
   206; Posaune 32, 43, 52, 70, 81, 85, 93, 101, 136, 177, 202, 206.
+
+## 4. Sparse Anastasia parts (user completes them, 2026-11-14)
+
+Six truth parts lack marks the page prints. They stay in the score until they are completed (user 2026-11-14), so
+they hold **1 472 of the 9 111** actions of `r69-a` (articulations 773, notes 193, dynamics 142, hairpins 104, slurs 68).
+
+Check against the Anastasia rule "a dynamic or text that several staves have at the same time in the same pattern is
+written only in the top-most staff" (user 2026-11-14). Method (scratch script, 2026-11-14): bars aligned like the
+metric; every articulation, dynamic, hairpin, slur, fermata and word of the `r69-a` output is looked up in the truth
+of its own part (kept / missing) and in every other truth part of the song at the same bar, beat and token ("above"
+= a part higher in the score order has it, "below" = only a lower part, "unique" = no other part).
+
+| Song | Part | has it above: kept / missing | only below: kept / missing | unique: kept / missing | dynamics above: kept / missing | hairpins above: kept / missing |
+|---|---|---|---|---|---|---|
+| 3 | Kontrabass | 107 / 133 | 0 / 1 | 5 / 10 | 11 / 19 | 1 / 13 |
+| 3 | Trompete | 111 / 113 | 16 / 2 | 18 / 19 | 8 / 9 | 10 / 7 |
+| 3 | Posaune | 102 / 114 | 62 / 1 | 15 / 11 | 4 / 16 | 2 / 12 |
+| 3 | Keyboard 2 | 131 / 154 | 11 / 0 | 29 / 5 | 12 / 18 | 1 / 5 |
+| 4 | Trompete in B | 74 / 224 | 13 / 4 | 9 / 13 | 4 / 23 | 1 / 10 |
+| 4 | Posaune | 92 / 171 | 51 / 11 | 19 / 18 | 7 / 18 | 7 / 9 |
+| | **six parts** | **617 / 909** | 153 / 19 | 95 / 76 | 46 / 103 | 22 / 56 |
+| 3 | Violine 1 (complete part, for comparison) | 323 / 13 | 19 / 3 | 32 / 14 | 26 / 5 | 17 / 5 |
+| 3 | Horn (complete) | 172 / 6 | 43 / 1 | 45 / 11 | 17 / 1 | 12 / 0 |
+| 3 | Keyboard 1 (complete) | 439 / 21 | 58 / 7 | 93 / 20 | 20 / 9 | 11 / 2 |
+| 4 | Violine 1 (complete) | 488 / 6 | 63 / 1 | 9 / 25 | 33 / 2 | 19 / 1 |
+| 4 | Horn in F (complete) | 222 / 5 | 89 / 8 | 82 / 15 | 16 / 3 | 11 / 1 |
+
+Result:
+- **928 of the 1 004 missing marks are real gaps by the evidence**: the part's own page gives the mark (the reader
+  found it) and another truth part has the same mark on the same bar and beat. Only 76 have no second witness (those
+  may be misreads).
+- **The top-most-staff rule does not explain them.** The complete parts keep 95 % of the marks a higher part also
+  has (Violine 1 sits at the bottom of the score and keeps 811 of 830). The six parts keep 617 and lack 909 of the
+  same kind, mixed inside one part, so they follow neither "write everything" nor "only the top-most staff".
+- Dynamics and hairpins alone (the rule's own scope): 159 missing ones have the same mark in a higher part. If the
+  rule is meant for these parts, these 159 are right as they are and the pipeline has to drop them (IMPROVEMENTS
+  D6); the 750 articulations and slurs are gaps in any case.
+- Candidates with the same pattern, smaller: song 3 Violoncello dynamics 5 kept / 16 missing and hairpins 3 / 10
+  with a higher part; song 4 Fagott 40 + 28 marks missing that another part has; song 4 Keyboard 2 dynamics 20 / 13.
+- Song 3 Violine 2 and Klarinette 2 are `plainArticulation` parts (marks stripped on both sides), not in this list.
+
+Not checked: the scan pages themselves. To complete a part, start from the output of `r69-a`
+(`results/anastasia/3/`, `results/anastasia/4/`): it already carries these marks.

@@ -1,505 +1,182 @@
 # museScribe plan
 
-Single source of state, decisions, results and next steps. Replaces `PC_PLAN.md` and `PLAN_full.md`
-(2026-10-13). Backlog ideas without a slot yet: `docs/IMPROVEMENTS.md`. How-to docs: `docs/shows.md`
-(workbook, transcribe, bench), `docs/pipeline.md` (pipeline engine, meta keys), `docs/engine-benchmark.md`
-(samples, `run`). What hand corrections cost and the conventions of the corrected scores: `docs/CORRECTION_INFORMATION.md`;
-truth vs printed part: `docs/TRUTH_DEVIATIONS.md`. Every remaining output error by kind (basis for the next round) and the sheet_reader test:
-`docs/ERRORS.md` (`python scripts/error_report.py anastasia,ghost --run p1`).
+State, rules and how things are built. Rewritten 2026-11-14; the long version with every baseline and round up to
+this date is `docs/archive/PLAN-2026-11-14.md`.
+
+Other docs: `docs/IMPROVEMENTS.md` (**what to do next**, what worked, what failed), `docs/ERRORS.md` (what is still
+wrong, by kind and cost), `docs/TRUTH_DEVIATIONS.md` (truth vs printed page), `docs/CORRECTION_INFORMATION.md`
+(conventions of the corrected scores), `docs/shows.md` (workbook, transcribe, bench), `docs/pipeline.md` (engine,
+meta keys), `docs/engine-benchmark.md` (samples, `run`), `docs/sheet_reader_requests.md`.
 
 ## 1. Goal and rules
 
-Goal: **the best possible transcription of the two shows Anastasia and Ghost**, which are then corrected
-by hand in MuseScore. No need to generalise to unseen shows, so no held-out set: every finished
-hand-corrected song becomes truth and is used for tuning right away.
-
-The quality measure that matters is **how much hand work an output needs to become the truth**:
-notes, rhythm, bar count, dynamics, articulations, lyrics, text, instrument changes, everything. Note
-F1 alone is not enough (section 6).
+Goal: **the best possible transcription of the two shows Anastasia and Ghost**, which are then corrected by hand in
+MuseScore. No held-out set: every finished hand-corrected song becomes truth and is used for tuning right away.
+The measure is **how much hand work an output needs to become the truth** (edit penalty, section 6).
 
 User rules:
-
-- Zero budget, local only, free tools. Non-commercial use, so GPL / AGPL / CC-BY-SA / NC licences are fine.
-  No cloud, paid or commercial tools. Local VLMs only as an OCR component, not as a full engine.
-- Everything runs in Docker (Audiveris, homr and every other engine).
-- Accuracy first. Speed never at the cost of quality (e.g. Audiveris parallel sheets stay off).
+- Zero budget, local only, free tools; non-commercial use (GPL / AGPL / CC-BY-SA / NC are fine). No cloud. Local
+  VLMs only as an OCR component.
+- Everything runs in Docker. Accuracy first; speed never at the cost of quality.
 - The best scorer is the default (`pipeline` = Audiveris layout + homr crops + repairs).
 - Truth = MusicXML / MuseScore only. No metric that needs extra user input.
-- `data/` is read-only for the tool (edited by hand only); everything generated goes to `results/`.
-- Same commands and `bench.yaml` on both machines; no per-machine config.
-- A wrong bar count is a soft error (the user can add bars or delete empty ones), not a hard failure.
-- Big benchmark runs only on the PC and may take several days.
+- `data/` may be edited by hand or by Claude (show.yaml, workbook; user 2026-11-11), **never `data/<show>/truth/`**.
+  Everything generated goes to `results/`. Both are gitignored.
+- Same commands and `bench.yaml` on both machines. A wrong bar count is a soft error.
+- Every pipeline change passes the acceptance rule (`docs/IMPROVEMENTS.md` section 1).
 
-Dropped for good: LEGATO (Llama 3.2 licence), ijdar-e2e-pianoform (no weights), student CV repos
-except Mozart, moonlight, handwritten / mensural tools, `external` engine, `correction_minutes` and
-the 70 % rule, tromr (homr's transformer derives from TrOMR) and tfe2e (monophonic incipits only),
-MeasureDetector (same Faster R-CNN family OLA beat, TF1.13).
+Dropped for good: LEGATO, ijdar-e2e-pianoform, student CV repos except Mozart, moonlight, handwritten / mensural
+tools, `external` engine, tromr, tfe2e, MeasureDetector.
 
 ## 2. Machines
 
 | | PC (benchmark machine) | Laptop (dev box) |
 |---|---|---|
-| Host | `SuperGamer3000`, Windows + WSL2 Ubuntu-24.04, Docker Desktop 29.8.2 | `DESKTOP-606ME4E`, same setup |
-| CPU / RAM | Ryzen 7 3700X (16 threads), 32 GB; WSL `memory=28GB` (`.wslconfig`) | Ryzen 7 7840U (16 threads), 27 GB |
-| GPU | RTX 2070 SUPER 8 GB, Turing (fp16 yes, bf16 no, no FlashAttention-2), driver 610.53, CUDA 13.3 | Radeon 780M, no CUDA; `omrbench doctor` shows `docker gpu: skipped` |
+| Host | `SuperGamer3000`, Windows + WSL2 Ubuntu-24.04, Docker Desktop | `DESKTOP-606ME4E`, same setup |
+| CPU / RAM | Ryzen 7 3700X (16 threads), 32 GB; WSL `memory=28GB` | Ryzen 7 7840U (16 threads), 27 GB |
+| GPU | RTX 2070 SUPER 8 GB (fp16 yes, bf16 no), CUDA 13.3 | Radeon 780M, no CUDA |
 
-- Repo `~/museScribe` on the WSL ext4 filesystem on both (never `/mnt/c`, I/O is much slower). User develops on
-  the laptop and pulls on the PC. Data in `~/museScribe/data/` (not in git, copied by hand).
-- Harness venv: `source ~/.local/share/omrbench/env.sh` (`~/.local/share/omrbench/venvs/harness`).
-- Tesseract 5.5.2 + tessdata are copied out of the Audiveris image once into `~/.local/share/omrbench/tools`
-  (needed for the bar-number OCR pass). Qwen GGUF in `~/.local/share/omrbench/models/qwen25vl-7b`.
-- No global git identity on the PC: `git -c user.name="Konstantin Pelz" -c user.email="konstantin.pelz@online.de" commit ...`.
-  `gh` is logged in, `git push` works.
-- `wsl --shutdown` also kills the Claude session.
-- MuseScore 4 on the Windows default path (`/mnt/c/Program Files/MuseScore 4/...`), used to export `.mscz` truth.
+- Repo `~/museScribe` on the WSL ext4 filesystem (never `/mnt/c`). Data in `~/museScribe/data/` (copied by hand).
+- Harness venv: `source ~/.local/share/omrbench/env.sh`. Tesseract 5.5.2 + tessdata in
+  `~/.local/share/omrbench/tools`. Qwen GGUF in `~/.local/share/omrbench/models/qwen25vl-7b`.
+- `gh` is logged in, `git push` works. `wsl --shutdown` also kills the Claude session.
+- MuseScore 4 on the Windows default path, used to export `.mscz` truth and for `to_mscz`.
 - `results-laptop/` = the laptop's results as a reference (untracked). Keep.
 
 ## 3. Commands
 
 ```bash
 source ~/.local/share/omrbench/env.sh
-omrbench doctor                                   # docker, GPU, images
-omrbench images build [names] | list
-omrbench check anastasia                          # validate the workbook
+omrbench doctor | images build [names] | images list
+omrbench check anastasia                           # validate the workbook
 omrbench transcribe anastasia --songs 1,2 [--run-id ID] [--jobs 2]
-omrbench bench anastasia [--songs 1] [--run ID] [--full]   # score against truth; --full adds OMR-NED + TEDn
-omrbench bench ghost --songs 20 --transcribe       # transcribe + score
-omrbench sweep anastasia,ghost --id ID [--engines a,b] [--grid "k=v1,v2;k2=..."] [--grid-reuse BASE] [--songs 1,1a]
-                                                   # every engine/variant -> transcribe (or reassemble from BASE) + bench,
-                                                   # then results/sweeps/ID/report.md (ranking, best per part / category)
-omrbench sweep --id ID --resume                    # after a crash: skips finished engines and PDFs
-omrbench sweep --id ID --rebench | --report-only   # re-score finished engines / rebuild the report
-python scripts/reassemble.py ghost --from WORKRUN --to NEWRUN [--engine pipeline-raw] [--songs 20]
-                                                   # assembly only, on a run's work dirs (~90 s)
-python scripts/compare_bench.py BASE NEW           # all-song edit penalty delta + acceptance rule (bench ids)
-python scripts/error_report.py anastasia,ghost --run p1   # every difference by kind -> results/errors/p1/
-python scripts/derive_drumkit.py [show]            # drum legend from the truth drum parts -> drumkit.yaml
-omrbench run --engines pipeline,homr --samples demo-*      # multi-engine run on data/samples
-omrbench components layout|ocr <show> --run <run>  # P6 component benchmarks
-bash scripts/smoke_docker.sh                       # demo sample through the containers
-python -m pytest -q tests                          # no Docker needed; must pass before a commit
-python -m pyflakes omrbench tests                  # 4 old warnings: report.py, runner.py, _olimpic_tedn.py, pipeline/vocal.py
+omrbench bench anastasia [--songs 1] [--run ID] [--bench-id ID] [--full]
+python scripts/reassemble.py <show> --from h71 --to NEW [--songs 20] [--combine]   # assembly only, no re-reading
+python scripts/compare_bench.py BASE NEW           # total delta + acceptance rule
+python scripts/error_report.py anastasia,ghost --run NEW    # every difference by kind -> results/errors/NEW/
+python scripts/derive_drumkit.py [show]            # drum legend from the truth drum parts; re-run after a new drum truth
+python scripts/pdf_truth_check.py <show> <song> <part>      # vector PDF pitches vs truth
+omrbench sweep anastasia,ghost --id ID [--engines a,b] [--grid "k=v1,v2"] [--resume | --rebench | --report-only]
+omrbench components layout|ocr <show> --run <run>
+bash scripts/smoke_docker.sh
+python -m pytest -q tests                          # no Docker; must pass before a commit
 ```
 
-Fast iteration: `scripts/reassemble.py` (`PipelineEngine.reassemble`) reruns only the assembly on a finished
-work dir (`results/<show>/runs/<id>/pipeline/<sid>/`). All Anastasia 1/2/4A parts take about 90 s. Use it for
-every assembly change; then `omrbench bench <show> --run <id>`.
-
-Gotcha: `omrbench transcribe --engine X` overwrites `results/<show>/<song>/`. Back it up or rerun `pipeline` after.
+Gotcha: `omrbench transcribe --engine X` overwrites `results/<show>/<song>/`.
 
 ## 4. Architecture (as built)
 
-Data and outputs:
-
 ```
-data/<show>/{show.yaml, songs.xlsx, pdfs/, truth/}   read-only; workbook sheet per song, B2 = truth file,
-                                                     row column `truth` maps output part -> truth part(s)
-data/samples/<id>/                                   single-PDF samples with meta.yaml (type) + GT
-results/<show>/<song>/                               latest outputs + manifest.json (+ combined.mscz)
-results/<show>/runs/<id>/                            run history: outputs per song, pipeline/<sid>/ work dirs, run.log
-results/<show>/bench/<id>/                           report.md, scores.json, metrics.csv
-results/<show>/components/<id>/                      layout / OCR component reports
+data/<show>/{show.yaml, songs.xlsx, pdfs/, truth/}   workbook sheet per song, B2 = truth file, column `truth`
+                                                     maps output part -> truth part(s)
+results/<show>/<song>/                               latest outputs + combined.mscz (the user reviews these)
+results/<show>/runs/<id>/                            outputs per song, pipeline/<sid>/ work dirs, run.log
+results/<show>/bench/<id>/                           report.md, scores.json, metrics.csv; trend.csv
+results/errors/<id>/                                 errors.md, errors.json
 results/cache/                                       truth exports
 ```
 
 Code map:
+- Engines `omrbench/engines/`; containers `omrbench/containers.py`; homr pool `engines/homr_pool.py`.
+- Pipeline `omrbench/pipeline/`: `engine.py` (Audiveris layout -> crop jobs -> homr -> assembly), `layout.py`
+  (reads the Audiveris `.omr`: systems, head chords with stem side, dynamics, wedges, articulations, repeat dots),
+  `assemble.py` (plan, align, repairs, write), `bars.py` (bar repairs), `vector.py` (born-digital pages: text layer,
+  slashes, drum heads, articulation glyphs, ties, time signatures, lyric marks), `vocal.py` (piano reductions:
+  singers, lyrics, marks by x), `drumkit.py`, `ocr.py`, `chords.py`, `text.py`.
+- Song level: `transcribe.share_marks` (cross-book votes and filters), `musicxml.py` (extractor, sounds, last passes).
+- Metrics: `metrics/edits.py` (edit penalty), `notef1.py`, `elements.py`; `bench.py`; `scripts/error_report.py`.
 
-- Engines: `omrbench/engines/` (`build()` registry; `Engine.container` image key, `container: native` turns
-  Docker off; `exec_cmd`; `pagewise.py`; `KernPages` = one container call per sample for page-image engines).
-- Containers: `omrbench/containers.py` (`IMAGES`, `run_cmd`, `run_in_container` reads `stats.json`, kills the
-  container by name on timeout, `pool_cmd` for long-lived workers, `build_cmd` with repo-root context).
-  `docker/base/omr_run.py` = in-container monitor (psutil + NVML) writing `stats.json`.
-- Pipeline: `omrbench/pipeline/engine.py` (Audiveris layout -> crop jobs -> recognizer -> `assemble.py`),
-  `recognizer.py` (`recognizer:` / `fallback:`; readers `homr`, `zeus`, `smt-sys`, `transcoda`, `smt-fp`,
-  `clarity`; groups a reader can't read go to homr), `ocr.py` (bar numbers: PDF text layer on vector pages,
-  Tesseract otherwise; `ocr_engine:` option), assembly source label is `crop` (generic).
-- homr pool: `engines/homr_pool.py` (JSON lines over stdin/stdout to `_homr_worker.py`, copied into the image).
-- PDF kind: `omrbench/pdfkind.py`, per page `scan | scan+ocr | vector | vector-outlined | text`.
-- Converters: `omrbench/convert/kern.py` (**kern/bekern -> MusicXML via music21, header/terminator and
-  spine-count repair), `convert/mozart.py`.
-- Metrics: `metrics/edits.py` (**edit penalty**, the headline), `metrics/notef1.py` (note F1 by bar index +
-  bar-aligned), `metrics/elements.py` (LCS F1 per element category), `metrics/omrned.py` (OMR-NED, musicdiff),
-  `metrics/tedn.py`, `metrics/flags.py`. `omrbench/bench.py` = show benchmark, `omrbench/sweep.py` = all engines.
-- Components: `omrbench/components.py`.
+Design rules: a container mounts its run dir at the host's path; `docker run --user <uid>:<gid> -e HOME=/tmp`;
+`device: auto` (homr runs on CPU by default); engines with `requires_gpu: true` are skipped on CPU machines.
 
-Design rules:
+Images in use: `omrbench/audiveris:5.11.0`, `omrbench/homr:0.7.1` (CUDA 13 base, worker with
+`title_detection=False`). Benchmarked and kept for comparison: oemer, clarity, transcoda, smt, zeus, mozart, ola,
+ocr (EasyOCR / docTR), paddle, llama.cpp + Qwen2.5-VL-7B (table in the archive file).
 
-1. Identical paths: a container mounts its run dir at the same absolute path as on the host.
-2. `docker run --user <uid>:<gid> -e HOME=/tmp`, so outputs belong to the user.
-3. Single commands run as `omr-run --stats <dir>/stats.json -- <cmd>`; long-lived pools have host-side stats only.
-4. Host tool paths (`TESSDATA_PREFIX`, ...) are not passed into containers.
-5. `device: auto` = `cuda` when host `nvidia-smi -L` works, else `cpu`. `cpu` sets `CUDA_VISIBLE_DEVICES=`
-   and runs without `--gpus`. Engines with `requires_gpu: true` are skipped on CPU machines.
+## 5. Data, truth and the current reference
 
-Images (all built and verified on the PC, GPU visible where used):
+- Anastasia: 14 full-book PDFs, all scans except the vector `PianoReduction`. Lettered bars count; a cut to a plain
+  number keeps the bars between as empty bars; a cut to a lettered bar skips the earlier letters.
+- Ghost: 9 PDFs, born-digital vector pages (fonts `Maestro`, `EngraverFontSet`, `MaestroPercussion`).
+- Workbook rows per song: `time`, `key`, `bars`, `letters`; columns `truth`, `plainArticulation`, `plainText`,
+  `unfinished`, `extra`.
 
-| Image | Base | Notes |
+Truth songs (12, 174 scored parts, 40 301 notes):
+
+| Show | Songs (bars) | Notes |
 |---|---|---|
-| `omrbench/audiveris:5.11.0` | cpu | needs `libgtk-3` even in `-batch`; tessdata at `/opt/tessdata`; `JAVA_TOOL_OPTIONS` legacy merge sort |
-| `omrbench/homr:0.7.1` | cuda13 | pinned 0.7.1 (since 2026-11-11; worker: `title_detection=False`; output differences handled in `bars.homr_as_printed`, section 7); onnxruntime-gpu 1.31.0 needs CUDA 13; holds fp32 + fp16 models; honours `CUDA_VISIBLE_DEVICES=""` |
-| `omrbench/oemer:0.1.8` | cuda | patched to ask for CPU when `CUDA_VISIBLE_DEVICES=""` (onnxruntime-gpu 1.19 segfaults otherwise) |
-| `omrbench/clarity:c6bb8a4` | cpu | whole-PDF engine + `clarity-crops` staff reader (stage B on our crops) |
-| `omrbench/transcoda:b529f8a` | cpu | full-page pianoform -> kern |
-| `omrbench/smt:fp-grandstaff`, `omrbench/smt:grandstaff` | cpu | full page / system-level grand staff |
-| `omrbench/zeus:c8569eb` | cuda11 | solo-staff `ayce-2026-08-03` (CC BY-NC-SA) + grand-staff `zeus-olimpic-1.0` (CC BY-SA) |
-| `omrbench/mozart:a51c9d7` | cpu | classic-CV floor |
-| `omrbench/ola:2.0` | clarity | layout YOLO, must run at imgsz 640 |
-| `omrbench/ocr:easyocr1.7.2-doctr0.11`, `omrbench/paddle:3.3` | clarity / cpu | OCR components |
-| llama.cpp `server-cuda` (by digest `sha256:c4348afb…`) | | Qwen2.5-VL-7B Q4_K_M, 7.3 GB VRAM |
+| Anastasia | 1 (32), 2 (78), 3 (245), 4 (211), 4A (6), 5 (156) | Klavierauszug piano not generated, not scored (`Piano=-`); song 3 Violine 2 / Klarinette 2 are `plainArticulation`; six sparse parts in songs 3 / 4 (TRUTH_DEVIATIONS section 4), the user completes them |
+| Ghost | 1a (28), 4 (80), 5 (44), 11a (19), 13 (199; Bass, Cello only), 20 (135) | 20 "Voice 1" unfinished |
 
-## 5. Data, truth and current baselines
+No truth yet: Anastasia 5A, 6 (sheets made; outputs in `results/anastasia/`), all later songs.
 
-### Shows
-
-- `data/anastasia/pdfs/`: 14 full-book PDFs, all scans (97–405 pages each) except the vector `PianoReduction`.
-  Expected bar counts: song 1: 32, 2: 78 (1–76 + 72A/72B), 3: 245, 4: 211 (206 + 131A, 132C, 148A–C), 4A: 6.
-  Lettered bars count; a cut to a plain number ("to 14") keeps the bars between as empty bars, a cut to a lettered
-  bar ("-> 132C") skips the earlier letters (132A, 132B don't exist; `assemble.align_bars`, 2026-10-15).
-- `data/ghost/pdfs/`: 9 PDFs, born-digital vector pages (music fonts `Maestro`, `EngraverFontSet`) with a few
-  scanned covers. 31 sheets (1..24 incl. 1a, 11a, 13A, 14a, 20A–C), titles "English / German". Every song starts
-  on a fresh page; blank page-turn pages excluded via comma ranges (Utility 6, 8). PianoReduction = German
-  Klavierauszug, no #24. TACET parts stay empty. Only Guitar #2 and Drums #15 were checked for hidden vocal
-  staves (`keep_staves: 1`).
-- Samples `data/samples/`: `demo-bach-chorale` (choir), `demo-lindenbaum` (piano), `demo-violin-part` (part),
-  `anastasia-pr-1` (PianoReduction p. 7–9, piano_reduction), `anastasia-pr-4a` (p. 58, piano).
-
-### Truth
-
-| Show / song | File | Linked in workbook | Notes |
-|---|---|---|---|
-| Anastasia 1 | `truth/01_Opening_Fanfare_and_Opening_Scene.mscz` | yes | |
-| Anastasia 2 | `truth/02_Prologue_Once_upon_a_december_fertig.mscz` | yes | Klavierauszug not corrected yet (`unfinished`); truth updated 2026-10-15 |
-| Anastasia 4A | `truth/04a_Underscore_after_A_rumor_in_St_Petersburg.mscz` | yes | "mallets" in the drum book = xylophone: Drums row -> `Xylophon` (instrument `Xylophone`, 2026-10-15; the reader finds 1 of 5 notes) |
-| Anastasia 4 | `truth/04_A_rumor_in_St_Petersburg_fertig.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261014`) | finished 2026-10-18 (all parts); 211 bars (truth updated 2026-10-15); singer labels mapped by note match (Others / All / Voice 1 / Ensemble / Group 1 -> Frauen and Männer, Both -> Dmitry and Vlad, Gleb / Black Marketeer #2 -> Frauen); Dmitry / Vlad truth is an octave below the output: the truth is right, the PDF wrong (accepted, 1 bulk shift each) |
-| Ghost 13 | `truth/#13 - Bass.mscz; truth/#13 - Cello.mscz` | yes (2026-10-15) | two single-part files (B2 lists both, `;`); parts named Bass / Cello from the file names; run `g13`, bench `g13-m3`: 333 |
-| Ghost 20 | `truth/#20 - I'm Outta Here_Fertig.mscz` | yes | 7377 truth notes (Anastasia 1/2/4A together: 2708) |
-| Ghost 1a | `truth/#1a - Don't want the bubble to burst.mscz` | yes (2026-10-14; backup `songs.xlsx.bak-20261013`) | TACET rows `-` |
-| Ghost 4 | `truth/#4 - Three Little Words-fertig.mscz` | yes (2026-10-18) | Trumpet TACET (row `-`; the user removed a half-marked cue from the truth); guitar truth writes the fingerpicking out over the slash bars |
-| Ghost 5 | `truth/#5 - Sam's Death and Higher Spirits.mscz` | yes (2026-10-18) | 2/4, 4/4, 12/8 |
-| Ghost 11a | `truth/#11a - Ditto.mscz` | yes (2026-10-18) | cues from "Cl." up to "Play" in most parts |
-
-Theresa's earlier song 4 corrections are deleted and no longer relevant.
-
-Truth conventions (user decisions, pitch, bars, text, part names): `docs/CORRECTION_INFORMATION.md`. Klarinette in
-B 1 = Reed 2 in song 1 but Reed 1 in song 2.
-
-Most truth songs contain keyboard, guitar and drums; Anastasia 4 adds choir.
-
-### Baselines (kept run dirs)
-
-Edit penalty = MuseScore actions to reach the truth (lower is better; section 6); "left" = penalty / typing the
-parts in from scratch.
-
-| Show | Work dirs (reassemble from these) | Scored outputs | Bench id | Edit penalty (left) | Total note F1 | bar-aligned |
-|---|---|---|---|---|---|---|
-| Anastasia 1/2/4A | `results/anastasia/runs/20261013-020114` (`ocr-doctr/easyocr/paddle`, `ola` caches; its `crops-zeus/clarity/smt-sys` links are broken since the `full-pipeline-*` runs were deleted: reassemble ensembles from `weed-pipeline-ensemble` with `--work-engine pipeline-ensemble`) | `runs/fix4` | `edits-fix4` | **1528** (32.0 %) | **0.953** (1: 0.933, 2: 0.966, 4A: 0.985) | 0.955 |
-| Ghost 20 | `results/ghost/runs/ghost20-pc` | `runs/g20-fix4` | `edits-g20-fix4` | **3458** (35.7 %) | **0.705** | 0.766 |
-| Ghost 1a | `results/ghost/runs/g1a-base` | `runs/g1a-fix4` | `edits-g1a-fix4` | **235** (32.5 %) | 0.622 | 0.941 |
-| Ghost 11a (smoke, no truth) | `results/ghost/runs/ghost11a-final` | `runs/g11a-fix` | – | – | – |
-| Anastasia 4 | `results/anastasia/runs/20261013-222736` | same | `a4-first` | **6121** (30.4 %) | 0.667 | |
-
-**Reference 2026-10-15 (improvements round 1, branch `improvements`)**: all 6 truth songs re-transcribed with the default
-`pipeline` into `results/<show>/runs/ref` (work dirs; reassemble from these). Edit penalty with metric #24 (wrong-length
-bars): base `s-base` **12617** -> `r1` **9586** (-24 %; Anastasia 1 773, 2 671, 4 5941, 4A 186, Ghost 1a 227, 20 1788).
-Per step (cumulative, `scripts/compare_bench.py`): drums -106, song time -1279, song key -134, chord symbols -109,
-slash reader -619, "(loco & 8va)" -251, vector barlines -487, measure repeats -46. Remaining top categories: notes 2390,
-articulations 1448, dynamics 683, slurs 596, words 594, ties 526, bars 476, lyrics 459.
-Round 1 continued (same reference work dirs): slash articulations + chord beats from the slashes -131, ties from
-Audiveris -69, cue / dialogue / label words -231, misread time carried too long -515, single tremolos -140,
-stage-management words -33: **8467** (-33 % from 12617). Rejected (measured worse): slurs from Audiveris (+106),
-Audiveris double barlines (+129), vector barlines on multi-staff systems (+4584). Bench ids `s-*` (cumulative steps),
-`r1`, `t-ties`, `t-words`, `t-rest`, `t-run`, `t-trem`, `t-flow`; final check `final1` (fresh transcription of all 6 songs, `results/<show>/runs/final1`): **8464**.
-
-**New reference 2026-10-15 (truths of Anastasia 2 and 4 updated, 4A Drums -> Xylophon)**: `final1` outputs rebenched =
-`final1-t2` **8392** (6 songs; these bench ids also list Ghost 13 as from scratch, leave it out). Reassembled from `final1`:
-German mute words + lettered cuts + tempo in brackets = `m3` **8369** (-23). Then `plain` parts (workbook column, user
-2026-10-15: Anastasia Violin 2, Cello, Bass, Reed 2 / 3, Trumpet, Trombone, Männer get notes, ties and dots only, in the
-output and in the scored truth) = `p1` **7005** (a metric change, not a gain; **the reference from now on**, outputs in
-`results/<show>/runs/p1`). Ghost 13 (run `g13`, in `p1` too): 331.
-Rebenched 2026-10-16 as `p1-q` **7342** (metric: typographic quotes = plain ones -16; Ghost 13 truth fixed by the user,
-Molly cue out, accents on %-bars, rehearsal marks / tempi removed: +22, Ghost 13 now 353). Then slurs between equal pitches read as ties in every truth (`truth.load`) + more Ghost 13 truth fixes:
-`p1-t` **7377** (Anastasia 5168, Ghost 2209). Compare new work against `p1-t`.
-
-**Improvements round 2 (2026-10-16, branch `improvements`)**: reassembled from `final1` (Ghost 13 from `g13`); `p1-t`
-reproduces as `x0` **7376**. Accepted (acceptance rule, `docs/IMPROVEMENTS.md`), cumulative bench ids: whole-bar rests take
-the bar's length `f1` -153; slurs between equal pitches written as ties `f2` -288; notes re-read in the bar's key when the
-crop's key was misread `f3` -81; system text only for tempo terms, loose style / label text dropped `f5` -178; "sim." bars
-get the pattern's articulations `f6` -105; measure repeats in unnumbered systems placed by page position `f7` -56 (6515);
-workbook row `letters` (the song's lettered bars seed `align_bars`) `f8` -394 **only once the row is in the workbook**
-(tested in memory with Anastasia 4 `131A, 132C, 148A-C`); Audiveris ties at bar edges by pitch `g2` -6: **6115** (-17 % from
-7376). Rejected: respell also skipped next to key changes (+18), double barline before every key change (+99, Ghost 20 has key
-changes without one), articulations from the PDF glyphs on vector pages (+13, Ghost 20 Reed truth has accents the page lacks),
-"arco" / "pizz." from Tesseract (-2 but a part +2), system text by tempo terms without dropping the loose text (Keyboard 1 +28).
-Then (user 2026-10-16) the `letters` row is in both workbooks (Anastasia 2 `72A-B`, 4 `131A, 132C, 148A-C`; no other
-song has lettered bars; backups `songs.xlsx.bak-20261016`; `time` / `key` / `bars` filled for every song from the vector
-PDFs / Anastasia piano reduction 2026-10-16, backup `.bak-20261016b`; pickup songs Ghost 9, 11, 14a, 20A, 24 start at bar
-`0`, `bars` counts the pickup); "sim." / "fill" left out `g3` -11; dynamics read by
-Tesseract (conf >= 70) and dynamic-only text as `<dynamics>` `g5` -3: **6101** (-17.3 % from 7376). **Reference from now on:
-`g5`** (outputs `results/<show>/runs/g5`). Cheap fixes have flattened out; next (user choice): a dynamics detector for the
-scans (IMPROVEMENTS #33).
-
-**Improvements round 3 (2026-10-18, branch `improvements`)**: new truths (Anastasia 4 finished, all parts; Ghost 4, 5, 11a;
-Ghost 1a / 20 updated). All 10 truth songs transcribed fresh as run `r3` (unchanged PDFs link their older work dirs); baseline
-`r3-base` **12423**. User feedback (cue notes before "Play", missing fermatas over rests, dynamics, guitar chord symbols on the
-wrong beat = wrong bars, ties on held chords) -> chord ties, cues up to "Play", fermatas shared across parts `r3-b` -98; extra
-rest bars dropped where the printed numbers show the output ahead + trim to the workbook bar count `r3-c` -327; workbook bar
-count as the song-end anchor `r3-f` -52: **11946** (-3.8 %). Bar count right in 115 of 126 parts. **Reference from now on:
-`r3-f`** (outputs `results/<show>/runs/r3-f`, reassemble from `r3`). Next: `docs/IMPROVEMENTS.md` "Round 4", errors in
-`docs/ERRORS.md`. Rejected: chord symbols on every Ghost piano reduction (+72).
-Round 3 continued (same day): no guessed pickup bar when the workbook time row has none, homr's courtesy-copy bar after the
-last Audiveris stack dropped, extra bars past the stacks / before the anchoring number dropped `r3-h` -68 (bar count right in
-125 of 126 parts; left: Anastasia 4 Keyboard 1 212, conflicting numbers in the last system); Anastasia drum set: alias
-`sticks`, `kit: true`, labels of other percussion inside a kit passage take only their hits `r3-i` -183; Ghost 4 slash glyph
-`’` + the written pattern continued over the slashes (`same style` / `fingerpicking` parts) `r3-k` -733: **10962**
-(Anastasia 5741, Ghost 5221; -11.8 % from `r3-base`). **Reference from now on: `r3-k`.**
-
-Small output-only runs of the comparisons are kept too (`lvl2-*`, `l3-ola`, `ocr-*`, `p7-*`); older work
-dirs were deleted 2026-10-13. All bench reports stay in `results/<show>/bench/`.
-
-Note F1 changed slightly on 2026-10-14: drum notes are keyed by staff position (was rhythm only) and truth
-slashes are scored on rhythm (Ghost 20 0.719 -> 0.705: Drums 0.481 -> 0.333, Guitar 0.067 -> 0.150).
-Ghost 1a: index note F1 0.622 vs aligned 0.941 = bar-count errors (Cello 25/28, Guitar 25/28, Piano 29/28).
-
-Ghost 20 per part (note F1 / aligned, before 2026-10-14): Violin 0.992, Cello 0.978, Bass 0.998, Reed 0.947, Trumpet 0.521 / 0.883
-(134/135 bars), **Guitar 0.067** (slash notation, 608 of 725 truth notes are slashes), **Utility (E-piano) 0.582**
-(pitch class 0.772: octave convention), **Drums 0.481** (692 notes out vs 1329; chords of hits lost),
-PianoReduction 0.856. Truth part "Voice 1" has no workbook row.
-
-Anastasia weak spots (fix3): song 2 Trombone 0.875 (77/78 bars), Crotales 0.769, Mark Tree 0.000, Cymbal 0.500,
-Triangle and Schlagzeug no output; several parts one bar short or long.
+**Reference: `r69-a` = 9 111 actions** (Anastasia 6 762, Ghost 2 349; 14 % of typing everything in; 2026-11-13).
+Outputs `results/<show>/runs/r69-a`, bench id `r69-a`, work dirs `results/<show>/runs/h71/pipeline/` (homr 0.7.1
+crops of the 12 truth songs). History of the reference: `docs/IMPROVEMENTS.md` section 4.
 
 ## 6. Metrics
 
-### Edit penalty (headline, `metrics/edits.py`)
+Edit penalty (`metrics/edits.py`, headline): MuseScore actions that turn the output into the truth; every action
+costs 1. A wrong note (pitch and / or duration) = 1; a missing, made-up, changed or moved element (dynamic, hairpin,
+articulation, fermata, slur, tie, tuplet, tremolo, lyric, word, chord symbol, clef / key / time change, barline,
+repeat, instrument change) = 1; rests free. Bars aligned by DP: delete a bar = 1, insert = 1 + contents; a matched
+bar of the wrong length = 1 (`barlen`). A whole part transposed = 1 (`shift`); a section an octave off = 1
+(`octave`). Playing techniques (`playtech`) and the part's instrument (`instrument`) = 1 each. Rehearsal marks,
+tempi and system text once per song. Slash noteheads: rhythm only; drums: by staff position.
 
-Number of MuseScore actions that turn the output into the truth; minimise it. Every action costs 1 (user
-decisions 2026-10-13): a wrong note (pitch and/or duration) = 1 retype; a missing / made-up / changed / moved
-element (p -> f, fermata, slur, tie, hairpin, lyric, chord symbol, tuplet, tremolo, word, clef / key / time
-change, barline, repeat / volta / navigation, instrument change) = 1; rests free. Bars aligned by DP: delete an
-extra bar = 1 (contents go with it), insert a missing bar = 1 + its contents. A whole part off by an octave /
-transposition = 1 bulk action (the `shift` column; also logged as a warning). A part with no output = 1 (add the
-instrument; bars are score-wide) + contents = `from_scratch`. Rehearsal marks, tempi and system text
-(`system="only-top"` words in the truth, e.g. rit.) count once per song over the union of all output parts.
-Slash noteheads: rhythm only; drums: by staff position (kit instrument), simultaneous hits kept.
-A section one or two octaves off (Celesta after an instrument change in Ghost 20 Utility) = 1 action per section
-(`octave`, 2026-10-14). Known limits: split-instrument outputs
-compare instrument changes by position only; a dynamic printed in two overlaid split parts counts twice; a short
-(underfilled) output bar puts its final barline at a different onset (+1).
+Not scored yet (the user wants them in, 2026-11-14; IMPROVEMENTS M1-M4): grace notes, curve end points, lyric
+hyphens / melisma lines, ornaments and technique marks, chord degrees. Counts: ERRORS section 4.
 
-### In `omrbench bench`
+`omrbench bench` also reports note F1 (by bar index and bar-aligned), element F1 per category, bars to fix,
+runtime, and the "Percussion instruments" check after the MuseScore round trip.
 
-Per part, per song (+ system items) and total: edit penalty, from scratch, left %, bars to fix (insert / delete
-/ change), shift, penalty by category; note F1 (notes, pitch, pc, rhythm, aligned); element F1 per category
-(`musicxml.CATEGORIES`: notes, pitch, rhythm, rests, clefs, keys, times, dynamics, hairpins, articulations,
-slurs, ties, lyrics, words, tempo, fermatas, tuplets, tremolos, instruments, structure, barlines, rehearsal,
-chords, multirest, systemtext); runtime / memory per PDF; `--full` adds OMR-NED + TEDn. Every bench appends to
-`results/<show>/bench/trend.csv`. `omrbench check` suggests `truth` cells for rows without one.
+## 7. Findings that still hold
 
-Not scored: grace notes and cue notes; per-kit-instrument drum report (penalty covers it).
-Open: cross-check the penalty against OMR-NED (`--full`) on a few parts.
+Readers and components
+- homr is the best crop reader at every level (full pipeline note F1 0.955; SMT 0.769, Clarity 0.696, Zeus 0.659).
+  The Audiveris-layout crops add most (page 0.63 -> crops 0.96 aligned); the repairs mostly fix bar counts.
+- Ensembles of readers lose (0.937-0.946 against 0.955). OLA as layout or vote loses. Tesseract beats docTR,
+  PaddleOCR, EasyOCR for bar numbers. Qwen reads numbers but its boxes are not in image coordinates.
+- homr fp16 on the GPU: 0.928 against 0.955 and stalls; homr stays on the CPU (8 workers x 2 threads, `--jobs 2`).
+- Audiveris `processAllStubsInParallel` drops symbols and crashes; stays off.
+- homr 0.7.1 output is not the printed staff (estimated time per crop, multi-rests written out, an empty measure
+  before a repeat start): `bars.homr_as_printed` undoes it. Check again at the next homr bump.
 
-## 7. Findings and learnings
+Pipeline
+- Audiveris' `.omr` holds far more than its MusicXML export (hairpins, dynamics, articulations, repeat dots, stem
+  sides); marks are placed on homr's notes by image x (`imgpos`).
+- Vector pages: text layer and glyphs are exact; bar numbers, lyrics, labels, chord symbols, drum heads, slashes,
+  time signatures come from them.
+- Cross-book votes work for bar structure (barlines, repeats, fermatas, lone-mark filters), not for copying marks.
+- MuseScore 4 drops mid-part `<transpose>` and instrument changes on import: doubling books are split per
+  instrument in Anastasia (`split_instruments`), one part in Ghost (`doublings: one_part`).
+- Piano reductions give `- Voices` (one part per singer label) and `- Piano`.
 
-### Readers and engines (Anastasia 1/2/4A, PC)
+More learnings and every rejected experiment: `docs/IMPROVEMENTS.md` sections 6 and 7.
 
-Full pipeline per crop reader, total note F1: homr **0.955**, SMT 0.769, Clarity 0.696, Zeus 0.659.
-Zeus's solo-staff model breaks on scanned orchestral parts (bar counts up to 6x, one crop looped into 177 bars);
-SMT-sys ruins piano reductions (346 / 1581 bars) and drops most keyboard notes; Clarity is better only on 4A
-Keyboard 2 (1.000 vs 0.983). Samples: pipeline-clarity pr-1 0.881, pr-4a 1.000, lindenbaum 0.960 (homr
-0.942 / 1.000 / 0.986).
-
-Recognizer comparison without homr tuning (27 parts every level has output for):
-
-| level | reader | note F1 (bars by index) | bar-aligned |
-|---|---|---|---|
-| 1 page | Audiveris | 0.234 | 0.473 |
-| 1 page | homr | 0.398 | 0.631 |
-| 2 crops, no repairs | homr | 0.644 | 0.957 |
-| 2 crops, no repairs | Clarity | 0.520 | 0.889 |
-| 2 crops, no repairs | Zeus | 0.501 | 0.765 |
-| 3 full pipeline | homr | 0.976 | 0.980 |
-| 3 full pipeline | Clarity | 0.723 | 0.904 |
-| 3 full pipeline | Zeus | 0.640 | 0.785 |
-
-All 41 parts, level 2 aligned: homr 0.907, Clarity 0.806, Zeus 0.682, SMT 0.592. Zeus / Clarity beat homr on 2
-parts each (Pauken, Crotales / Frauen, 4A Keyboard 2) and lose on 30+. Conclusion: homr is the best reader even
-without tuning; the Audiveris-layout crops add most (level 1 -> 2), the repairs mostly fix bar counts.
-Level 1 runs via `omrbench transcribe --engine homr|audiveris`; level 2 by reassembling with `repairs: false`
-(bench entries `pipeline-raw`, `pipeline-<reader>-raw`). Index-based note F1 scores raw outputs with a missing
-bar near 0; use `aligned` for reader quality.
-
-Page engines on the demo samples: see `docs/engine-benchmark.md`. oemer on laptop CPU: 260 s / page, 6 GB,
-note F1 94 % on demo.
-
-### Layout and OCR components
-
-- OLA v2.0 vs Audiveris: on vector samples about equal; on Anastasia scans OLA finds 242 systems vs 385 and misses
-  many single-staff systems. As an extra bar-count vote (`pipeline-ola`): 0.955 -> 0.929. Audiveris stays.
-- Bar-number OCR (`ocr_engine`): Tesseract 0.955, docTR 0.948, PaddleOCR (CPU) 0.948, EasyOCR 0.944. The filters in
-  `ocr.supplement` (MIN_CONF, lone digits) were tuned on Tesseract. Tesseract stays.
-- Qwen2.5-VL-7B reads strip numbers well where Tesseract misses them, but its `bbox_2d` via llama.cpp is not in
-  image coordinates, so numbers can't be placed on bars. Follow-up only if bar alignment errors matter: ask per
-  Audiveris bar segment (~4000 requests for Anastasia 1/2/4A), expected gain ~0.01.
-- Part labels and rehearsal marks: not benchmarked (Audiveris text is used).
-
-### Ensemble (P7)
-
-`ensemble: [zeus, clarity, smt-sys]` adds those readers' crop bars as per-bar candidates (`assemble.plan_systems`
-`alts`; picks `agree`, `fallback`, weighted, `agree-keep`). All variants lose: 0.937 / 0.937 / 0.937 / 0.946 vs 0.955.
-A homr bar whose voices don't add up is still usually the best reading. Routing says homr for every part type
-with the current truth. Revisit only with new readers or truth of new score types.
-
-### Hardware and runtime
-
-- homr fp16 on the GPU: 0.928 vs 0.955 (fp32 CPU), and 8 GPU workers on 8 GB stalled into 1800 s timeouts (GPU run
-  6987 s vs CPU 988 s). homr runs on the CPU by default everywhere (`device: cuda` opts in). fp32 ONNX on CUDA
-  (patched worker, scratch test) = CPU-identical output, no speed-up. Don't move homr back to GPU without re-benching.
-- On the CUDA 12.6 base, homr's CUDA provider failed to load (`libcublasLt.so.13`) and silently fell back to CPU.
-- Speed comes from the homr pool (8 workers x 2 ONNX threads) and `--jobs 2`; 3 jobs or niced workers were slower.
-  One transcribe peaks at ~10 GB; with 15.6 GB WSL two parallel transcribes were OOM-killed.
-- Audiveris `processAllStubsInParallel=true` halves wall time but a race drops symbols (an accent in song 4 Trumpet)
-  and crashed song 4 Violin 2 in 3/3 tries; `parallel_sheets` stays off (opt-in, failed parallel run is redone serially).
-- `pdfkind` takes ~100 s for a 405-page scan.
-
-### Pipeline behaviour
-
-- Vector pages: bar numbers and multi-rest counts come from the PDF text layer; pages without fonts skip it.
-- Ghost 20 multi-rests: text-layer counts + Audiveris MULTI_REST stacks keep Audiveris' count (0.538 -> 0.719).
-- homr 0.7.1 (2026-11-11, IMPROVEMENTS R49): `r14-h70` 13 555 -> `r14-h71` **12 243**; work dirs `runs/h71`.
-  Its MusicXML is not the printed staff: estimated time on every crop, multi-rests written out, an empty measure
-  before a repeat start (`bars.homr_as_printed` undoes all three); its dynamics win over Audiveris' in a bar; a
-  second voice may cover a part of the bar (`bar_ok(side_voices=True)`). Check these again at the next bump.
-- User requests U6–U9 (2026-11-11): U8 `u8-c` **12 239** (Anastasia 9 022, Ghost 3 217), ties <= 2 bars, slurs <= 6; U6 `u6-b` **12 200**
-  (Anastasia 8 995, Ghost 3 205), no voice past the bar end; U9 `u9-a` 12 200 (mute words); U7 `u7-b` **12 187**
-  (Anastasia 8 983, Ghost 3 204), one full-bar rest per staff of rests. U4 part 1 `u4-b` **12 185** (Anastasia
-  8 981, Ghost 3 204), hairpins attached to notes; R40 `r40-w` **11 968** (Anastasia 8 764, Ghost 3 204), the
-  `.omr` hairpins on scanned single-staff parts; R42 `r42-df` **11 833** (Anastasia 8 643, Ghost 3 190), dynamics /
-  fermatas only one book has dropped; R41 `r41-a` **11 570** (Anastasia 8 422, Ghost 3 148), words only one book
-  prints dropped (playing words kept); R43 `r43-a` **11 499** (Anastasia 8 351, Ghost 3 148), one-instrument
-  percussion parts on the truth's line; U1 `u1-c` 11 499 (metric-neutral), percussion parts import as the truth's
-  MuseScore instrument; U2 `u2-a` 11 499 (metric-neutral), "hide if empty" on every part of combined.mscz.
-  U10 `u10-c` 11 499 (metric-neutral), German part / instrument names in combined.mscz. U11 `u11-b` 11 499
-  (metric-neutral), Klavierauszug piano kept for the vote only (`<song>/vote/`), no "- Piano" output. U12 `u12-a`
-  **11 460** (Anastasia 8 312, Ghost 3 148), bars of an unread cut inserted at the system break.
-  U13 `u13-a` 11 460 (metric-neutral), duet labels ("VLAD & DMITRY:", `singer_groups` BOTH) into both singers.
-  U14 `u14-a` 11 460 (metric-neutral), `show_overrides.yaml` moved into data/ (show.yaml, workbook cells).
-  U15 `u15-a` 11 460 (metric-neutral), "hide if empty" per show (`hide_empty_staves`: Anastasia on, Ghost off).
-  U16 `u16-a` 11 460 (metric-neutral), singers without a `voice_sounds` entry import as a voice.
-  R44a `r44-a` **11 399** (Anastasia 8 312, Ghost 3 087), drum grooves written over the slash bars after them.
-  R44b `r44-b` **11 205** (Anastasia 8 312, Ghost 2 893), Ghost drum legend re-derived with the Ghost 4 / 5 truths.
-  R44c `r44-c` **11 179** (Anastasia 8 312, Ghost 2 867), drum-page accent + staccato glyphs, "sim." on drum books.
-  R44d `r44-d` **11 048** (Anastasia 8 312, Ghost 2 736), no pseudo-bars from repeat barlines / staff-end signatures
-  on vector pages.
-  R45a `r45-b` **11 015** (Anastasia 8 284, Ghost 2 731), Anastasia kit legend + drum bars read in bass clef.
-  R45b `r45-c` **10 963** (Anastasia 8 232, Ghost 2 731), "tamb." after a Timpani bar stays a kit-passage label.
-  R45c `r45-e` **10 921** (Anastasia 8 190, Ghost 2 731), groove copied over the slash bars of scanned drum books.
-  R45e `r45-g` **10 883** (Anastasia 8 152, Ghost 2 731), lower-staff bars with hits on 2+ lines go to the kit.
-  R45f `r45f-a` **10 784** (Anastasia 8 053, Ghost 2 731), scanned kit bars rebuilt from the `.omr` head chords.
-  R45g `r45g-b` **10 769** (Anastasia 8 038, Ghost 2 731), "[to] 194 mf": cut mark split off a trailing dynamic.
-  R47 `r47-a` **10 666** (Anastasia 7 964, Ghost 2 702), repeat signs from the `.omr` repeat dots.
-  R12 `r12w-a` **10 563** (Anastasia 7 861, Ghost 2 702), no words in the Anastasia keyboard parts.
-  R27a `r27-b` **10 462** (Anastasia 7 760, Ghost 2 702), barline vote at 45 % + repeat end paired to a kept start.
-  R27b `r27c-a` **10 421** (Anastasia 7 719, Ghost 2 702), double barline before a "[to] N" cut moved to bar N-1.
-  R14 `r14w-a` **10 406** (Anastasia 7 715, Ghost 2 691), one-staff treble parts keep their first clef.
-  R25 `r25w-a` **10 401** (Anastasia 7 710, Ghost 2 691), exact duplicate directions removed.
-  R50a `am1-a` **10 237** (Anastasia 7 710, Ghost 2 527), printed time signatures of vector pages.
-  R50b `am2-b` **10 155** (Anastasia 7 628, Ghost 2 527), "ALL MEN" no longer merged into "ALL WOMEN".
-  R51 `r51-e` **9 892** (Anastasia 7 365, Ghost 2 527), `.omr` articulations placed on homr's notes by `imgpos` x.
-  R52 `r52-a` **9 820** (Anastasia 7 365, Ghost 2 455), "sim." 4-5 interlines below the staff placed (Ghost 5 Guitar).
-  R54 `r54-c` **9 801** (Anastasia 7 346, Ghost 2 455), `.omr` dynamics (grade >= 0.8) by `imgpos` x where a bar staff has none.
-  R56 `r56-b` **9 674** (Anastasia 7 218, Ghost 2 456), hairpins placed by homr's `imgpos` x, start on the nearest note.
-  R58 `r58-a` **9 547** (Anastasia 7 092, Ghost 2 455), no Audiveris dynamics copied onto homr's bars.
-  R62 `r62-a` **9 443** (Anastasia 6 950, Ghost 2 493), unlabelled vocal staves take their first later label.
-  `r62-t` **9 444** (Anastasia 6 951, Ghost 2 493): `r62-a` benched after the user's Anastasia 4 Keyboard 2 truth fix.
-  R65a `r65-a` (bench `r65-t`) **9 404** (Anastasia 6 911, Ghost 2 493), slurs to / from a rest dropped.
-  R67 `r67-a` **9 366** (Anastasia 6 911, Ghost 2 455), instrument cue staves ("Vc. (pizz)") stay out of the singers.
-  R66 `r66-a` **9 142** (Anastasia 6 791, Ghost 2 351), lyrics from the PDF text layer on vector pages.
-  R69 `r69-a` **9 111** (Anastasia 6 762, Ghost 2 349), lyric lines numbered from 1 per bar.
-  **Reference from now on: `r69-a`.**
-- Repairs tuned on homr: `_vote` breaks 1-vs-1 ties between Audiveris and the crop reader toward the crop reader;
-  homr's courtesy-signature rest bar is dropped; multi-rests and bar numbers fixed around homr's habits.
-- MuseScore 4 drops mid-part `<transpose>` changes and `<sound><instrument-change>` on MusicXML import (the part keeps
-  the first transposition); `<score-instrument><instrument-sound>` does set the instrument. So doubling books use
-  `split_instruments: true` (one part per instrument), not `doubling: true`.
-- Piano reductions give two files: `- Voices` (one part per printed singer label, lyrics) and `- Piano`
-  (no sung / spoken text); `spoken_text: drop|text`; uncertain articulations / dynamics dropped; hairpins at most 2 bars.
-- Reed 2 song 2 bar 17: "(Flute)" is a cue label; parenthesised labels are ignored by the matcher unless `paren_aliases`.
-
-### Code review fixes (2026-10-14)
-
-Bench: page engines name every part alike ("Voice", "Voice"): only the last was scored, N times (weed rankings of
-audiveris, homr, clarity, transcoda wrong until `omrbench sweep --id weed --rebench`); one output part may feed two
-truth parts. Metrics: an instrument change without `<transpose>` resets the transposition (MuseScore writes it only
-when non-zero; Ghost 20 E-piano from bar 109 was an octave off), right barlines after `<backup>`, `<words>` runs
-joined, system marks prefer the truth's bar in a cluster. Pipeline: printed / boxed bar numbers at the system start
-count as bar-number evidence in all score types (Ghost 20 note F1 0.705 -> 0.736, Guitar / Drums 135 bars; Ghost 1a
-0.622 -> 0.745; Anastasia 2 Drums 76 -> 75 of 78, +5); ensemble readers' divisions in `D`; fallback Audiveris bars no
-longer get Audiveris directions twice; agree-keep KeyError on multi-rests; F# transposition. Sweep: `--resume`
-retries failed PDFs, `--full` on resume / rebench, failed rebench not ranked, totals include system from-scratch.
-Baselines with all of it (reassembled, not yet saved as runs): Anastasia 1531, Ghost 20 3360, Ghost 1a 232.
-
-### What the edit penalty shows (2026-10-14, baselines fix4)
-
-- Anastasia 1/2/4A (1528): words 196, articulations 168, slurs 151, notes 156, ties 121, dynamics 115, barlines
-  ~130, systemtext 99, hairpins 89, structure (repeats) 68, keys 62. Notes are no longer the main cost.
-- Ghost 20 (3458): notes 2130 (Guitar slashes, Drums, Utility), ties 303, chords 253 (no chord symbols in the
-  output), slurs 217, articulations 203.
-- Pipeline outputs had no barlines at all (`bars.part_bars` drops them) and wrote boxed bar numbers as rehearsal
-  marks. Fixed 2026-10-14: final light-heavy barline on every part, numeric rehearsal marks dropped (Anastasia
-  -42, Ghost 20 -100, 1a -12). Double barlines and repeats (Audiveris reads some) are still not carried over.
-- `pipeline-ensemble*` used to read `crops-<reader>/` caches only, so on a fresh run it equalled `pipeline`; the
-  pipeline now runs the ensemble readers on the same crops itself.
-
-### Open workbook / data items
-
-- Ghost 20 truth "Voice 1" = Oda Mae, not finished: workbook `unfinished: Voice 1` (bench skips it), PianoReduction
-  row already maps `Oda Mae=Voice 1`.
-
-- Drums song 4 p15 sys 1 (bars 90–97): upper staff Timpani, lower unlabeled = Triangle -> instruments cell
-  `Triangle (lower_staff)`. Drums song 4 p17 sys 3 (bars 174–177): x-heads marked "sticks" are still Castanets;
-  Timpani from bar 177.
-- Keyboard 2 scan lacks printed p. 11 of No. 3 (bars 218–229) and p. 12 of No. 4 (~196–206); user is getting them.
+Open workbook / data items
+- Keyboard 2 scan lacks printed p. 11 of No. 3 (bars 218-229) and p. 12 of No. 4 (about 196-206).
   `Keyboard 1.pdf` ends at No. 14 (Act Two book missing).
-- Later songs: Violin 2 plays Viola (alto clef) in No. 11 and 26; Bass "Acoustic Bass" in No. 26; No. 24A not in the
-  PianoReduction TOC; song 5 Reed 1 English Horn needs a `show.yaml` entry (transpose F), not added yet.
-- MuseScore instrument mapping: "Bass" opens as the voice register, "Cello" is not mapped to Violoncello; most
-  instruments have to be reassigned by hand (IMPROVEMENTS #18).
+- Later songs: Violin 2 plays Viola (alto clef) in No. 11 and 26; Bass "Acoustic Bass" in No. 26; No. 24A not in
+  the PianoReduction TOC.
+- Anastasia workbook: duets into both singers before song 6 is reviewed; drum book lower staff (`lower_staff:
+  Triangle` in song 4 is right for 90-97, wrong for 78-81 / 174-177).
 
-## 8. Next steps (in order)
+## 8. Next steps
 
-1. **Big run** (user decision 2026-10-13): a weed-out sweep of every engine on Anastasia 1 + 4A and Ghost 1a
-   (`--id weed`; 17 of 19 engines done, `smt-fp` stopped by the user 2026-10-14, `mozart` not run), then the
-   full grid on all truth songs incl. Anastasia 4 (`--id full --full`: base `pipeline-allreaders` + 42 variants
-   reassembled from it, Tesseract only, OMR-NED on every variant). Weed rebenched 2026-10-14 (page-engine part
-   names fixed, PianoReduction rows out of the ranking): `pipeline` 932 = `ensemble-wk` 932 (18x the time); OCR
-   variants within 1.5 %; other main readers 37-130 % worse; homr page 1697, Audiveris 2316, Clarity 2555. `smt-fp` stays in (resume it; drop it only if it crashes the PC again). Includes the gated SMT models once the Hugging Face access is approved
-   (`HF_TOKEN`; `PRAIG/smt-fp-mozarteum`, `-polish-scores`).
-2. **Truth wiring**: fill the `unfinished` parts as they get corrected (Anastasia 2 Klavierauszug, Anastasia 4 Reed 2 / 3,
-   Keyboard 2, percussion; Ghost 20 Voice 1 / 2); add Ghost 13 to the reference total once more of it is corrected.
-3. **Regression safety** (IMPROVEMENTS #3): small regression samples from real failures (Ghost Trumpet system 8,
-   Reed system 1, Anastasia 2 Violin 1) with stored work dirs, checked in pytest via `reassemble()`.
-4. **Quality work, biggest penalty first** (from the sweep's "penalty by category"; current order):
-   - Ghost Guitar slash notation + chord symbols (IMPROVEMENTS #7, #11); chords 253 actions in Ghost 20.
-   - Drums: kit mapping, keep simultaneous hits (#8); Anastasia percussion without output (Triangle, Schlagzeug).
-   - Words / system text / dynamics / hairpins / ties / slurs: route from the best source per element.
-   - Barlines + repeats / voltas from Audiveris onto the output bars.
-   - Octave regions after instrument changes (Celesta in Ghost Utility; #9).
-   - Generic bar-count guards (#10); tuplets, fermatas, tremolos (homr reads single tremolos as two-note).
-   - MuseScore instrument mapping in the output (#18).
-5. **Speed** (#13–#15): two songs in parallel, per-page Audiveris cache, homr GPU fp32 with larger batches.
-6. **Routing / ensemble revisit** (P7): from the sweep's best-per-part and best-per-category tables, write
-   `routing.yaml` (score type x pdfkind x element).
-7. **Optional / later**: results viewer (#16), `transcribe` refuses to start on workbook errors (#17), README per
-   song folder (#18), container script tests (#19), pin remaining assets (#20), native vector glyph parsing for
-   born-digital PDFs (#12), vector pages at a higher render dpi, report split by pdfkind, Qwen per-bar-segment bar
-   numbers, re-test the Audiveris parallel race on a newer Audiveris.
+The ranked list is `docs/IMPROVEMENTS.md` section 2. Short form (2026-11-14):
+1. User: complete the six sparse truth parts (T1, about -930) and the other truth items T2-T4.
+2. Dynamics and hairpins (the user's worst pain): D1 Ghost vector glyphs and lines, D2 / D3 `.omr` marks on
+   keyboards and drum books, D8 filter for made-up homr dynamics.
+3. Metric: score grace notes, curve ends, lyric hyphens, ornaments (M1-M4) and bench provenance (M5); rebaseline.
+4. Detectors for dynamics / hairpins no reader sees (D4, D5), hairpin start / end (D7).
+5. Keyboard notes: K2 (Ghost pianos from the drawing), K1 (Anastasia per-staff reading).
+6. Anastasia drum kit and tremolos (P1, P2); then singers and the small structure items.
 
 ## 9. Conventions
 
-- `python -m pytest -q tests` passes before every commit; no Docker needed for tests.
-- Do not commit `data/` or `results/` (gitignored).
-- New GPU-only engines get `requires_gpu: true` in `bench.yaml`.
-- Every new engine / recognizer lands with image, adapter, converter test and `bench.yaml` entry, and is run on
-  demo + one real sample before moving on. Failures are recorded, not crashes.
-- Assembly changes: reassemble the baseline work dirs, bench with `--run`, and compare to the baseline ids above
-  (default path must stay byte-identical unless the change is meant to alter it).
+- `python -m pytest -q tests` passes before every commit. Do not commit `data/` or `results/`.
+- One commit per accepted change on branch `improvements`; after a reassembly run refresh `results/<show>/<song>/`
+  and `combined.mscz`.
+- New engines land with image, adapter, converter test and `bench.yaml` entry; GPU-only ones get `requires_gpu`.
+- `data/` edits (workbook cells, show.yaml keys) are listed in the commit message, because `data/` is not in git.
