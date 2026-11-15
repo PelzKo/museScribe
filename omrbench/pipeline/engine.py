@@ -460,7 +460,7 @@ class Pipeline(Engine):
             if vocal and not is_scan(sample.pdf) else ())
         if is_scan(sample.pdf) and sample.score_type in ("part", "drums"):
             A.place_text_dynamics(plans, pages, stats)   # D12: dynamics Audiveris filed as (lyric) text
-        if is_scan(sample.pdf) and sample.score_type == "part" and workdir:
+        if is_scan(sample.pdf) and sample.score_type in ("part", "drums") and workdir:
             # D4: dynamics by template correlation below the staff (templates: scripts/derive_dyn_templates.py);
             # the show from the work dir id ("anastasia-4--Horn"): meta["show"] is set on drum books only
             dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
