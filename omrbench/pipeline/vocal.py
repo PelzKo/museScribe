@@ -357,8 +357,10 @@ def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] 
                 end = mk.x + mk.w
                 before = [p for p in pos1 if p[0] <= end + 1.5 * il]
                 after_last = not pos1 or end > pos1[-1][0] + 2 * il
+                # D7: the stop goes at the end of the last note under the tip, as MuseScore writes it
                 on1 = (B.bar_length(plan.times[i1], D) or 0) if after_last or not before \
-                    else before[-1][1]
+                    else min(before[-1][1] + int(before[-1][2].findtext("duration", "0") or 0),
+                             B.bar_length(plan.times[i1], D) or 10 ** 9)
             if (i1, on1) <= (i0, on0):
                 stats.marks_unplaced += 1
                 continue
