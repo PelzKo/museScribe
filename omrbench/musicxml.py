@@ -120,13 +120,13 @@ def _rename_ids(el: etree._Element, old: str, new: str) -> None:
             e.set("id", new + v[len(old):])
 
 
-def merge_parts(roots: list[etree._Element]) -> etree._Element:
+def merge_parts(roots: list[etree._Element], order: list[int] | None = None) -> etree._Element:
     """Stack the parts of several scores (e.g. per-instrument GT exports) into one score.
 
     Header (work, identification, defaults) comes from the first score. Part ids are
     renumbered P1..Pn in the given order. System text (tempo, rall. ...; MuseScore marks
     it system="only-top"/"also-top" and repeats it in every part export) is kept only in
-    the first part, as printed.
+    the first part, as printed. `order`: indices into all parts in input order (the stacking order).
     """
     if not roots:
         raise ValueError("no scores to merge")
@@ -134,22 +134,25 @@ def merge_parts(roots: list[etree._Element]) -> etree._Element:
     part_list = out.find("part-list")
     for el in list(part_list) + out.findall("part"):
         el.getparent().remove(el)
-    k = 0
+    entries = []
     for r in roots:
         parts = {p.get("id"): p for p in r.findall("part")}
-        for sp in r.iterfind("part-list/score-part"):
-            old = sp.get("id")
-            k += 1
-            new = f"P{k}"
-            sp, part = copy.deepcopy(sp), copy.deepcopy(parts[old])
-            _rename_ids(sp, old, new)
-            _rename_ids(part, old, new)
-            if k > 1:
-                for d in part.findall("measure/direction"):
-                    if d.get("system") in ("only-top", "also-top"):
-                        d.getparent().remove(d)
-            part_list.append(sp)
-            out.append(part)
+        entries += [(sp, parts[sp.get("id")]) for sp in r.iterfind("part-list/score-part")]
+    k = 0
+    for i in order if order is not None else range(len(entries)):
+        sp, part = entries[i]
+        old = sp.get("id")
+        k += 1
+        new = f"P{k}"
+        sp, part = copy.deepcopy(sp), copy.deepcopy(part)
+        _rename_ids(sp, old, new)
+        _rename_ids(part, old, new)
+        if k > 1:
+            for d in part.findall("measure/direction"):
+                if d.get("system") in ("only-top", "also-top"):
+                    d.getparent().remove(d)
+        part_list.append(sp)
+        out.append(part)
     return out
 
 

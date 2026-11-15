@@ -165,7 +165,7 @@ def keep_awake(enabled: bool):
         LOG.info("keep-awake off: Windows may sleep again")
 
 
-def combine(files: list[tuple[str, Path]], out: Path) -> Path:
+def combine(files: list[tuple[str, Path]], out: Path, layout: dict | None = None) -> Path:
     """Stack the parts of every (name, musicxml) into one score, named after `name`."""
     roots = [musicxml.load(p) for _, p in files]
     counts = {name: len(r.find("part").findall("measure")) if r.find("part") is not None else 0
@@ -175,14 +175,19 @@ def combine(files: list[tuple[str, Path]], out: Path) -> Path:
                     + ", ".join(f"{n}: {c}" for n, c in counts.items()))
     else:
         LOG.info(f"all {len(files)} combined files have {next(iter(counts.values()), 0)} bars")
-    labels = []
-    for (name, _), r in zip(files, roots):
+    labels, files_of = [], []
+    for k, ((name, _), r) in enumerate(zip(files, roots)):
         parts = r.findall("part-list/score-part")
         for sp in parts:
             pn = sp.findtext("part-name") or ""
             shown = sp.findtext("part-name-display/display-text")      # U10: the German name
             labels.append(shown or (f"{name} – {pn}" if len(parts) > 1 and pn else name))
-    score = musicxml.merge_parts(roots)
+            files_of.append(k)
+    layout = layout or {}
+    order = staff_order(labels, files_of, layout.get("staff_order") or [])
+    score = musicxml.merge_parts(roots, order)
+    labels = [labels[i] for i in order]
+    short = layout.get("short_names") or {}
     # title/credits of the first piece don't describe the combination
     for el in score.findall("credit") + score.findall("work") + score.findall("movement-title"):
         score.remove(el)
@@ -192,10 +197,34 @@ def combine(files: list[tuple[str, Path]], out: Path) -> Path:
             pn = etree.SubElement(sp, "part-name")
             sp.insert(0, pn)
         pn.text = label
-        for el in sp.findall("part-abbreviation"):
+        for el in sp.findall("part-abbreviation") + sp.findall("part-abbreviation-display"):
             sp.remove(el)
+        if short:      # MuseScore's short name, shown from the second system on (as the truths); unlisted: the name
+            ab = etree.Element("part-abbreviation")
+            ab.text = short.get(label, label)
+            pn.addnext(ab)
+            if (pd := sp.find("part-name-display")) is not None:
+                pd.addnext(ab)
     musicxml.write(score, out)
     return out
+
+
+def staff_order(labels: list[str], files_of: list[int], order: list[str]) -> list[int]:
+    """Part indices sorted by show.yaml `staff_order` (the truths' order). A label not in the list
+    stays next to the nearest listed part of its own file (an unknown singer with the singers), else
+    after the listed part before it."""
+    rank = {n: i for i, n in enumerate(order)}
+    known = [rank.get(lb) for lb in labels]
+    keys = []
+    for i, r in enumerate(known):
+        if r is None:
+            same = [j for j in range(len(labels)) if files_of[j] == files_of[i] and known[j] is not None]
+            near = min(same, key=lambda j: (abs(j - i), j > i), default=None)
+            if near is None:
+                near = max((j for j in range(i) if known[j] is not None), default=None)
+            r = known[near] if near is not None else -1
+        keys.append((r, i))
+    return sorted(range(len(labels)), key=lambda i: keys[i])
 
 
 def output_names(name: str, meta: dict) -> list[str]:
@@ -225,6 +254,7 @@ class Job:
     meta: dict
     sid: str              # log / work dir id, "anastasia-1--Horn"
     hide_empty: bool = False   # show.yaml `hide_empty_staves` (U2): combined.mscz parts "Hide if empty"
+    layout: dict | None = None  # show.yaml `staff_order` / `short_names` for combined.mscz
 
 
 def input_key(job: Job, engine: str, spec: dict) -> str:
@@ -268,7 +298,8 @@ def project_jobs(cfg: dict, name: str, songs=None, parts=None) -> tuple[Path, li
             if parts and part.name not in parts:
                 continue
             jobs.append(Job(song.id, part.name, part.pdf, part.meta, f"{proj.name}-{song.id}--{part.name}",
-                            bool(proj.show.get("hide_empty_staves"))))
+                            bool(proj.show.get("hide_empty_staves")),
+                            {k: proj.show[k] for k in ("staff_order", "short_names") if proj.show.get(k)}))
     if parts and (unknown := set(parts) - {p.name for s in selected for p in s.parts}):
         problems.append(f"no part {', '.join(sorted(unknown))} in the selected songs")
     return Path(cfg["results_dir"]) / proj.name, [s.id for s in selected], jobs, problems
@@ -441,7 +472,7 @@ def _transcribe(cfg: dict, root: Path, run_dir: Path, groups: list[str], jobs_in
         files = [(Path(o).stem, root / g / o) for job in order[g]
                  for o in output_names(job.name, job.meta) if (root / g / o).exists()]
         if files and (g in changed or not (root / g / "combined.musicxml").exists()):
-            _combine(g, files, root / g, cfg, any(j.hide_empty for j in order[g]))
+            _combine(g, files, root / g, cfg, any(j.hide_empty for j in order[g]), order[g][0].layout)
     LOG.info(f"latest outputs in {root}/<{'song' if root.name != 'samples' else 'sample'}>/, "
              f"this run in {run_dir}")
     return failed
@@ -480,26 +511,19 @@ def share_marks(dest: Path, jobs: list[Job]) -> None:
 _HIDE_STYLE = {"hideEmptyStaves": "0", "dontHideStavesInFirstSystem": "1"}
 
 
-def hide_empty_staves(mscz: Path) -> int:
-    """Set <hideWhenEmpty>on</hideWhenEmpty> on every <Part> of the .mscz and the truths' style keys
-    (MusicXML has no such setting). Returns the parts set."""
+def _edit_mscz(mscz: Path, mscx=None, mss=None) -> int:
+    """Rewrite the .mscx / .mss text inside a .mscz with `mscx(text) -> (text, n)` / `mss(text) -> text`.
+    Returns the mscx function's count."""
     with zipfile.ZipFile(mscz) as z:
         items = [(i, z.read(i)) for i in z.infolist()]
     n = 0
     out = []
     for info, data in items:
-        if info.filename.endswith(".mscx"):
-            text = data.decode("utf-8")
-            text, n = re.subn(r"(<Part\b[^>]*>(?:(?!</Part>).)*?</trackName>)(?!\n[ \t]*<hideWhenEmpty>)(\n[ \t]*)",
-                              r"\1\2<hideWhenEmpty>on</hideWhenEmpty>\2", text, flags=re.S)
+        if mscx and info.filename.endswith(".mscx"):
+            text, n = mscx(data.decode("utf-8"))
             data = text.encode("utf-8")
-        elif info.filename.endswith(".mss"):
-            text = data.decode("utf-8")
-            for k, v in _HIDE_STYLE.items():
-                text, found = re.subn(rf"<{k}>[^<]*</{k}>", f"<{k}>{v}</{k}>", text)
-                if not found:
-                    text = text.replace("</Style>", f"  <{k}>{v}</{k}>\n    </Style>", 1)
-            data = text.encode("utf-8")
+        elif mss and info.filename.endswith(".mss"):
+            data = mss(data.decode("utf-8")).encode("utf-8")
         out.append((info, data))
     tmp = mscz.with_suffix(".mscz.part")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
@@ -509,12 +533,63 @@ def hide_empty_staves(mscz: Path) -> int:
     return n
 
 
-def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict, hide: bool = False) -> None:
+def hide_empty_staves(mscz: Path) -> int:
+    """Set <hideWhenEmpty>on</hideWhenEmpty> on every <Part> of the .mscz and the truths' style keys
+    (MusicXML has no such setting). Returns the parts set."""
+    def mscx(text):
+        return re.subn(r"(<Part\b[^>]*>(?:(?!</Part>).)*?</trackName>)(?!\n[ \t]*<hideWhenEmpty>)(\n[ \t]*)",
+                       r"\1\2<hideWhenEmpty>on</hideWhenEmpty>\2", text, flags=re.S)
+
+    def mss(text):
+        for k, v in _HIDE_STYLE.items():
+            text, found = re.subn(rf"<{k}>[^<]*</{k}>", f"<{k}>{v}</{k}>", text)
+            if not found:
+                text = text.replace("</Style>", f"  <{k}>{v}</{k}>\n    </Style>", 1)
+        return text
+    return _edit_mscz(mscz, mscx, mss)
+
+
+def written_c_keys(mscz: Path) -> int:
+    """MuseScore 4.x imports a transposing staff written in C (<fifths>0 + <transpose>, Anastasia 5A
+    clarinet / trumpet) without a key signature, so its concert key is C instead of the song's.
+    Add the key the MusicXML meant to the first bar of every such staff. Returns the staves fixed."""
+    def mscx(text):
+        transp = []        # per staff, in order: the part's chromatic transposition
+        for part in re.findall(r"<Part\b.*?</Part>", text, re.S):
+            ch = re.search(r"<transposeChromatic>(-?\d+)</transposeChromatic>", part)
+            transp += [int(ch.group(1)) if ch else 0] * len(re.findall(r"\n[ \t]*<Staff>", part))
+        n = 0
+
+        def fix(m):
+            nonlocal n
+            k = int(m.group(1)) - 1
+            c = transp[k] if k < len(transp) else 0
+            concert = (c * 7) % 12
+            concert -= 12 if concert > 6 else 0
+            first = re.search(r"<Measure>.*?</Measure>", m.group(2), re.S)
+            if not concert or not first or "<KeySig" in first.group(0):
+                return m.group(0)
+            clef = re.search(r"(</Clef>)(\n[ \t]*)", m.group(2))
+            if not clef or clef.start() > first.end():
+                return m.group(0)
+            n += 1
+            ind = clef.group(2)
+            key = (f"{ind}<KeySig>{ind}  <concertKey>{concert}</concertKey>{ind}  <actualKey>0</actualKey>"
+                   f"{ind}  </KeySig>")
+            body = m.group(2)[:clef.end(1)] + key + m.group(2)[clef.end(1):]
+            return f'<Staff id="{m.group(1)}">{body}</Staff>'
+        text = re.sub(r'<Staff id="(\d+)">(.*?)</Staff>', fix, text, flags=re.S)
+        return text, n
+    return _edit_mscz(mscz, mscx)
+
+
+def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict, hide: bool = False,
+             layout: dict | None = None) -> None:
     """Stack the group's latest files into dest/combined.musicxml (+ .mscz)."""
     exe = find_musescore(cfg.get("musescore_cli"))
     with logmod.context(group):
         try:
-            combined = combine(files, dest / "combined.musicxml")
+            combined = combine(files, dest / "combined.musicxml", layout)
         except Exception as e:  # noqa: BLE001 - the individual files are still there
             LOG.error(f"combine FAILED {type(e).__name__}: {e}", exc_info=True)
             return
@@ -526,6 +601,8 @@ def _combine(group: str, files: list[tuple[str, Path]], dest: Path, cfg: dict, h
         try:
             clean = to_mscz(combined, mscz, exe)
             hidden = hide_empty_staves(mscz) if hide else 0
+            if keys := written_c_keys(mscz):
+                LOG.info(f"{mscz.name}: key signature added to {keys} transposing staves written in C")
             if clean:
                 LOG.info(f"-> {mscz.name} ({hidden} parts hide when empty)")
             else:
@@ -543,7 +620,8 @@ def combine_run(cfg: dict, project: str, run: str, songs=None) -> None:
         files = [(Path(o).stem, d / o) for j in jobs if j.group == g
                  for o in output_names(j.name, j.meta) if (d / o).exists()]
         if files:
-            _combine(g, files, d, cfg, any(j.hide_empty for j in jobs if j.group == g))
+            _combine(g, files, d, cfg, any(j.hide_empty for j in jobs if j.group == g),
+                     next(j.layout for j in jobs if j.group == g))
 
 
 def reassemble_run(cfg: dict, project: str, songs, *, src_run: str, work_engine: str, dst_run: str,
