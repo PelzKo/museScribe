@@ -378,6 +378,40 @@ def read_dynamics(pdf, pages: list) -> dict[int, list[tuple[float, float, str]]]
                 and any(f[3].split("+")[-1] == "EngraverFontSet" for f in p.get_fonts())}
 
 
+def read_hairpins_page(pdf_page, page) -> list[tuple[float, float, float, float, str]]:
+    """(x0, x1, y0, y1, CRESCENDO | DIMINUENDO) in page pixels of the hairpins of one vector page: a
+    stroked drawing of two slanted lines that meet at the tip (tip right = diminuendo)."""
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    out = []
+    for d in pdf_page.get_drawings():
+        ls = [it for it in d["items"] if it[0] == "l"] if d["type"] == "s" else []
+        if len(ls) != 2:
+            continue
+        (a0, a1), (b0, b1) = (ls[0][1], ls[0][2]), (ls[1][1], ls[1][2])
+        tip = next((p for p in (a0, a1) if any(abs(p.x - q.x) < 0.5 and abs(p.y - q.y) < 0.5 for q in (b0, b1))), None)
+        if tip is None:
+            continue
+        ends = [p for p in (a0, a1, b0, b1) if abs(p.x - tip.x) >= 0.5 or abs(p.y - tip.y) >= 0.5]
+        if len(ends) != 2 or abs(ends[0].x - ends[1].x) > 1 or abs(ends[0].x - tip.x) < 5 \
+                or not 1 < abs(ends[0].y - ends[1].y) < 0.25 * abs(ends[0].x - tip.x) + 12:
+            continue
+        x0, x1 = sorted((tip.x, ends[0].x))
+        y0, y1 = min(e.y for e in ends), max(e.y for e in ends)
+        out.append((x0 * sx, x1 * sx, y0 * sx, y1 * sx, "DIMINUENDO" if tip.x > ends[0].x else "CRESCENDO"))
+    return out
+
+
+def read_hairpins(pdf, pages: list) -> dict[int, list]:
+    """D1: {page number: hairpins} of the vector pages of `pdf` (pages[i] is PDF page i)."""
+    import pymupdf as fitz
+
+    from ..pdfkind import classify_page
+    from ..rasterize import FITZ_LOCK
+    with FITZ_LOCK, fitz.open(pdf) as doc:
+        return {pages[i].number: read_hairpins_page(p, pages[i]) for i, p in enumerate(doc)
+                if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"}
+
+
 def _ties(curves, groups: list[list], st, staff_of, right: float):
     """(column, head) of the tie curves of one staff: a flat curve from a head to the head at the
     same height in the next column, or off the system end from the last column (#39)."""

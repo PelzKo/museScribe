@@ -243,3 +243,15 @@ def test_dynamics_glyphs_merge_into_one_token():
     page = NS(get_text=lambda kind: {"blocks": [{"lines": [{"spans": spans}]}]}, rect=NS(width=100))
     got = vector.read_dynamics_page(page, NS(width=200))
     assert [t for *_, t in got] == ["fp", "mp"] and got[0][0] == (10 + 26) / 2 * 2
+
+
+def test_hairpin_lines_tip_gives_the_kind():
+    from types import SimpleNamespace as NS
+    from omrbench.pipeline import vector
+    P = lambda x, y: NS(x=x, y=y)  # noqa: E731
+    dim = {"type": "s", "items": [("l", P(343, 500), P(447, 503.8)), ("l", P(447, 503.8), P(343, 507.5))]}
+    cresc = {"type": "s", "items": [("l", P(470, 335.8), P(385, 339.5)), ("l", P(385, 339.5), P(470, 343.3))]}
+    beam = {"type": "s", "items": [("l", P(10, 10), P(50, 10)), ("l", P(50, 10), P(50, 30))]}
+    page = NS(get_drawings=lambda: [dim, cresc, beam], rect=NS(width=100))
+    got = vector.read_hairpins_page(page, NS(width=100))
+    assert [k for *_, k in got] == ["DIMINUENDO", "CRESCENDO"] and got[1][:2] == (385, 470)

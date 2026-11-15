@@ -412,6 +412,13 @@ class Pipeline(Engine):
             A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
         if not is_scan(sample.pdf) and not vocal:
             A.place_vector_dynamics(plans, pages, SL.read_dynamics(sample.pdf, pages), D, stats)   # D1
+            # D1: the hairpins of the vector drawing replace the .omr ones and the readers'
+            pins = SL.read_hairpins(sample.pdf, pages)
+            for page in pages:
+                if page.number in pins:
+                    page.marks = [m for m in page.marks if m.kind != "wedge"] + [
+                        layout.Mark("wedge", kind, x0, y0, x1 - x0, y1 - y0, 1.0) for x0, x1, y0, y1, kind in pins[page.number]]
+            V.place_marks(plans, pages, D, stats, kinds=("wedge",))
         if not is_scan(sample.pdf):         # drum books too (R44: Ghost 5 bass drum 3-7)
             A.place_sim(plans, SL.read_lines(sample.pdf, pages, B.SIM))
         if vocal:
