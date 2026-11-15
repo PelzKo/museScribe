@@ -448,6 +448,8 @@ class Pipeline(Engine):
             plans, pages, D, stats, sample.meta, split, estimate, symbols,
             SL.read_lines(sample.pdf, pages, re.compile(r"[A-Z].*[:;]"), left=True)
             if vocal and not is_scan(sample.pdf) else ())
+        if is_scan(sample.pdf) and sample.score_type in ("part", "drums"):
+            A.place_text_dynamics(plans, pages, stats)   # D12: dynamics Audiveris filed as (lyric) text
         A.reader_agreement(plans, pages)        # D9: R42 keeps a lone dynamic two readers agree on
         A.patch_octaves(plans, stats)
         if repairs:

@@ -651,15 +651,57 @@ def place_dynamics(plans: list[SysPlan], pages: list[Page], stats: Stats) -> Non
             if any(e.tag == "direction" and e.find("direction-type/dynamics") is not None
                    and int(e.findtext("staff", "1") or 1) == staff for e in bar.items):
                 continue
-            left = max(0, int(min(s.left for s in g) - 3 * g[0].interline))
-            cand = [(left + x, on) for on, n in B.onsets(bar)
-                    if n.tag == "note" and n.find("rest") is None and n.find("grace") is None
-                    and int(n.findtext("staff", "1") or 1) == staff and (x := _imgpos_x(n)) is not None]
-            if not cand:
+            if _put_dynamic(bar, g, staff, placement, mk.x + mk.w / 2, mk.shape):
+                stats.dynamics += 1
+
+
+def _put_dynamic(bar: B.Bar, g, staff: int, placement: str, x: float, shape: str) -> bool:
+    """A dynamic onto the homr note of `staff` nearest to image x (`imgpos`); False: no such note."""
+    from . import vocal as V
+    left = max(0, int(min(s.left for s in g) - 3 * g[0].interline))
+    cand = [(left + nx, on) for on, n in B.onsets(bar)
+            if n.tag == "note" and n.find("rest") is None and n.find("grace") is None
+            and int(n.findtext("staff", "1") or 1) == staff and (nx := _imgpos_x(n)) is not None]
+    if not cand:
+        return False
+    on = min(cand, key=lambda t: abs(t[0] - x))[1]
+    B.add_direction(bar, V._dynamics_el(shape, placement), on, staff)
+    return True
+
+
+TEXT_DYNAMIC = re.compile(r"p{1,4}|mp|mf|f{1,4}|sfz|sffz|sf|fp|sfp|fz|rfz")
+
+
+def place_text_dynamics(plans: list[SysPlan], pages: list[Page], stats: Stats) -> int:
+    """D12: Audiveris often files a bold italic `mf` / `f` under the staff as a lyric text atom; no
+    other step turns a one-letter text into a dynamic. Such an atom becomes a dynamic (placed like
+    R54) where its bar has none of that token. Returns the number added."""
+    from . import vocal as V
+    on_page: dict[int, list] = {}
+    for p in plans:
+        if p.n and p.chosen and not p.system.skip:
+            on_page.setdefault(p.system.page, []).append(p)
+    n = 0
+    for page in pages:
+        for t in page.texts:
+            tok = t.value.strip()
+            if t.font == "ocr" or not TEXT_DYNAMIC.fullmatch(tok):
                 continue
-            on = min(cand, key=lambda t: abs(t[0] - (mk.x + mk.w / 2)))[1]
-            B.add_direction(bar, V._dynamics_el(mk.shape, placement), on, staff)
-            stats.dynamics += 1
+            cx, cy = t.x + t.w / 2, t.y + t.h / 2
+            plan = V._system_of(page, on_page.get(page.number, []), cy)
+            if plan is None:
+                continue
+            gi, staff, placement = V._owner(plan.system, cy)
+            i = V._bar_index(plan, cx)
+            if gi not in plan.chosen or i is None or i >= len(plan.chosen[gi]):
+                continue
+            bar = plan.chosen[gi][i]
+            if any(e.tag == "direction" and e.find(f"direction-type/dynamics/{tok}") is not None for e in bar.items):
+                continue
+            if _put_dynamic(bar, plan.system.groups()[gi], staff, placement, cx, "DYNAMICS_" + tok.upper()):
+                n += 1
+    stats.dynamics += n
+    return n
 
 
 READ_ATTR, AGREE_ATTR = "omrbench-read", "omrbench-agree"   # internal; transcribe.share_marks removes them
