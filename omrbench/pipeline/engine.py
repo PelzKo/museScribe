@@ -419,6 +419,10 @@ class Pipeline(Engine):
             # stay as exported (the `.omr` ones cost more than they fix next to homr's)
             V.place_marks(plans, pages, D, stats, kinds=("wedge",))
             A.place_dynamics(plans, pages, stats)   # R54: .omr dynamics by imgpos where none
+        elif is_scan(sample.pdf):
+            # D2: keyboards take the .omr hairpins between their two staves, drum books those below the staff
+            V.place_marks(plans, pages, D, stats, kinds=("wedge",),
+                          zone="between" if sample.score_type == "piano" else "below")
         if sample.meta.get("cues") == "drop":
             A.drop_cues(plans, pages, D, stats)
             A.drop_play_cues(plans, pages, stats, None if is_scan(sample.pdf)

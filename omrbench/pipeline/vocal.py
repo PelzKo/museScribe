@@ -288,12 +288,22 @@ def _wedge_el(kind: str, placement: str) -> etree._Element:
     return d
 
 
-def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] = MARK_TYPES) -> None:
-    """Replace the engines' dynamics and hairpins (`kinds`) with the ones on the page."""
+def _has_wedge(bar: B.Bar, kind: str, staff_no: int) -> bool:
+    return any(el.tag == "direction" and int(el.findtext("staff", "1") or 1) == staff_no
+               and any(w.get("type") == kind for w in el.findall("direction-type/wedge")) for el in bar.items)
+
+
+def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] = MARK_TYPES,
+                zone: str | None = None) -> None:
+    """Replace the engines' dynamics and hairpins (`kinds`) with the ones on the page. With `zone`
+    (D2), only hairpins there are added and the engines' marks stay: "between" = between the two
+    lowest staves of a group (keyboards; placed on staff 1), "below" = below the staff (drum books);
+    a bar that already has that hairpin on that staff gets none."""
     for plan in plans:
         for g in plan.chosen.values():
             for bar in g:
-                strip_marks(bar, kinds)
+                if zone is None:
+                    strip_marks(bar, kinds)
     on_page: dict[int, list] = {}
     for p in plans:
         if p.n and p.chosen and not p.system.skip:
@@ -312,6 +322,12 @@ def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] 
                 stats.marks_unplaced += 1
                 continue
             g = sy.groups()[gi]
+            if zone == "between":       # above the lowest staff = between it and the one above (cue staves dropped)
+                if not (len(g) >= 2 and staff_no == len(g) and placement == "above"):
+                    continue
+                staff_no, placement = 1, "below"
+            elif zone == "below" and placement != "below":
+                continue
             il = g[0].interline
             if mk.kind == "dynamics":
                 i = _bar_index(plan, mk.x + mk.w / 2)
@@ -345,6 +361,8 @@ def place_marks(plans, pages: list[Page], D: int, stats, kinds: tuple[str, ...] 
                     else before[-1][1]
             if (i1, on1) <= (i0, on0):
                 stats.marks_unplaced += 1
+                continue
+            if zone and _has_wedge(plan.chosen[gi][i0], kind, staff_no):
                 continue
             B.add_direction(plan.chosen[gi][i0], _wedge_el(kind, placement), on0, staff_no)
             B.add_direction(plan.chosen[gi][i1], _wedge_el("stop", placement), on1, staff_no)
