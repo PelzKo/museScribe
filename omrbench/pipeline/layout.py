@@ -147,6 +147,7 @@ class Page:
     marks: list[Mark] = field(default_factory=list)
     arts: list[Mark] = field(default_factory=list)          # articulations of full-size chords
     repeats: list[tuple[int, float, str]] = field(default_factory=list)  # (staff, x, repeat-start | repeat-end)
+    ocr_words: list[dict] = field(default_factory=list)     # raw Tesseract words (D9: reader agreement)
 
     def staff(self, sid: int) -> tuple[System, Staff] | None:
         for sy in self.systems:

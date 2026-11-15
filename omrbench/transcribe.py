@@ -504,6 +504,7 @@ def share_marks(dest: Path, jobs: list[Job]) -> None:
         n = musicxml.drop_lone_marks(list(books.values()), kind, playing, song_bars)
         LOG.info(f"{dest.name}: {n} {kind} only one book has removed")
     for f, r, _ in roots:
+        musicxml.strip_internal_attrs(r)
         musicxml.write(r, f)
 
 

@@ -662,6 +662,63 @@ def place_dynamics(plans: list[SysPlan], pages: list[Page], stats: Stats) -> Non
             stats.dynamics += 1
 
 
+READ_ATTR, AGREE_ATTR = "omrbench-read", "omrbench-agree"   # internal; transcribe.share_marks removes them
+
+
+def tag_read_dynamics(plans: list[SysPlan]) -> None:
+    """D9: mark the dynamics the bar's reader (homr crop / Audiveris export) wrote."""
+    for p in plans:
+        for g in p.chosen.values():
+            for bar in g:
+                if bar.source in ("crop", "audiveris"):
+                    for el in bar.items:
+                        if el.tag == "direction" and el.find("direction-type/dynamics") is not None:
+                            el.set(READ_ATTR, "1")
+
+
+def reader_agreement(plans: list[SysPlan], pages: list[Page]) -> int:
+    """D9: a dynamic that two of homr / the Audiveris export, an `.omr` glyph (any grade) and a
+    Tesseract word (any confidence) read in its bar gets AGREE_ATTR: R42 (`drop_lone_marks`) keeps it
+    even when no other book has it (simulated 51 right : 15 wrong, alone 28 : 72). Returns the count."""
+    from . import ocr, vocal as V
+    seen: dict[tuple[int, int, int], set] = {}     # (plan id, group, bar) -> {(reader, token)}
+    on_page: dict[int, list] = {}
+    for p in plans:
+        if p.n and p.chosen and not p.system.skip:
+            on_page.setdefault(p.system.page, []).append(p)
+
+    def note(page, x, cy, reader, tok):
+        p = V._system_of(page, on_page.get(page.number, []), cy)
+        if p is None:
+            return
+        gi = V._owner(p.system, cy)[0]
+        i = V._bar_index(p, x)
+        if gi in p.chosen and i is not None:
+            seen.setdefault((id(p), gi, i), set()).add((reader, tok))
+    for page in pages:
+        for mk in page.marks:
+            if mk.kind == "dynamics" and "_" in mk.shape:
+                note(page, mk.x + mk.w / 2, mk.cy, "omr", mk.shape.split("_", 1)[1].lower())
+        for wd in page.ocr_words:
+            t = ocr._EDGE.sub("", wd["text"].strip())
+            if ocr.DYNAMIC.fullmatch(t):
+                note(page, wd["x"] + wd["w"] / 2, wd["y"] + wd["h"] / 2, "ocr", t)
+    n = 0
+    for p in plans:
+        for gi, g in p.chosen.items():
+            for i, bar in enumerate(g):
+                got = seen.get((id(p), gi, i), set())
+                for el in bar.items:
+                    d = el.find("direction-type/dynamics") if el.tag == "direction" else None
+                    if d is None or not len(d):
+                        continue
+                    tok = d[0].tag
+                    if (el.get(READ_ATTR) is not None) + (("omr", tok) in got) + (("ocr", tok) in got) >= 2:
+                        el.set(AGREE_ATTR, "1")
+                        n += 1
+    return n
+
+
 def _rested_cues(bar: B.Bar, staff: int, length: int | None) -> set[int]:
     """Onsets of the notes on `staff` when another voice there rests the whole bar: the
     player rests, the notes above the rest are a cue (printed full size in these parts)."""

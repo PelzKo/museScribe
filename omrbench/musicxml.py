@@ -443,6 +443,19 @@ def _lone_marks(m: etree._Element, kind: str) -> list[tuple[str, etree._Element]
     return [(_dyn_token(d), d) for dyn in m.iter("dynamics") for d in dyn]
 
 
+def _agreed(el: etree._Element) -> bool:
+    """D9: two readers agreed on this dynamic (`pipeline.assemble.reader_agreement`)."""
+    d = next(el.iterancestors("direction"), None)
+    return d is not None and d.get("omrbench-agree") is not None
+
+
+def strip_internal_attrs(root: etree._Element) -> None:
+    """Remove the pipeline's working attributes (omrbench-*) before the files are final."""
+    for d in root.iter("direction"):
+        for k in [k for k in d.attrib if k.startswith("omrbench-")]:
+            del d.attrib[k]
+
+
 def drop_lone_marks(books: list[list[etree._Element]], kind: str, playing: int,
                     bars: int | None = None) -> int:
     """R42: a dynamic (`kind` "dynamics": the same one) or fermata ("fermata": any) that no other book
@@ -472,7 +485,7 @@ def drop_lone_marks(books: list[list[etree._Element]], kind: str, playing: int,
             if plays.get(i, 0) < playing:
                 continue
             for t, el in _lone_marks(m, kind):
-                if has.get((i, t), 0) > 1:
+                if has.get((i, t), 0) > 1 or (kind == "dynamics" and _agreed(el)):
                     continue
                 parent = el.getparent()
                 parent.remove(el)

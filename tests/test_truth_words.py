@@ -187,6 +187,11 @@ def test_dynamic_only_one_book_has_goes():
     assert musicxml.drop_lone_marks(books, "dynamics", 4) == 1      # ff: no other book has it
     assert books[0][0].find(".//direction") is None and books[1][0].find(".//p") is not None
     assert musicxml.drop_lone_marks(books[1:], "dynamics", 4) == 0   # only 3 books play
+    books = [[part("ff")], [part("p")], [part("p")], [part()]]
+    books[0][0].find(".//direction").set("omrbench-agree", "1")      # D9: two readers read it
+    assert musicxml.drop_lone_marks(books, "dynamics", 4) == 0
+    musicxml.strip_internal_attrs(books[0][0])
+    assert not books[0][0].find(".//direction").attrib
 
 
 def test_word_only_one_book_has_goes_playing_words_stay():

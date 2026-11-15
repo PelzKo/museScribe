@@ -395,6 +395,7 @@ class Pipeline(Engine):
                                  alts=alts, pick_mode=self.cfg.get("ensemble_pick", "agree"),
                                  weights=self.cfg.get("ensemble_weights"), song_time=song_time,
                                  vector_bars=None if is_scan(sample.pdf) else SL.read_all_systems(sample.pdf, pages))
+        A.tag_read_dynamics(plans)              # D9: the dynamics homr / the Audiveris export read
         if not is_scan(sample.pdf) and sample.score_type != "piano_reduction":
             drums = sample.score_type == "drums"
             # drum books: kit bars and the slash bars after a written groove (R44)
@@ -447,6 +448,7 @@ class Pipeline(Engine):
             plans, pages, D, stats, sample.meta, split, estimate, symbols,
             SL.read_lines(sample.pdf, pages, re.compile(r"[A-Z].*[:;]"), left=True)
             if vocal and not is_scan(sample.pdf) else ())
+        A.reader_agreement(plans, pages)        # D9: R42 keeps a lone dynamic two readers agree on
         A.patch_octaves(plans, stats)
         if repairs:
             A.expand_multirests(plans, crop_bars, D, stats)
@@ -563,6 +565,8 @@ class Pipeline(Engine):
             ocr_dir = ocr_dir.with_name(f"ocr-{engine}")
         words = ocr.read_pages(pages, images, tess, ocr_dir, pdf=pdf, engine=engine,
                                device=self.bench.get("device", "cpu"))
+        for p, w in zip(pages, words):
+            p.ocr_words = w
         added = sum(ocr.supplement(p, w) for p, w in zip(pages, words))
         LOG.info(f"bar-number OCR: {added} text items added on {len(words)} pages "
                  f"in {time.perf_counter() - t0:.0f}s")
