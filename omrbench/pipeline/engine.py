@@ -409,6 +409,8 @@ class Pipeline(Engine):
             A.place_arts(plans, pages, stats)    # R51: .omr articulations onto homr's notes by imgpos
         if not is_scan(sample.pdf) and sample.score_type != "drums":
             A.place_marks(plans, SL.read(sample.pdf, pages, marks=True), stats)
+        if not is_scan(sample.pdf) and not vocal:
+            A.place_vector_dynamics(plans, pages, SL.read_dynamics(sample.pdf, pages), D, stats)   # D1
         if not is_scan(sample.pdf):         # drum books too (R44: Ghost 5 bass drum 3-7)
             A.place_sim(plans, SL.read_lines(sample.pdf, pages, B.SIM))
         if vocal:

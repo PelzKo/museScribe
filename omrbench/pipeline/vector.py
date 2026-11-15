@@ -336,6 +336,48 @@ def read_marks(pdf_page, page) -> list[SlashBar]:
     return out
 
 
+# D1: dynamics glyphs of the exact font EngraverFontSet (fonts starting with "Maestro" also hold an "s" of
+# text); neighbouring glyphs of one word form one token ("f" + "p" = fp)
+DYN_GLYPHS = {"p": "p", "P": "mp", "F": "mf", "f": "f", "ƒ": "ff", "π": "pp", "z": "z", "s": "s"}
+DYN_TOKENS = {"p", "pp", "ppp", "mp", "mf", "f", "ff", "fff", "fp", "sf", "sfz", "fz", "sfp"}
+
+
+def read_dynamics_page(pdf_page, page) -> list[tuple[float, float, str]]:
+    """(x centre, y centre, token) in page pixels of the full-size dynamics of one vector page."""
+    sx = page.width / pdf_page.rect.width if pdf_page.rect.width else 1.0
+    spans = [sp for b in pdf_page.get_text("rawdict")["blocks"] for ln in b.get("lines", []) for sp in ln["spans"]
+             if sp["font"].split("+")[-1] == "EngraverFontSet"]
+    full = max((sp["size"] for sp in spans), default=0)
+    out = []
+    for sp in spans:
+        if sp["size"] < 0.8 * full:
+            continue
+        run: list = []
+        for ch in sp["chars"] + [None]:
+            if ch is not None and ch["c"] in DYN_GLYPHS and (not run or ch["bbox"][0] - run[-1]["bbox"][2] < 0.3 * sp["size"]):
+                run.append(ch)
+                continue
+            tok = "".join(DYN_GLYPHS[c["c"]] for c in run)
+            if tok in DYN_TOKENS:
+                x0, x1 = run[0]["bbox"][0], run[-1]["bbox"][2]
+                y0, y1 = min(c["bbox"][1] for c in run), max(c["bbox"][3] for c in run)
+                out.append(((x0 + x1) / 2 * sx, (y0 + y1) / 2 * sx, tok))
+            run = [ch] if ch is not None and ch["c"] in DYN_GLYPHS else []
+    return out
+
+
+def read_dynamics(pdf, pages: list) -> dict[int, list[tuple[float, float, str]]]:
+    """D1: {page number: dynamics} of the vector pages of `pdf` (pages[i] is PDF page i)."""
+    import pymupdf as fitz
+
+    from ..pdfkind import classify_page
+    from ..rasterize import FITZ_LOCK
+    with FITZ_LOCK, fitz.open(pdf) as doc:
+        return {pages[i].number: read_dynamics_page(p, pages[i]) for i, p in enumerate(doc)
+                if i < len(pages) and p.get_fonts() and classify_page(p, i + 1).kind == "vector"
+                and any(f[3].split("+")[-1] == "EngraverFontSet" for f in p.get_fonts())}
+
+
 def _ties(curves, groups: list[list], st, staff_of, right: float):
     """(column, head) of the tie curves of one staff: a flat curve from a head to the head at the
     same height in the next column, or off the system end from the last column (#39)."""

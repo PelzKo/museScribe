@@ -228,3 +228,18 @@ def test_time_sigs_on_staff_lines():
     chars = [(50, 105, 4, "4"), (50, 115, 4, "4"), (200, 105, 4, "1"), (204, 105, 4, "2"), (202, 115, 4, "8"),
              (300, 95, 4, "2")]
     assert SL._time_sigs(chars, st) == [(50, ("4", "4")), (200, ("12", "8"))]
+
+
+def test_dynamics_glyphs_merge_into_one_token():
+    from types import SimpleNamespace as NS
+    from omrbench.pipeline import vector
+
+    def ch(c, x):
+        return {"c": c, "bbox": (x, 100, x + 8, 110), "origin": (x, 110)}
+    spans = [{"font": "EngraverFontSet", "size": 20, "chars": [ch("f", 10), ch("p", 18), ch("œ", 60)]},
+             {"font": "EngraverFontSet", "size": 20, "chars": [ch("P", 200)]},
+             {"font": "EngraverFontSet", "size": 14, "chars": [ch("F", 300)]},           # cue size
+             {"font": "MaestroTimes", "size": 20, "chars": [ch("s", 400)]}]           # text font
+    page = NS(get_text=lambda kind: {"blocks": [{"lines": [{"spans": spans}]}]}, rect=NS(width=100))
+    got = vector.read_dynamics_page(page, NS(width=200))
+    assert [t for *_, t in got] == ["fp", "mp"] and got[0][0] == (10 + 26) / 2 * 2

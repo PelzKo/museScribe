@@ -1201,6 +1201,37 @@ def place_marks(plans: list[SysPlan], mark_bars: list[SL.SlashBar], stats: Stats
             break
 
 
+def place_vector_dynamics(plans: list[SysPlan], pages: list[Page], dyns: dict[int, list], D: int,
+                          stats: Stats) -> int:
+    """D1: on vector pages the dynamics glyphs are exact: they replace the readers' dynamics, each on
+    the note of its staff nearest in x (owner staff by height, like the `.omr` marks). Returns the count."""
+    from . import vocal as V
+    on_page: dict[int, list] = {}
+    for p in plans:
+        if p.n and p.chosen and not p.system.skip and p.system.page in dyns:
+            on_page.setdefault(p.system.page, []).append(p)
+            for g in p.chosen.values():
+                for bar in g:
+                    V.strip_marks(bar, ("dynamics",))
+    n = 0
+    for page in pages:
+        for x, y, tok in dyns.get(page.number, []):
+            plan = V._system_of(page, on_page.get(page.number, []), y)
+            if plan is None:
+                continue
+            gi, staff, placement = V._owner(plan.system, y)
+            i = V._bar_index(plan, x)
+            if gi not in plan.chosen or i is None or i >= len(plan.chosen[gi]):
+                continue
+            g = plan.system.groups()[gi]
+            pos = V._positions(plan, gi, i, g, page, D, staff)
+            on = V._nearest_onset(pos, x, g[0].interline) or 0
+            B.add_direction(plan.chosen[gi][i], V._dynamics_el("DYNAMICS_" + tok, placement), on, staff)
+            n += 1
+    stats.dynamics += n
+    return n
+
+
 def _staff_step(n) -> int:
     return int(n.findtext("pitch/octave") or 4) * 7 + "CDEFGAB".index((n.findtext("pitch/step") or "C").strip())
 
