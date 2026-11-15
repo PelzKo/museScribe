@@ -38,6 +38,14 @@ lack (1 113 marks in 11 parts: output has it, the part's truth not, another trut
 is in `docs/ANASTASIA_TRUTH_FIXES.pdf` for the person correcting the truths (generator:
 `results/errors/2026-11-15-dynamics/truthfix_pdf.py`). Spot checks on the scans: 3 Kontrabass 35 `fp`, 4 Trompete 52.
 
+**Ghost recheck 2026-11-15** (every truth song 1a, 4, 5, 11a, 13, 20): all parts through `pdf_truth_check.py`
+(no pitch difference left besides the known false hits: instrument changes, slash bars, accidentals not carried over a
+barline, as Ghost 20 bar 90 A4); fermatas, dynamics and articulations counted per bar from the PDF glyphs against the
+truth (scratch script) and every hit looked up on the page; slurs, ties, hairpins and double barlines only where the
+`r82-ref` output differs. Removed as right or not fixable: Ghost 4 Drums 37–59 accents and bar 39 tie, 4 Utility 60 / 61,
+4 Violin 78–79, 5 Drums 36 / 39 / 43, 20 PianoReduction 130 / 131. The open Ghost rows, in German for the person
+correcting the truths: `docs/GHOST_TRUTH_FIXES.pdf` (generator `results/errors/2026-11-15-dynamics/ghost_truthfix_pdf.py`).
+
 Status in table 1: `mistake` = probable truth error, `question` = a convention decision is needed, `open` = known,
 not decided.
 
@@ -56,22 +64,39 @@ not decided.
 | Anastasia | 5A | Keyboard 1 | 21 | wavy glissando line from the last LH chord up to the top of the RH staff | none | open |
 | Anastasia | 5A | Pauken | 18–20 | treble staff with rests up to 19, bass clef at the end of 19 (box "Timpani" at 20) | clef change at the start of 18 | open (minor) |
 | Anastasia | 5A | Schlagzeug | 1–2, 16–18 | ⊗ head with tremolo for the rolls (1, 17), x heads with l.v. curves (2, 16, 18) | Ride Cymbal, same head for all, no l.v. | not verified (minor): head / instrument convention |
+| Ghost | 1a | all | 8 | double barline at the end of 8 (key change) | plain barline | mistake |
+| Ghost | 1a | Clarinet in Bb | 17 | p ("molto legato") | no dynamic | mistake |
+| Ghost | 1a | Electric Guitar | 10, 14; 16 | tie G eighth to G half (10, 14); no fermata in 16 | no tie; fermata on the half of 16 | mistake |
+| Ghost | 1a | Electric Piano | 10, 12, 14 | fermatas over both staves | none | mistake |
+| Ghost | 1a | Piano | 10; 12, 14; 16, 22 | fermatas over the rests of both hands (10), also over the LH rest (12, 14); none in 16, 22 | none in 10, RH only in 12, 14; fermata on the half in 16, 22 | mistake |
 | Ghost | 4 | Bass | 15–16 | G3 dotted half tied to a quarter, straight slide line into C3 | tie + slur G3–C3 | question (minor): slide as slur? |
-| Ghost | 4 | Drums | 37, 38, 47, 48, 58, 59 | written bars | accents as before | not re-checked (the text layer was not readable there) |
-| Ghost | 4 | Drums | 39 | ⊗ dotted half tied into the x eighth | no tie (different drum pitches cannot be tied) | open (minor) |
-| Ghost | 4 | Drums | 61 | one cresc. hairpin | two stacked cresc. hairpins | mistake (minor) |
-| Ghost | 4 | PianoReduction | whole part | — | — | only the rows of the old table were fixed; no bar-by-bar comparison of marks |
-| Ghost | 4 | Utility | 60, 61 | whole-note clusters | C4 D4 G4 / B3 D4 G4 | not checked |
-| Ghost | 4 | Violin | 39–40, 78–79 | dim. hairpin ends on the C4 of 40 / runs into 79 | ends at the end of 39 / 78 | mistake (minor) |
-| Ghost | 5 | Drums | 36, 41, 43 | ⊗ with dot, kick dotted quarter below | ⊗ dotted whole | not verified (39 is a dotted quarter + rests, fixed) |
-| Ghost | 5 | Drums | 38, 40 | sub. p | p | question (minor) |
-| Ghost | 5 | Drums | 41 | ^ over the ⊗ | none | not verified (minor) |
-| Ghost | 5 | Reed, Trumpet | 13, 18 | "flt." | tremolo, no word | open (minor) |
-| Ghost | 11a | all | 6 | "Moderato (♩=c.108)" | written so, but MuseScore exports only the metronome sign ("c." is not a number) | open (minor; same in Ghost 1a "♩ = c. 72") |
-| Ghost | 20 | Drums | 1, 41 | "Open H.H." | every hi-hat note Closed Hi-Hat (G5, x head) | open (pipeline follows the truth) |
+| Ghost | 4 | Drums | 61, 62 | one cresc. hairpin (61); crash on beat 1 without accent (62) | two stacked hairpins; accent on the crash | mistake (minor) |
+| Ghost | 4 | Molly | 16 | mf before the entry | no dynamic | mistake |
+| Ghost | 4 | PianoReduction (Klavier) | 62 | f | fz | mistake |
+| Ghost | 4 | PianoReduction (Klavier) | 76–77 | dim. hairpin (76) and mp (77) belong to the cue staff (Cl.) | hairpin in the piano, no mp | question |
+| Ghost | 4 | PianoReduction | whole part | — | — | only the bars the checks reported were looked at; no bar-by-bar comparison of marks (also Ghost 5, 20) |
+| Ghost | 4 | Violin, Cello | 39–40 | dim. hairpin ends on the quarter of 40 | ends at the end of 39 | mistake (minor) |
+| Ghost | 5 | Drums | 38, 40; 41 | sub. p; ^ over the ⊗ of 41 | p; no mark | question (minor); mistake (minor) |
+| Ghost | 5 | Reed, Trumpet | 13, 18 | "flt." | tremolo, no word | question (minor) |
+| Ghost | 5 | Utility | 35–36 | cresc. hairpin ends at the barline, ff on beat 1 of 36 | hairpin runs to the end of 36, ff at the end of 36 | mistake (minor) |
+| Ghost | 11a | all | 6 | "Moderato (♩=c.108)" | written so, but MuseScore exports only the metronome sign ("c." is not a number) | open (minor; same in Ghost 1a "♩ = c. 72"; nothing to fix in the file) |
+| Ghost | 11a | Bass, Utility, Piano, Violin, Cello | 3 | fermata in bar 3 (Bass: over the rest; the others: in the cue, Clarinet, Guitar) | fermatas only in 2 and 5 | mistake (fermatas are copied to every part) |
+| Ghost | 11a | Clarinet in Bb | 1 | p | no dynamic | mistake |
+| Ghost | 13 | Bass, Cello | 1 | fermata over bar 1 (cue "Util: SFX") | whole rest without fermata | mistake |
+| Ghost | 13 | Cello | 38, 44 | double barline (pipeline reading) | plain | not checked on the page |
+| Ghost | 20 | all | 65, 74, 123, 130 | double barline at the end of the bar | plain barline | mistake |
+| Ghost | 20 | Bass, Guitar, Drums (1); Drums (46); Utility (5, 115); Trumpet (25, 70) | see parts | f | no dynamic | mistake |
+| Ghost | 20 | Cello, Utility, Guitar, Piano | 100 | mf | no dynamic | mistake (Guitar 92 mp and Piano 29 / 110 f: reader hits, not seen on the page) |
+| Ghost | 20 | Drums | 1, 46 | "Open H.H." | every hi-hat note Closed Hi-Hat (G5, x head) | open (pipeline follows the truth) |
+| Ghost | 20 | Drums | 3, 8, 11, 130, 135 | accent on the last eighth | none (9, 17, 19, 61 have it) | mistake |
+| Ghost | 20 | Guitar | 47, 48, 130 | accent on the E♭ quarter (47), on the last eighth (48, 130) | none | mistake |
 | Ghost | 20 | PianoReduction | 5–28 | piano staves labelled "Util: (Str. Ens), Vln, Vc" | notes kept | question: also other-instrument notes? (bars 1–3 "Gtr." / "Bs." were removed 2026-11-11) |
 | Ghost | 20 | PianoReduction | 9–134 | a chord symbol under almost every bar (PianoReduction.pdf pages 257–274) | none (the truth guitar has 105) | truth deviation (user 2026-11-15): chord symbols belong where the sheet prints them; the truth must get them |
-| Ghost | 20 | PianoReduction | 130, 131, 134 | pdf_truth_check: A♭4 (130, 131); no F6 in 134 | A4; F5 + F6 on the last eighth of 134 | not checked on the page (may be false hits) |
+| Ghost | 20 | PianoReduction | 134 | pdf_truth_check: no F6 | F5 + F6 on the last eighth | not checked on the page (130 / 131 A4 is right: chord symbol F) |
+| Ghost | 20 | Trumpet | 135 | slanted line (scoop) into the last note | none | not verified (minor) |
+| Ghost | 20 | Utility | 50, 52, 56, 58, 60, 64; 109; 131 | staccato dots on both voices; accent under the bell whole note (109); no accent in 131 | no staccatos; no accent; accent on the tied notes of 131 | mistake (56–64 by glyph count) |
+| Ghost | 20 | Violin, Cello | 7, 13, 15, 52, 58, 60; 131 | no f (only at 5 and 50); no accent in 131 (only on the eighth of 130) | f in each of these bars; accent on the tied dotted half | mistake |
+| Ghost | 20 | Violin | 108, 109 | trill (tr + wavy line) on the whole note; accent on the eighth of 109 | tremolo + text "Tremolo"; no accent | mistake |
 
 ## 2. Conventions
 
@@ -87,7 +112,7 @@ not decided.
 | Anastasia | 4 | Triangel | 94, 97 | triangle noteheads | x head (94), normal head (97) | MuseScore can't set a triangle head here (user 2026-10-18) |
 | Anastasia | 4, 4A | Xylophon (drum book) | 4: 1–27, 169–173; 4A: 1–3 | "mallets": x / ⊗ heads, rolls, "choke"; 4 bar 27 kit notes (bass drum F4 + x "choke") | a Xylophon part with pitches, incl. the kit notes of 27 | "mallets" = xylophone, everything in the mallets sections is Xylophon (user 2026-10-18); Drums rows `Xylophon` / `Xylophone`, alias `mallets` |
 | Ghost | 4 | Guitar | 15–38, 47–57, 60–74 | slashes + chord symbols ("cont. in same style … ad lib.") after a written fingerpicking pattern | the last written pattern continued over the slash bars | user 2026-10-18: the pipeline continues the last written pattern as long as the slashes last |
-| Ghost | 4, 5 | Reed, Guitar, Utility | e.g. 4 Reed 7–22, 4 Utility 39, 44, 49, 58, 5 Reed 30 | doubling labels (FLUTE / CLARINET) and patch labels (HARP, STR. ENS., ...) | one part with instrument changes ("Zu Flöte", Harfe, Streichinstrumente, ...) | doublings stay in one part in Ghost, are split per instrument in Anastasia (user 2026-10-18; show.yaml `doublings: one_part` in Ghost) |
+| Ghost | 4, 5 | Reed, Guitar, Utility | e.g. 4 Reed 7–22, 4 Utility 39, 44 (clarinet patch: written a tone up with key signature), 49, 58, 5 Reed 30 | doubling labels (FLUTE / CLARINET) and patch labels (HARP, STR. ENS., ...) | one part with instrument changes ("Zu Flöte", Harfe, Streichinstrumente, ...) | doublings stay in one part in Ghost, are split per instrument in Anastasia (user 2026-10-18; show.yaml `doublings: one_part` in Ghost) |
 | Ghost | 11a | PianoReduction | 1–5 | right hand Cl. line in full size, G4 whole 4–5 ("+Util. (Strings), Vln, Vc."), left hand Gtr diamond slashes | rests | the piano plays only its own part (user 2026-10-18) |
 | Ghost | 1a, 4, 11a | PianoReduction | | chord symbols above the piano staff | chord symbols | Ghost piano reductions keep them (Anastasia's have none; user 2026-10-18); Ghost 20 still missing them (table 1) |
 | Ghost | 13, 20 | all | e.g. 20 Drums 6, 7, 14; 13 Bass 115–129; 13 Cello 27–33, 99–105 | one- and two-bar repeat signs (%), "sim." after a marked bar | the bars written out, with the articulations of the pattern bar | user 2026-10-16; pipeline writes %-bars out, copying the marks is IMPROVEMENTS #47 |
