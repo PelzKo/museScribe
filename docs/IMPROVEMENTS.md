@@ -15,7 +15,7 @@ work dirs copied into `h71`, reassembled with unchanged code; current truths). T
 the old metric: +980 = grace 219, hairpin ends 181, slur ends 177, technique (stopped) 164, ties without stop 59,
 bowings 41, lyric syllabic / melisma 34, ornaments 33, pedals 27, dashes 16, arpeggios 14, glissandi 7, chord
 degrees 7. User answers of the same day: section 3, "Answers". Accepted the same day (section 5): staff order /
-short names / key fix (neutral), D2, D9, D12, D7, D1, D4: **current reference `r79-d4` = 9 705**.
+short names / key fix (neutral), D2, D9, D12, D7, D1, D4: D4 on drum books (-11) and Ghost vector hairpins (-29): **current reference `r82-ref` = 9 665** (copied into `results/<show>/<song>/`).
 Born-digital books (Ghost, Anastasia piano reduction): what the PDF itself gives and the pipeline does not read is in
 `docs/BORN_DIGITAL_IMPROVEMENTS.md` (B1-B13, TB1-TB4; sharpens D1, K2, K9, S1, P2).
 
