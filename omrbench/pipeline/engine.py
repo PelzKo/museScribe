@@ -46,6 +46,7 @@ from ..pdfkind import is_scan
 from ..project import bar_map, letter_list
 from ..rasterize import rasterize
 from . import assemble as A
+from . import dynamics as DY
 from . import bars as B
 from . import chords as CH
 from . import vector as SL
@@ -452,6 +453,13 @@ class Pipeline(Engine):
             if vocal and not is_scan(sample.pdf) else ())
         if is_scan(sample.pdf) and sample.score_type in ("part", "drums"):
             A.place_text_dynamics(plans, pages, stats)   # D12: dynamics Audiveris filed as (lyric) text
+        if is_scan(sample.pdf) and sample.score_type == "part" and workdir:
+            # D4: dynamics by template correlation below the staff (templates: scripts/derive_dyn_templates.py);
+            # the show from the work dir id ("anastasia-4--Horn"): meta["show"] is set on drum books only
+            dpi = int(self.cfg.get("dpi", self.bench.get("dpi", 300)))
+            show = sample.meta.get("show") or sample.id.split("-", 1)[0]
+            DY.place(plans, pages, sorted((workdir.parent.parent / "_pages" / sample.id / f"{dpi}dpi").glob("page*.png")),
+                     DY.load(Path(self.bench.get("data_dir", "data")) / show), stats)
         A.reader_agreement(plans, pages)        # D9: R42 keeps a lone dynamic two readers agree on
         A.patch_octaves(plans, stats)
         if repairs:
