@@ -195,3 +195,32 @@ def test_wrong_length_bar_costs_one_each():
     e = pen(part(note("C4") + note("D4") + note("E4") + rest, note("C4") + note("D4") + note("E4") + rest), t)
     assert e["by_cat"]["barlen"] == 2 and e["penalty"] == 2 + 1     # 2 bars + the time signature
     assert "barlen" not in pen([], t)["by_cat"]                       # typing it in: bars come right
+
+
+def _sl(t, n="1"):
+    return f'<notations><slur type="{t}" number="{n}"/></notations>'
+
+
+def test_curve_ends_grace_lyrics_ornaments_are_scored():
+    # M2: a slur ending on the wrong note is one action; renumbering is free
+    t = part(note("C4", extra=_sl("start")) + note("D4", extra=_sl("stop")) + note("E4") + note("F4"))
+    late = part(note("C4", extra=_sl("start", "2")) + note("D4") + note("E4", extra=_sl("stop", "2")) + note("F4"))
+    same = part(note("C4", extra=_sl("start", "3")) + note("D4", extra=_sl("stop", "3")) + note("E4") + note("F4"))
+    assert pen(late, t)["by_cat"] == {"slurs": 1} and pen(same, t)["penalty"] == 0
+    # a tie without its stop
+    tie = '<notations><tied type="start"/></notations>'
+    t = part(note("C4", 2, tie) + note("C4", 2, '<notations><tied type="stop"/></notations>'))
+    assert pen(part(note("C4", 2, tie) + note("C4", 2)), t)["by_cat"] == {"ties": 1}
+    # M1: grace note with / without slash
+    g = lambda sl: f'<note><grace{sl}/><pitch><step>B</step><octave>3</octave></pitch><type>eighth</type></note>'  # noqa: E731
+    assert pen(part(g("") + Q4), part(g(' slash="yes"') + Q4))["by_cat"] == {"grace": 1}
+    assert pen(part(Q4), part(g("") + Q4))["by_cat"] == {"grace": 1}
+    # M3: syllabic and melisma line
+    ly = lambda s, e="": f'<lyric number="1"><syllabic>{s}</syllabic><text>la</text>{e}</lyric>'  # noqa: E731
+    assert pen(part(note("C4", 4, ly("single"))), part(note("C4", 4, ly("begin"))))["by_cat"] == {"lyrics": 1}
+    assert pen(part(note("C4", 4, ly("single"))), part(note("C4", 4, ly("single", "<extend/>"))))["penalty"] == 1
+    # M4: an arpeggio on a chord counts once
+    arp = "<notations><arpeggiate/></notations>"
+    chord = note("C4", 4, arp) + note("E4", 4, arp).replace("<note>", "<note><chord/>")
+    assert pen(part(note("C4", 4) + note("E4", 4).replace("<note>", "<note><chord/>")), part(chord))["by_cat"] \
+        == {"arpeggios": 1}

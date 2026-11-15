@@ -14,6 +14,10 @@ Anastasia 3 and 5 (checked 2026-11-06): the scanned parts were checked only wher
 lacks (all of these were OMR errors); their marks were not checked. The Anastasia Klavierauszug piano is not checked,
 generated or scored any more (user 2026-11-09): its rows were removed; the vocal staves still count.
 
+Anastasia 5A (checked 2026-11-15): every part page against the truth, plus the diff of run 20261114-102221. Notes,
+dynamics, hairpins, slurs and articulations match the scans; the remaining diffs are pipeline errors. Patch / doubling
+labels ("Harp", "Piano", "Eng Hn", "Solo", "(under winds)") are left out by convention and not listed.
+
 Checked 2026-11-09 against the user's corrected truths: rows fixed since then were removed (Anastasia 3 Empress 108–110,
 Frauen 186 / 210, Kontrabass marks, Männer 186 / 202 / 204 / 210; Anastasia 4 bar 101 double barline, Keyboard 1
 32 / 43 marcatos, Keyboard 2 bar 26 octave line, Posaune 98 "gedämpft"; Anastasia 5 Keyboard 1 104; the double
@@ -26,6 +30,14 @@ next to each file): every table 1 row that could be confirmed on the page was fi
 Xylophon 27. Already right before the pass: Ghost 4 Trumpet 10, Ghost 20 Guitar 59–61, Anastasia 4 Schlagzeug 144.
 What is left below are questions, unverifiable rows and things seen but not checked.
 
+**Recheck 2026-11-15** (all Anastasia truths as saved that day against every row below and against the `r69-a` /
+5A outputs): fixed by the user and removed here: song 3 double barlines 4 / 22 / 46 / 87, song 4 Keyboard 2 82–84, song 5
+bar 124, 5A double barlines 5 / 21 and Kontrabass "Arco"; song 3 Kontrabass articulations completed (100 -> 220; Posaune
++9, Trompete +6, Violoncello +26). Everything still open for Anastasia, with per-bar lists of the marks the sparse parts
+lack (1 113 marks in 11 parts: output has it, the part's truth not, another truth part has it at the same bar and beat),
+is in `docs/ANASTASIA_TRUTH_FIXES.pdf` for the person correcting the truths (generator:
+`results/errors/2026-11-15-dynamics/truthfix_pdf.py`). Spot checks on the scans: 3 Kontrabass 35 `fp`, 4 Trompete 52.
+
 Status in table 1: `mistake` = probable truth error, `question` = a convention decision is needed, `open` = known,
 not decided.
 
@@ -34,15 +46,16 @@ not decided.
 | Project | Song | Part | Bars | Printed | Truth | Status |
 |---|---|---|---|---|---|---|
 | Anastasia | 1, 2, 4 | all | every "sim." and % bar | "sim." after a marked bar; one- / two-bar repeat signs (%) | may be written out (marks copied onto the "sim." bars, %-bars as notes) | to fix: Anastasia keeps "sim." without the marks and keeps the % signs (expert 2026-10-28). Not done in the 2026-11-11 pass (needs every scan page). 4A checked 2026-11-11 as a trial: its books print no "sim." and no %, nothing to change |
-| Anastasia | 3 | all | 4, 22, 46, 87 | double barline (user confirmed 2026-11-13) | single barline | open: the truth lacks the printed double barlines |
-| Anastasia | 3, 4 | Kontrabass, Trompete, Posaune, Keyboard 2 (song 3); Trompete in B, Posaune (song 4) | whole parts | articulations, dynamics, hairpins, slurs | about half of them missing | to fix: sparse parts, the user completes them (2026-11-14); counts and the check against the top-most-staff rule in section 4 |
+| Anastasia | 3, 4 | Kontrabass, Trompete, Posaune, Keyboard 2 (song 3); Trompete in B, Posaune (song 4) | whole parts | articulations, dynamics, hairpins, slurs | about half of them missing | to fix: sparse parts, the user completes them (2026-11-14); counts and the check against the top-most-staff rule in section 4. 2026-11-15: 3 Kontrabass articulations done, its dynamics / hairpins not; 3 Violoncello, 3 / 4 Fagott, 4 Klarinette 2, 4 Keyboard 2 lack marks too (PDF) |
 | Anastasia | 3 | Posaune | 38, 47, 57, 63–65 | mp + hairpin (38), mf (47, 57), cresc. 63–64 to f (65) | no dynamics | open: sparse part (incomplete truth, user 2026-11-10); only the tenutos of 63 were added |
-| Anastasia | 4 | Keyboard 2 | 82–84 | LH bass clef C♯3 / G♯2 (box "RH: Bassoon - sounding 8vb" names the RH only) | LH an octave lower (C♯2 / G♯1), RH as printed | fixed by user 2026-11-13 (the octave was in the wrong hand) |
 | Anastasia | 4 | Fagott, Posaune, Keyboard 2, Klarinette 2, Flöte 2 | section 3 "plain rows" (Fagott 31, 32, 42, 43, 70, 85, 93, 135, 136, 177, 185, 202, 206; ...) | marcato (^) | accent (&gt;) | to fix: these rows were skipped in the 2026-11-01 marcato fix because the parts were `plain`; the flags are gone since 2026-11-09, so `r69-a` charges 65 "marcato instead of accent" (Fagott 38, Posaune 7, Keyboard 2 7) |
 | Anastasia | 4 | Keyboard 2 | 196–206 | not in the scan (PDF page 29 is already 4A, printed page 30 missing) | rests | open: unverifiable |
 | Anastasia | 4 | Trompete | 52–55 (and more, R65) | 2-note slurs (52 B♭–A, 53 A–B♭, 54 A–G, E–F) | no slurs | to fix in the truth (user 2026-11-13): add the printed slurs; the pipeline keeps them (18 made-up slurs in the part; other parts may lack printed 2-note slurs too, R65) |
 | Anastasia | 4 | Männer | 65–71 | "(BASS SOLO:)" over a plain treble staff, bar 66 starts C5 | in Männer (treble-8vb) at C3 sounding: two octaves below the print | open: which octave (user checks later) |
-| Anastasia | 5 | all | 124 | double barline (user confirmed 2026-11-13) | single barline | open: the truth lacks the printed double barline |
+| Anastasia | 5A | all | 1, 16, 21 | "Slightly Relaxed Tempo (In 3)" (1), "Con mosso (In 1) (Transition)" (16), "Slower" and "Attacca" (21) | no tempo text, no tempo mark | question: 4A and 5 also lack the heading tempo words (4A has only a ♩ = 120 mark), but song 5 keeps "rit.", "rall.", "a tempo" and "Applause segue", so at least "Slower" and "Attacca" may be missing |
+| Anastasia | 5A | Keyboard 1 | 21 | wavy glissando line from the last LH chord up to the top of the RH staff | none | open |
+| Anastasia | 5A | Pauken | 18–20 | treble staff with rests up to 19, bass clef at the end of 19 (box "Timpani" at 20) | clef change at the start of 18 | open (minor) |
+| Anastasia | 5A | Schlagzeug | 1–2, 16–18 | ⊗ head with tremolo for the rolls (1, 17), x heads with l.v. curves (2, 16, 18) | Ride Cymbal, same head for all, no l.v. | not verified (minor): head / instrument convention |
 | Ghost | 4 | Bass | 15–16 | G3 dotted half tied to a quarter, straight slide line into C3 | tie + slur G3–C3 | question (minor): slide as slur? |
 | Ghost | 4 | Drums | 37, 38, 47, 48, 58, 59 | written bars | accents as before | not re-checked (the text layer was not readable there) |
 | Ghost | 4 | Drums | 39 | ⊗ dotted half tied into the x eighth | no tie (different drum pitches cannot be tied) | open (minor) |
@@ -57,7 +70,7 @@ not decided.
 | Ghost | 11a | all | 6 | "Moderato (♩=c.108)" | written so, but MuseScore exports only the metronome sign ("c." is not a number) | open (minor; same in Ghost 1a "♩ = c. 72") |
 | Ghost | 20 | Drums | 1, 41 | "Open H.H." | every hi-hat note Closed Hi-Hat (G5, x head) | open (pipeline follows the truth) |
 | Ghost | 20 | PianoReduction | 5–28 | piano staves labelled "Util: (Str. Ens), Vln, Vc" | notes kept | question: also other-instrument notes? (bars 1–3 "Gtr." / "Bs." were removed 2026-11-11) |
-| Ghost | 20 | PianoReduction | 9–134 | a chord symbol under almost every bar (PianoReduction.pdf pages 257–274) | none (the truth guitar has 105) | open: Ghost piano reductions keep chord symbols; the user checks later (2026-10-18, again 2026-11-09) |
+| Ghost | 20 | PianoReduction | 9–134 | a chord symbol under almost every bar (PianoReduction.pdf pages 257–274) | none (the truth guitar has 105) | truth deviation (user 2026-11-15): chord symbols belong where the sheet prints them; the truth must get them |
 | Ghost | 20 | PianoReduction | 130, 131, 134 | pdf_truth_check: A♭4 (130, 131); no F6 in 134 | A4; F5 + F6 on the last eighth of 134 | not checked on the page (may be false hits) |
 
 ## 2. Conventions

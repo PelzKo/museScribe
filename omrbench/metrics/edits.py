@@ -24,6 +24,13 @@ action costs 1:
              word written as plain text where the truth has the technique = 1 (user 2026-11-01).
   instrument the part's instrument (<instrument-sound> of its first <score-instrument>) differs from the
              truth part's = 1 (re-assign it in MuseScore); not scored when the truth part has none.
+  curves     slurs and hairpins carry their end (bars later, onset), a tie whether it stops: a curve with a
+             wrong end is 1 action, renumbering is free (M2, 2026-11-15).
+  lyrics     verse, text, syllabic (omitted = single) and melisma line in one token: a missing lyric is 1 (M3).
+  grace      a grace note is (staff, main note onset, sounding pitch, slash); 1 per missing / made-up / wrong (M1).
+  ornaments  arpeggio lines (once per chord), trills / wavy lines / mordents, glissandi, bowings, stopped /
+             harmonic, cresc. dash lines, pedal marks: 1 per (staff, onset, token); chord symbols include
+             their <degree>s (M4).
   system     rehearsal marks, tempi and system text (rit., a tempo: <words system="only-top"> in
              the truth) are entered once per score: `system_penalty` scores them per song (union of
              all output parts), not per part; output words equal to a truth system text go there too.
@@ -43,7 +50,7 @@ from . import notef1
 SYSTEM_CATS = ("rehearsal", "tempo", "systemtext")
 PART_CATS = ("clefs", "keys", "times", "dynamics", "hairpins", "articulations", "fermatas", "slurs",
              "ties", "tuplets", "tremolos", "lyrics", "words", "playtech", "chords", "instruments", "structure",
-             "barlines")
+             "barlines", "grace", "arpeggios", "ornaments", "glissandi", "bowings", "technique", "dashes", "pedals")
 _CHANGES_ONLY = ("clefs", "keys", "times")
 BAND = 40                 # DP band around the diagonal (+ the bar count difference)
 

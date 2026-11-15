@@ -3,7 +3,20 @@
 Backlog and memory of the pipeline work. Rewritten 2026-11-14 on the state `r69-a` = **9 111** actions
 (Anastasia 6 762, Ghost 2 349). Error counts behind every item: `docs/ERRORS.md`. The long version with every
 measurement note up to this date is `docs/archive/IMPROVEMENTS-2026-11-14.md`; item numbers (U.., R.., #..) are the
-same there, so look an item up by its number when a detail is missing here.
+same there, so look an item up by its number when a detail is missing here. 2026-11-15: evidence run on dynamics,
+hairpins and low keyboard notes after the 5A truth (sections "Dynamics and hairpins", "Keyboards"; items D2, D4, D9-D11,
+K7-K9, T9 are new or rewritten; nothing benched, nothing changed in the pipeline). Same day: an independent second
+investigation (`docs/CODEX_IMPROVEMENTS.md`, C1-C9) was checked against the source and the data; what held up is
+merged below (D12, D13, S11 new; D1, D2, D7, D10, K7-K9 extended). The user fixed truths of songs 3, 5, 5A that day
+(T1, T3): **rebench `r69-a` before judging any change**; the open truth errors are in `docs/ANASTASIA_TRUTH_FIXES.pdf`.
+
+**2026-11-15 (later): metric M1-M4 implemented, new reference `r70-ref` = 9 941** (Anastasia + Ghost, 13 songs: 5A
+work dirs copied into `h71`, reassembled with unchanged code; current truths). The same outputs score 8 961 under
+the old metric: +980 = grace 219, hairpin ends 181, slur ends 177, technique (stopped) 164, ties without stop 59,
+bowings 41, lyric syllabic / melisma 34, ornaments 33, pedals 27, dashes 16, arpeggios 14, glissandi 7, chord
+degrees 7. All gains below are measured against `r70-ref`. User answers of the same day: section 3, "Answers".
+Born-digital books (Ghost, Anastasia piano reduction): what the PDF itself gives and the pipeline does not read is in
+`docs/BORN_DIGITAL_IMPROVEMENTS.md` (B1-B13, TB1-TB4; sharpens D1, K2, K9, S1, P2).
 
 ## 1. Rules for every change
 
@@ -30,15 +43,16 @@ The picture from `r69-a` (`docs/ERRORS.md` sections 2 and 3):
 | rank | direction | actions in it | why here | items |
 |---|---|---|---|---|
 | 1 | Complete the six sparse truths (user) | 1 472, about 930 of them truth gaps | no code; 16 % of the score is not a pipeline error, and these parts block the acceptance rule for correct changes | T1 |
-| 2 | Dynamics and hairpins | 1 334 (1 088 without the sparse parts) | the user's worst pain; three cheap sources are unused (vector glyphs on Ghost, `.omr` marks on keyboards and drum books) | D1-D8 |
+| 2 | Dynamics and hairpins | 1 334 (1 088 without the sparse parts) | the user's worst pain; evidence run 2026-11-15: keyboard / drum hairpins are in the `.omr` (-86 simulated), a template detector finds 84 % of the missing dynamics (-100), R42 drops 79 right dynamics (-36); Ghost vector glyphs unused | D2, D9, D4, D1 |
 | 3 | Score what is not scored | 0 today | the user wants grace notes, curve ends, lyric hyphens, ornaments scored; hairpin, slur and lyric work cannot be judged before | M1-M5 |
-| 4 | Keyboard notes and pitches | about 1 100 | largest real note cluster (Anastasia keyboards 602, Ghost pianos 352 + 156) | K1-K4 |
+| 4 | Keyboard notes and pitches | about 1 100 | largest real note cluster (Anastasia keyboards 602, Ghost pianos 352 + 156); low ledger notes are right only 71 % (-79 simulated from the `.omr` heads) | K7, K1-K4 |
 | 5 | Anastasia drum kit and percussion | 1 100 (44 % of typing it in) | second priority of the user; Schlagzeug 3 / 4 = 622 | P1-P4 |
 | 6 | Singers | 1 071 | lyrics 297, routing, bars traded for delete + insert | V1-V3 |
 | 7 | Structure and text | barlines 320, words 375 + playtech 129, chords 212, slurs 579 | many small rules, each 20-100 | S1-S8 |
 
-Suggested order: T1 (user, in parallel) -> D1, D2, D3, D8 (each small, measurable now) -> M1-M4 (rebaseline) -> D4,
-D5, D7 -> K2, K1 -> P1, P2 -> the rest by gain.
+Suggested order (2026-11-15): T1 (user, in parallel) -> bench 5A into a new reference -> D2 -> D9 -> D12 -> D4 -> K7 -> D1
+-> M1-M4 (rebaseline) -> D11, D7 -> K2 / K9, K1 -> P1, P2 -> the rest by gain. D2, D9, D4, K7 are simulated on the
+aligned bars (about -250..-300 together, D9 lies partly inside D4); each still has to pass the acceptance rule.
 
 ## 3. Open items
 
@@ -48,51 +62,98 @@ D5, D7 -> K2, K1 -> P1, P2 -> the rest by gain.
 
 | # | item | actions | note |
 |---|---|---|---|
-| T1 | Complete Anastasia 3 Kontrabass, Trompete, Posaune, Keyboard 2 and 4 Trompete in B, Posaune | about -930 | start from the `r69-a` output of these parts, it carries the marks; TRUTH_DEVIATIONS section 4 |
+| T1 | Complete Anastasia 3 Kontrabass, Trompete, Posaune, Keyboard 2 and 4 Trompete in B, Posaune | about -930 | start from the `r69-a` output of these parts, it carries the marks; TRUTH_DEVIATIONS section 4. 2026-11-15: 3 Kontrabass articulations done (100 -> 220), dynamics / hairpins not; per-bar lists of what is left (1 113 marks, 11 parts) in `docs/ANASTASIA_TRUTH_FIXES.pdf` |
 | T2 | Marcatos in the former plain rows of Anastasia 4 (Fagott, Posaune, Keyboard 2, Klarinette 2, Flöte 2) | -65 | TRUTH_DEVIATIONS table 1 / section 3 |
-| T3 | Printed double barlines the truth lacks: Anastasia 3 bars 4, 22, 46, 87; 5 bar 124 | about -100 (5 bars in every part of the song) | confirmed 2026-11-13 |
+| T3 | Printed double barlines the truth lacks: Anastasia 3 bars 4, 22, 46, 87; 5 bar 124 | about -100 (5 bars in every part of the song) | **fixed by the user 2026-11-15** (also 5A bars 5, 21 and Kontrabass "Arco"); not in the reference yet |
 | T4 | Printed 2-note slurs the truths leave out (Anastasia 4 Trompete 52-55 and more) | part of 329 made-up slurs | to fix in the truth (user 2026-11-13) |
-| T5 | Ghost 20 piano: chord symbols or not (PDF prints them from bar 9 to 134) | +-16..100 | open since 2026-10-18; decides S5 |
+| T5 | Ghost 20 piano: chord symbols as printed (user 2026-11-15); the truth lacks them: truth deviation | +-16..100 | decides S5: write them on Ghost 20 too |
 | T6 | Anastasia "sim." / % as printed (R13): truths of songs 1, 2, 4 still written out | ? | pipeline change waits for the truths |
-| T7 | Anastasia 4 Männer 65-71 "(BASS SOLO:)": which octave (R33) | -1..-5 | |
-| T8 | Does the top-most-staff rule apply across instruments, or only inside one part / system? | decides D6 | the complete truth parts keep 95 % of the marks a higher part has |
+| T7 | Anastasia 4 Männer 65-71 "(BASS SOLO:)": treble clef + "(8vb)" = one octave below (user 2026-11-15, R33) | -1..-5 | pipeline: read "(8vb)" next to a treble clef as an octave line |
+| T8 | Top-most-staff rule applies across all instruments (user 2026-11-15) | decides D6 | the complete truth parts keep 95 % of the marks a higher part has: check against the truths before coding D6 |
+| T9 | Anastasia 3 Violoncello looks like a seventh sparse part: truth 7 hairpins / 11 dynamics, output 18 / 26, 15 / 20 "made up"; the template detector finds 13 printed dynamics the truth lacks (bars 13, 70, 110, 130, 136, ...). Anastasia 4 Horn: 9 printed `mf` / other the truth lacks (bars 11, 88-91: cue passages?). Counting also the ones the output already has: 3 Violoncello 28 dynamics, 4 Fagott 15, 4 Horn 10 | about -35 + ? | found 2026-11-15; list: `results/errors/2026-11-15-dynamics/truth-gap-candidates.md` |
 
-Open questions for the user (asked 2026-11-14, not answered yet):
-1. T8: is the top-most-staff rule meant across instruments, or only inside one part's staves? It decides D6 and
-   whether the 159 dynamics / hairpins of the sparse parts that a higher part also has are gaps or right.
-2. T5: Ghost 20 piano with or without chord symbols.
-3. T7: octave of Anastasia 4 Männer 65-71.
-4. P4: are Anastasia 2 Triangel / Schlagzeug, 3 Empress, 5 Mark Tree, 5 Vlad (no output) workbook mappings to fix
-   or parts the pipeline must find?
-5. M1-M4: how much is one grace note, one arpeggio line, one wrong slur end worth: 1 action each (assumed)?
+Answers (user 2026-11-15):
+1. T8: the top-most-staff rule holds **across all instruments**: a dynamic / hairpin several staves have at the
+   same time is written only in the top staff. So the 159 marks of the sparse parts that a higher part also has
+   are right to be absent, and D6 may work across parts.
+2. T5: Ghost 20 piano **with** chord symbols where the sheet prints them; a truth without them is a truth
+   deviation (TRUTH_DEVIATIONS).
+3. T7: Anastasia 4 Männer 65-71: treble clef with "(8vb)": one octave below the written treble.
+4. P4: Anastasia 3 Empress and 5 Vlad are spoken lines above the bars: missing output is fine. 5 Mark Tree must be
+   found at bar 88 (part of the drum book). 2 Triangel is printed normally and starts in the lower part of bar 1.
+   The suspended cymbal is probably part of the Schlagzeug (drum kit).
+5. M1-M4: 1 action each (implemented so).
+6. T9: open, the user checks it; **ask again next time**.
 
 ### Dynamics and hairpins (first priority)
 
-State: dynamics missing 432 / made up 305 / wrong beat 26; hairpins missing 298 / made up 162 / wrong beat 105.
-The missing ones are missing, not misplaced (4 of 409 dynamics and 12 of 295 hairpins have the same token made up in
-a neighbour bar). Sources today: homr 0.7.1 dynamics first; `.omr` dynamics of ctx-grade >= 0.8 by x into bars with
-none (R54); `.omr` hairpins by x on scanned single-staff parts only (R40, R56); Tesseract dynamic words from
-confidence 50; lone dynamics / fermatas dropped by the cross-book rule (R42).
+State `r69-a`: dynamics missing 432 / made up 305 / wrong beat 26; hairpins missing 298 / made up 162 / wrong beat 105.
+Sources today: homr 0.7.1 dynamics first; `.omr` dynamics of ctx-grade >= 0.8 by x into bars with none (R54); `.omr`
+hairpins by x on scanned single-staff parts only (R40, R56); Tesseract dynamic words from confidence 50; lone
+dynamics / fermatas dropped by the cross-book rule (R42).
+
+**Evidence run 2026-11-15** (Anastasia 1-5 from `h71` plus the new truth 5A, six sparse parts left out; scripts and
+data in `results/errors/2026-11-15-dynamics/`, see section 7). For every bar: what homr, the `.omr` (any grade) and
+Tesseract saw, what the plan held before the cross-book rules, what the output and the truth have. All numbers below
+are simulated on the aligned bars, not benched.
+
+Why a dynamic is missing:
+
+| books | missing | no reader has it | read, then removed (R42 lone rule, singers: routing) | `.omr` >= 0.8 has it, not placed | `.omr` has another token | only OCR / `.omr` < 0.8 / neighbour bar |
+|---|---|---|---|---|---|---|
+| single-staff parts | 201 | 70 | **55** | 34 | 17 | 25 |
+| drum books | 84 | 21 | 26 | 14 | 7 | 16 |
+| keyboards | 26 | 2 | **18** | 5 | 1 | 0 |
+| singers | 14 | 0 | 14 | 0 | 0 | 0 |
+
+Why a hairpin is missing:
+
+| books | missing | `.omr` has it | `.omr` has it in a neighbour bar | no reader |
+|---|---|---|---|---|
+| keyboards | 100 | **94** | 4 | 2 |
+| drum books | 52 | **45** | 1 | 5 |
+| single-staff parts | 63 | 21 (not in the output: D11) | 12 | 21 |
+
+Song 5A (truth added 2026-11-14, about 40 differences, not in the reference yet) shows every cause: `ppp` for the
+printed `mp` in 3 parts and `fz` for `f` in 2 (homr; the `.omr` had the right token in 1 of 3 and 1 of 2); `f` at
+bar 18 missing in 4 single-staff parts and `mf` in the Horn (a clean glyph 4 to 5 interlines below the staff, no reader
+or homr's `sfz`); Violine
+1 `mp` bar 3 read by the `.omr` and Tesseract, then dropped by R42 (the other books have it in bar 2); all 5 missing
+keyboard hairpins are in the `.omr` between the staves; drum book 6 dynamics missing, 1 in the `.omr`.
 
 | # | idea | evidence | expected | effort |
 |---|---|---|---|---|
-| D1 | **Ghost: dynamics glyphs and hairpin lines from the vector drawing.** `pipeline/vector.py` reads neither. Dynamics are music-font characters (sheet_reader `glyph_map.py`: p..fff, sfz, fp), hairpins two thin lines meeting at a point; place them by bar + x like `vector.read_marks` | Ghost dynamics 128 + hairpins 65 actions; sheet_reader's glyph dynamics beat the pipeline 33 : 58 on 14 parts | -80..-140 | medium |
-| D2 | **`.omr` hairpins on keyboards and drum books.** R40 left them out: naive placement cost +62 on keyboards (cue staves and the conductor's vocal line: Anastasia 4 Keyboard 1 has 131 `.omr` dynamics, truth 50). Take only marks whose owner staff is a kept staff (`keep_staves`), a mark between the two piano staves once; drum books after the instrument split | hairpins missing: keys 104 (Anastasia 4 Keyboard 1 29, Keyboard 2 21, 3 Keyboard 2 20, 5 Keyboard 1 / 2 31), perc 59 | -60..-120 | small-medium |
-| D3 | **`.omr` dynamics (R54) on keyboards and drum books**, same filter | dynamics missing: perc 98 (Anastasia 4 Schlagzeug 25, 5 Becken 18), keys 57 | -40..-90 | small |
-| D4 | **Dynamics no reader sees (single-staff scans 225 missing).** First diagnose 50 of them: `.omr` inter of any grade, Tesseract word, or nothing at all? At most about 50 sit under the 0.8 grade (R60). Then the detector of #33: letter templates (m, p, f, s, z in the publisher's bold italic) cut from sure OCR hits, correlation in the band below each staff | mp 119, mf 79, p 77, f 56, sfz 34, fp 23 missing | -100..-200 | large |
-| D5 | **Hairpins no reader sees** (single 100): two thin diverging lines in the band below the staff (Hough lines), after D2 | every `.omr` wedge is already placed | -40..-80 | medium-large |
-| D6 | **Top-most-staff rule** (user 2026-11-14): a dynamic or text that several staves have at the same time in the same pattern is written only in the top staff. Safe reading: inside one two-staff part (keyboards, piano reductions) keep it on the top staff only. Across instruments the truths do not follow it (T8) | made-up dynamics on keys 67; six sparse parts: 159 dynamics / hairpins a higher part also has | -20..-50 inside a part; across parts only after T8 | small |
-| D7 | **Hairpin start and end notes.** 105 start on the wrong beat (single 91); the end is not scored yet (M2). Tune the R56 start rule on those 91, then the stop once M2 exists | Anastasia 4 Horn 7, Violine 2 6, Violoncello 6 | -30..-60 | small |
-| D8 | **Made-up homr dynamics** (single 100, keys 67 without the sparse parts): keep a homr dynamic only when an `.omr` dynamics inter (any grade) or an OCR token lies within the bar's x range | R58: homr 670 kept / 211 made up on Anastasia | -30..-80; measure, may cost right ones | small |
+| D2 | **`.omr` hairpins on keyboards, only those between the two staves; on drum books those below the staff.** R40 placed all marks naively (+176 / +11). Split by position, the unused `.omr` wedges are: keyboards between the staves 87 right / 12 wrong / 3 in the neighbour bar; above the upper staff 30 / 18 / 4 (cue staff, vocal line: leave out); drum books 28 / 12. Grade and width do not separate right from wrong. Place like R40 / R56, piano: on staff 1, start by the nearest note of either staff | 5A: 5 of 5; worst book Anastasia 4 Keyboard 1 | **-70** keyboards, **-16** drums (simulated) | small |
+| D4 | **Dynamics detector by template correlation (tested).** The glyphs are one bold italic font per show. Templates: mean image per token of the `.omr` dynamics boxes of grade >= 0.9 (in the test: the ones the truth confirms; in the pipeline: the ones homr reads the same), scaled to 8 px per interline: `mf` `mp` `p` `f` `sfz` `fp` `fz`. Normalised cross-correlation in the band 0.3 to 7 interlines below the staff, per bar. Scores are bimodal: real glyphs >= 0.9, everything else <= 0.75; threshold 0.85 | 53 single-staff books, 4 459 bars: finds **118 of 141** missing dynamics of these tokens; misses 10 of 412 right ones; does not see 26 of 74 made-up ones; 34 hits the truth lacks (13 in Anastasia 3 Violoncello and 9 in 4 Horn, see T9); 9 sampled hits viewed on the page: all printed glyphs with the right token. 5A: 31 of 31 truth dynamics, 0 wrong | add where the output has none of the token: **-84**; detector as the only reader of its 7 tokens: **-100**. Needs D9's exemption (a detector hit is never "lone") | medium: new `pipeline/dynamics.py` (numpy FFT, about 80 lines), then drum books (below the staff), keyboards (between the staves), singers (above the staff) |
+| D9 | **R42: keep a lone dynamic that two readers agree on.** R42 drops a dynamic no other book has in the bar. Of 166 drops, 79 were right dynamics (the other books have the same mark one bar earlier or later, or rest). With two of homr / `.omr` glyph of any grade / Tesseract word agreeing: 51 right, 15 wrong; with one reader or none: 28 right, 72 wrong. Carry the agreement from the plan into the output (attribute on the `<direction>`), `drop_lone_marks` skips those | keyboards lose 18 of their 26 missing dynamics this way, singers 14 of 14 | **-36** (simulated); part of D4 once that exists | small |
+| D10 | **Token conflicts: homr against the `.omr`.** One homr dynamic and one `.omr` dynamic of grade >= 0.8 with another token in the same bar (45 bars): `.omr` right 20, homr right 14, neither 11. Keep homr when Tesseract reads homr's token: 20 : 8. homr's `ppp` was `mp` in 5 of 5, `fz` was `f` / `sfz` in 6 of 9 | 5A: Cello, Klarinette 2, Horn bar 2; Kontrabass bar 18. C5: `place_dynamics` refuses a second dynamic anywhere in the bar; allowing one at another onset only pays with this token check (without it 31 right / 33 wrong, section 6) | -10..-15; D4 covers it | tiny |
+| D1 | **Ghost: dynamics glyphs and hairpin lines from the vector drawing.** `pipeline/vector.py` reads neither. Dynamics are music-font characters (sheet_reader `glyph_map.py`: p..fff, sfz, fp), hairpins two thin lines meeting at a point; place them by bar + x like `vector.read_marks`. C3: take only the exact font `EngraverFontSet` (`p`, `P` = mp, `F` = mf, `f`, `ƒ` = ff, `π` = pp; compound dynamics are one glyph); every font starting with `Maestro` also hits an `s` of `MaestroTimes-BoldItalic` text; `ß` is already read as accent + staccato (`vector.py`), so tell `sfz` apart by position. Start with Ghost 13 Cello and 5 Utility | Ghost dynamics 128 + hairpins 65 actions; sheet_reader's glyph dynamics beat the pipeline 33 : 58 on 14 parts; candidates on the pages: 13 Cello 9, 5 Utility 7, 4 / 5 / 20 PianoReduction 12 / 16 / 25 | -80..-140 | medium |
+| D11 | **Single-staff hairpins the `.omr` has but the output lacks** (21, plus 12 placed in the neighbour bar): find where they go (pairing in `V.place_marks`, `limit_wedges`, a wedge starting just before a barline). Diagnose first | | -15..-30 | small |
+| D7 | **Hairpin start and end notes.** 105 start on the wrong beat (single 91); the end is not scored yet (M2). Tune the R56 start rule on those 91, then the stop once M2 exists. Stops (C5): candidates are note ends, bar ends and rests, not only note starts (5A Horn truth stop at 2.5); place after the bar repairs (U4 `u4-a` lost by placing while assembling) | Anastasia 4 Horn 7, Violine 2 6, Violoncello 6; 5A Kontrabass, Fagott bar 16. Stops: 5A has 6 hairpins with the right start and another stop (Violine 1 twice, Violine 2, Horn, Trompete, Keyboard 2); all Anastasia songs at most 170 of 536 same-start pairs (single-staff parts paired by bar order, so an upper bound) | -30..-60 | small |
+| D3 | **`.omr` dynamics on drum books** (grade >= 0.8, unused: 19 right / 14 wrong). Keyboards: nothing to gain (unused `.omr` dynamics 23 right / 40 wrong; their missing ones are R42 drops, D9) | 5A Pauken `f` bar 20 | -5; better through D4 on drum books | small |
+| D5 | **Hairpins no reader sees**: only 28 left in Anastasia (single 21, drums 5, keys 2) once D2 is in: two thin diverging lines in the band below the staff | was estimated 100 before the evidence run | -15..-25 | medium-large |
+| D6 | **Top-most-staff rule** (user 2026-11-14): a dynamic or text that several staves have at the same time in the same pattern is written only in the top staff. Safe reading: inside one two-staff part (keyboards, piano reductions) keep it on the top staff only. Across instruments the truths do not follow it (T8) | made-up dynamics on keys 36, 30 of them homr + `.omr` agree (printed for the lower staff or a cue); six sparse parts: 159 dynamics / hairpins a higher part also has | -20..-50 inside a part; across parts only after T8 | small |
+| D12 | **Dynamics Audiveris read as lyric text (C1, simulated).** The `.omr` holds `mf`, `f`, `p`, `fz` ... as text atoms of role `Lyrics`. They never become dynamics: `text.is_words` wants two letters (`f`, `p` fail), `text.classify` drops lines made only of lyric fragments, `ocr.supplement` adds no Tesseract word where an Audiveris text covers the box, and `ocr.DYNAMIC` lacks `fz`, `sffz`, `rfz`, `pppp`. Collect dynamic tokens from the single text atoms before the line grouping, into their own list; split them off a bar number or cut mark (`[to] 16 mf`); place like R54 where the bar has none of the token. Not on keyboards and piano reductions (0 right / 6 wrong), not on vocal staves | single-staff parts: 37 of the 201 missing dynamics (24 of them no other reader has), 11 wrong (some are T9 truth gaps); drum books 14 of 84, 7 wrong; all of role `Lyrics`. 5A: `mf` / `f` bars 16 / 18 in Cello, Horn, Reed 1, Trombone. `results/errors/2026-11-15-dynamics/textatoms.py` | **-26** single-staff, **-7** drums (simulated); lies inside D4, but needs no detector | small |
+| D13 | **Owner of a mark from the `.omr` relation graph (C2).** `layout._parse_sheet` keeps shape, box and grade of a dynamics / wedge inter, `Mark.staff` stays 0, `vocal._owner` guesses by y (`piano_group` exists only on vocal scores). The `chord-dynamics` relation names the chord, so the staff, so kept or cue staff. Use it before the position rule of D2 / D3; check that the chord survives the cue removal. Not simulated on all songs | 5A Keyboard 1: 7 dynamics of grade >= 0.8: 3 belong to the cue staff, 4 to the piano staves; one unlinked `p` of grade 0.64. May turn the losing classes (`.omr` dynamics on keyboards 23 / 40, hairpins above the upper staff 30 / 22) into usable ones | ? (simulate first) | small-medium |
+| D8 | **Made-up homr dynamics**: on single-staff parts 121 made up: homr alone 42, homr and `.omr` same token 28, placed from the `.omr` 27, homr against another `.omr` token 20. The detector (D4) does not see 26 of 74 made-up against 10 of 412 right ones: drop those | | -16, inside D4 | - |
+
+Order: D2 (with D13 when it simulates well) -> D9 -> D12 -> D4 (single-staff, then drums / keyboards / singers) -> D1 -> D11, D7.
+D10, D3, D8 fall away with D4.
 
 Do not retry (measured, section 6): copying or voting dynamics across books, moving lone dynamics to the other
 books' bar, grade or size cuts on `.omr` hairpins, `.omr` dynamics below grade 0.8, `max_wedge_bars` 4, lone-dynamic
-threshold 3.
+threshold 3, a second `.omr` dynamic in a bar that has one, Tesseract tokens below confidence 50, `.omr` dynamics on
+keyboards, `.omr` hairpins above the upper keyboard staff.
 
 ### Metric coverage (user wants all of it scored, 2026-11-14)
 
-**None of M1-M6 is implemented yet** (state 2026-11-14: `metrics/edits.py` is unchanged). Each one is a measurement change: implement in `musicxml.part_staves` + `metrics/edits.py` + `scripts/error_report.py`,
-rebench `r69-a`, write the new reference here, only then judge pipeline changes. Counts: ERRORS section 4.
+**M1-M4 implemented 2026-11-15** (`musicxml.part_staves` tokens, `edits.PART_CATS`; `error_report.py` reads the new
+categories without change): grace notes `g:<sounding midi>[/]` at the main note's onset; slur / hairpin tokens carry
+`><bars later>:<stop onset>` (`>?` without a stop), a tie without its stop reads `tie>?`; lyrics carry
+`|begin|middle|end` and `_` for a melisma line; categories `arpeggios` (once per chord), `ornaments`, `glissandi`,
+`bowings`, `technique`, `dashes`, `pedals`; chord tokens include `<degree>`s. Not done: the note / voice a mark hangs
+on (R34 second half: voice numbers differ between readers and truths, needs its own design). New reference
+`r70-ref` = 9 941. M5 and M6 still open.
 
 | # | what | rule to settle | scope |
 |---|---|---|---|
@@ -105,8 +166,16 @@ rebench `r69-a`, write the new reference here, only then judge pipeline changes.
 
 ### Keyboards and piano reductions
 
+Low notes (2026-11-15, `r69-a`, truth notes of keyboards and pianos by ledger lines below the staff, right = same
+staff, beat and pitch): Anastasia in the staff 95 % of 6 483, one line 94 %, two lines 87 % of 454, **three or more
+71 % of 329** (37 read too high, mostly 2 to 5 staff steps; 55 missing). Ghost pianos three or more: 83 % of 367 (37
+too high, 25 missing). Notes above the staff are as good as inside it (94 %). Single-staff parts: 85 % of 55.
+
 | # | idea | evidence | expected | effort |
 |---|---|---|---|---|
+| K7 | **Low keyboard notes from the `.omr` head positions (simulated).** Audiveris counts the ledger lines (`Chord.steps`, loaded since R45f); homr guesses them. For a homr note below the first ledger line: take the `.omr` head chord of the same staff at its x (`imgpos`, within 0.6 interlines); when the low heads differ and the `.omr` has at least as many, replace homr's low pitches by the `.omr` positions (same clef, key and accidentals) and add the heads homr lacks (the lower octave note) | Anastasia keyboards incl. 5A: 237 bars change, 52 better, 4 worse, rest equal; 5A Keyboard 1 bars 18-21: 4 of 5 note errors (C7: the Audiveris export has all 5 right there, also the E♭5 inside the staff, but its Keyboard 2 bar 1 is worse than homr's, 3 against 2: repair heads, never take the whole bar). One-for-one replacement only: -39. The same rule above the staff: +15, leave out. homr's `imgpos` y is too coarse for pitch (0.43 staff steps median error) | **-79** (simulated) | small-medium |
+| K8 | **Deeper crops for keyboards.** A crop ends 5 interlines below the lowest staff (room for 4 ledger lines) or half-way to the next staff; the `-m4` / `-m3` retries cut more. Where the `.omr` has heads lower than that, crop that group with 8 interlines below and re-read it. C8: `_run` retries a crop only when homr fails; also retry a crop that reads but looks wrong (fewer heads than the `.omr`, a head at the crop edge), keep the first reading when the new one loses upper notes | 3+ ledger lines: 55 notes missing on Anastasia; 5A Keyboard 1 system 2: lowest chord 1 px above the crop's lower edge (2 446 of 2 447.1); not tested (needs a homr re-read of the 14 keyboard books) | ? | small, slow to measure |
+| K9 | **Ghost pianos: pitch of low notes from the head glyph's y** in the vector drawing (exact), as a first step of K2: only correct the pitch of an existing note at that x. C9: `scripts/pdf_truth_check.py` has this reader already (heads, staff lines, clefs, accidentals): make it a verifier on the output's timeline; a run of notes shifted alike = check the clef first (K3) | Ghost 20 Piano 26, 5 Piano 18, 4 Klavier 10 wrong or missing with 3+ lines. Ghost 5 Piano: its pitch sets equal the truth in bars 19-22 (output E1 as A1 / B1) and 25-27 (wrong clef); it fails on the cue / repeat bars 3-7, 34-35 (negative tests) | -40..-60 | medium |
 | K1 | **Anastasia keyboards: per-staff reading instead of per-bar.** Notes missing 528 on keyboards. Today a bar is taken from one reader for both staves. Use the `.omr` head chords (stem side, pitches, values: loaded since R45f) per staff: where homr's staff has fewer heads than Audiveris found, rebuild that staff like `assemble.kit_bars`, keep the other. Diagnose 30 bars first (which hand, which voice) | Anastasia 4 Keyboard 2 63, 3 Keyboard 2 59, 4 Keyboard 1; chord notes missing 90 | -100..-250 | medium |
 | K2 | **Ghost pianos: notes from the vector drawing.** Heads, stems, beams and flags are exact on vector pages; `read_drum_page` / `read_marks` already read them per staff. A two-staff note reader (pitch from the head's y and the clef glyph, values from beams / flags) checks or replaces homr's bar | Ghost 5 Piano 240 (16ths read as 8ths, treble return missed 25-27, E1 read as B1), 20 Piano 286, 4 Klavier 178; "wrong by more than a third" 111 on Ghost; Ghost piano articulations 125 come with it | -150..-300 | large |
 | K3 | Keyboard clef changes (clefs 90 + the pitches after them): clef glyphs from the drawing on Ghost, the `.omr` clef inters on scans | made-up clefs keys 29 | -30..-60 | small-medium |
@@ -121,7 +190,7 @@ rebench `r69-a`, write the new reference here, only then judge pipeline changes.
 | P1 | **Anastasia kit, what R45 left.** (a) around 180-206 of song 4 the kit is 2-5 bars ahead (extra groove bars next to the 182-184 multi-rest); (b) grace notes (flams) read as hits: made up D4 / F5 / E5; drop small heads; (c) ride F5 read as G5 / E5 in 197-204; (d) still empty: 34-38, 44-45, 80-85; (e) lower-staff hi-hat bars 174-177 need the "sticks" label or head shape | Schlagzeug 4: 392 (hits missing 113, made up 65), 3: 230 (64 / 44) | -100..-200 | medium |
 | P2 | **Tremolos (rolls).** 153 missing: drums 83 (Schlagzeug 3 / 4, Becken 5), strings 65. No reader gives the stroke count. Detect the strokes on the stem of homr's note (`imgpos` x, short thick diagonal lines across the stem); drum rule: a half / whole roll has 3 strokes. Anastasia 5 Violins: 1 stroke written as 3 (22) | | -60..-120 | medium |
 | P3 | Dynamics and hairpins in drum books | = D2 / D3 | | |
-| P4 | Parts with no output: Anastasia 2 Triangel and Schlagzeug, 5 Mark Tree (and 3 Empress, 5 Vlad): workbook mapping or routing | 27 + small | -20..-40 | small |
+| P4 | Parts with no output (user 2026-11-15): 5 Mark Tree from bar 88 in the drum book, 2 Triangel from the lower part of bar 1, suspended cymbal = Schlagzeug; 3 Empress and 5 Vlad are spoken, may stay missing | 27 + small | -20..-40 | small |
 | P5 | Ghost 4 Drum Kit: accents at the wrong beat 15, wrong position 15 (two voices: marks above = hands, below = feet, R17) | | -10..-25 | medium |
 
 ### Singers
@@ -146,6 +215,7 @@ rebench `r69-a`, write the new reference here, only then judge pipeline changes.
 | S7 | System text made up 66 ("tempo", "cresc.", "poco", "colla voce") and Ghost rehearsal letters made up 15 | | -30..-50 | small |
 | S8 | Fermatas: vote per book and with lower-staff marks (R36); 69 missing, 1-3 per part | fermatas 93 | -20..-40 | medium |
 | S9 | Octave lines: 15va / 15vb, lines below the staff, "8va ad lib." = 8va (R19) | | 0..-30 | medium |
+| S11 | **Written "cresc." / "dim." as staff expressions (C6).** `assemble.TEMPO_TERMS` holds `cresc`, `dim`, `decresc`, `poco`: above the top staff they become system text (S7 made-up "cresc.", "poco"); Anastasia keyboards drop all words (`words: drop`). Classify them as expressions of their staff first; keep the word, no wedge; the dashed line as `<dashes>` | truths 62 `<dashes>`, outputs 0 (scored only with M4); "cresc." is both missing part text and made-up system text | -10..-30 now, more with M4 | small |
 | S10 | Tie repairs by musical time (R37): `close_ties`, `slurs_to_ties`, `tie_held_chords` bridge a `<forward>` gap | unmeasured; needs M2 to show | ? | small-medium |
 
 ### Not quality (kept short)
@@ -271,6 +341,14 @@ Metric-neutral user requests, done (2026-11-11 / 12)
 | homr 0.7.1 as a plain bump; margin-3 crops | +253; song 1 538 against 413 | see R49; retry order 5, 4, 3 is right |
 | sheet_reader as engine or per-bar vote | 6 440 against 1 387 | ERRORS section 5 |
 | Zeus, SMT, Clarity, Oemer as readers; OLA, EasyOCR, docTR, Paddle, Qwen as components; fp16 homr on GPU | all worse than homr on CPU + Audiveris + Tesseract | `docs/PLAN.md` section 7, `docs/engine-benchmark.md` |
+| A second `.omr` dynamic (grade >= 0.8) in a bar that has one (simulated 2026-11-15) | 31 right / 33 wrong | the bar's own dynamic is often the same glyph read as another token; needs the detector (D4) |
+| Tesseract dynamic tokens below confidence 50, or the unused ones from 50 (simulated) | 1 / 9; 9 / 20 | |
+| `.omr` dynamics on keyboards (simulated) | 23 right / 40 wrong | printed for a cue or the lower staff; the missing ones there are R42 drops (D9) |
+| `.omr` hairpins above the upper keyboard staff (simulated) | 30 right / 22 wrong | cue staff, vocal line; between the staves 87 / 15 (D2) |
+| Grade, width, height, distance cuts on placed `.omr` hairpins of single-staff parts (simulated) | no class separates | the 65 "made up" are mostly printed (T9, sparse parts) |
+| Pitch from homr's `imgpos` y (K7 test) | 0.43 staff steps median error in the staff | one y per chord, not per head; use the `.omr` head positions |
+| Low `.omr` heads replacing homr's also when the `.omr` has fewer (K7 test) | -57 with 15 bars worse, against -79 / 4 | Audiveris misses heads too: never drop |
+| `.omr` text atoms as dynamics on keyboards and piano reductions (D12 test, simulated) | 0 right / 6 wrong | printed for a cue or the other staff; single-staff 37 / 11, drums 14 / 7 |
 | Range check on single-staff parts (R15) | nothing to gain | no note is more than a whole tone outside its range; the far-off notes are on keyboards |
 
 ## 7. Learnings
@@ -293,6 +371,18 @@ Metric-neutral user requests, done (2026-11-11 / 12)
   (section 4). Rebench the base first (M5).
 - **Simulate before coding.** A rule simulated on the aligned bars of the reference landed close to the real
   change: R41 simulated -247, real -263; R43 -69 / -71.
+- **Ask every reader before building one** (`results/errors/2026-11-15-dynamics/diag.py`): it reassembles a work
+  dir, tags each dynamic / hairpin in the plan with its source and dumps per bar what homr, the `.omr` (all grades)
+  and Tesseract saw. `truthitems.py` gives truth and output items per aligned output bar, `join.py` / `lone.py` /
+  `sim.py` the tables of section 3, `tmpl.py` the template detector test, `ledger.py` / `ledger2.py` / `l2eval.py`
+  the ledger-line tables. The folder is not in git (`results/`).
+- **A reader's text is a reader too.** Audiveris files bold italic `mf` / `f` under lyrics; 51 missing dynamics sat
+  in the `.omr` texts while only its dynamics inters and Tesseract were asked (D12). `allitems.py` dumps every truth
+  and output marking per aligned bar; `truthfix_pdf.py` builds `docs/ANASTASIA_TRUTH_FIXES.pdf` from it.
+- **Join by the aligned bar, not by the printed number.** Anastasia 4 has lettered bars (131A): keyed by the truth's
+  bar number, a fifth of the dynamics landed in the wrong bar and printed glyphs looked like detector errors.
+- **A cross-book filter needs to know how sure a mark is.** R42 removes as many right dynamics as wrong ones when it
+  only counts books; with the readers' agreement it is 51 : 15.
 - **Counting bugs:** pairs keyed by `id()` of lxml proxies gave 454 phantom duplicate slurs; key by position.
 - Traps: `sorted(glob)` puts `s01-g1-m3` before `s01-g1`; the workbook `bars` cell is text; `data/` is gitignored,
   so workbook and show.yaml edits must be listed in the commit message or here.

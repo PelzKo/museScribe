@@ -828,7 +828,20 @@ CATEGORIES = [
     "chords",         # chord symbols (<harmony>)
     "multirest",      # multi-rest counts
     "systemtext",     # <words> marked system="only-top"/"also-top" (MuseScore system text: rit., a tempo)
+    "grace",          # grace notes: sounding pitch + slash, at the main note's onset (M1)
+    "arpeggios",      # arpeggio lines, once per chord (M4)
+    "ornaments",      # trills, wavy lines, mordents, turns (M4)
+    "glissandi",      # glissando / slide starts (M4)
+    "bowings",        # up / down bow (M4)
+    "technique",      # stopped (+), harmonic, open string, snap pizzicato (M4)
+    "dashes",         # cresc. / dim. dash lines (M4)
+    "pedals",         # pedal marks (M4)
 ]
+
+_ORNAMENTS = ("trill-mark", "mordent", "inverted-mordent", "turn", "inverted-turn", "delayed-turn", "shake",
+              "schleifer")
+_TECHNIQUE = ("stopped", "harmonic", "open-string", "snap-pizzicato")
+_STEP_MIDI = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
 _NAV = ("segno", "coda", "dacapo", "dalsegno", "fine", "tocoda")
 
@@ -939,6 +952,18 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
     divisions = Fraction(1)
     transpose = None
     measures = part.findall("measure")
+    # curves are scored with their end (M2): an open start waits for its stop, then its token gets
+    # "><bars later>:<stop onset>"; a start that never stops keeps ">?". Numbers are local references.
+    open_slurs: dict[str, tuple] = {}
+    open_wedges: dict[str, tuple] = {}
+    open_ties: dict[tuple, list] = {}
+    chord_marks: set = set()      # (staff, bar, onset): arpeggio once per chord
+
+    def close(opened: dict, key, mi: int, onset) -> None:
+        if key in opened:
+            lst, k, m0, tok = opened.pop(key)
+            lst[k] = (lst[k][0], lst[k][1], f"{tok}>{mi - m0}:{onset}")
+
     for mi, measure in enumerate(measures):
         cur = mend = Fraction(0)
         last_onset = Fraction(0)
@@ -1005,17 +1030,44 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                     if not is_chord:
                         ev["rhythm"].append((mi, onset, "N:" + dur_tok))
                     s.measures.setdefault(mi, []).append((onset, f"{pt}:{dur_tok}"))
+                if is_grace and el.find("rest") is None:
+                    ev["grace"].append((mi, onset, f"g:{_sounding(el, transpose)}"
+                                                   + ("/" if el.find("grace").get("slash") == "yes" else "")))
                 for notations in el.findall("notations"):
+                    for sl in notations.findall("slur"):      # stops first: a note can end one slur and start the next
+                        if sl.get("type") == "stop":
+                            close(open_slurs, sl.get("number", "1"), mi, onset)
+                    for ti in notations.findall("tied"):
+                        if ti.get("type") == "stop" and open_ties.get((s.staff_no, _pitch_token(el))):
+                            open_ties[(s.staff_no, _pitch_token(el))].pop(0)
+                    if notations.find("arpeggiate") is not None and (s.staff_no, mi, onset) not in chord_marks:
+                        chord_marks.add((s.staff_no, mi, onset))
+                        ev["arpeggios"].append((mi, onset, "arpeggio"))
+                    for o in notations.findall("ornaments/*"):
+                        if o.tag in _ORNAMENTS or (o.tag == "wavy-line" and o.get("type") == "start"):
+                            ev["ornaments"].append((mi, onset, o.tag))
+                    for g in [*notations.findall("glissando"), *notations.findall("slide")]:
+                        if g.get("type") == "start":
+                            ev["glissandi"].append((mi, onset, "gliss"))
+                    for t in notations.findall("technical/*"):
+                        if t.tag in ("up-bow", "down-bow"):
+                            ev["bowings"].append((mi, onset, t.tag))
+                        elif t.tag in _TECHNIQUE:
+                            ev["technique"].append((mi, onset, t.tag))
                     for art in notations.findall("articulations/*"):
                         ev["articulations"].append((mi, onset, art.tag))
                     for f in notations.findall("fermata"):
                         ev["fermatas"].append((mi, onset, "fermata"))
                     for sl in notations.findall("slur"):
                         if sl.get("type") == "start":
-                            ev["slurs"].append((mi, onset, "slur"))
+                            ev["slurs"].append((mi, onset, "slur>?"))
+                            open_slurs[sl.get("number", "1")] = (ev["slurs"], len(ev["slurs"]) - 1, mi, "slur")
                     for ti in notations.findall("tied"):
                         if ti.get("type") == "start":
+                            # a tie with no stop on a later note of its pitch becomes "tie>?" (M2)
                             ev["ties"].append((mi, onset, "tie"))
+                            open_ties.setdefault((s.staff_no, _pitch_token(el)), []).append(
+                                (ev["ties"], len(ev["ties"]) - 1))
                     for dyn in notations.findall("dynamics/*"):
                         ev["dynamics"].append((mi, onset, _dyn_token(dyn)))
                     for tu in notations.findall("tuplet"):
@@ -1032,7 +1084,12 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                     text = "".join(t.text or "" for t in ly.findall("text"))
                     if text.strip():
                         verse = ly.get("number", "1")
-                        ev["lyrics"].append((mi, onset, f"v{verse}:{_norm_text(text)}"))
+                        # syllabic (omitted = single) and the melisma line belong to the lyric (M3)
+                        syl = _txt(ly, "syllabic", "single")
+                        syl = "" if syl == "single" else "|" + syl
+                        ext = ly.find("extend")
+                        ext = "_" if ext is not None and ext.get("type") != "stop" else ""
+                        ev["lyrics"].append((mi, onset, f"v{verse}:{_norm_text(text)}{syl}{ext}"))
                 if not is_chord and not is_grace:
                     last_onset = cur
                     cur += Fraction(_txt(el, "duration", "0")) / divisions
@@ -1047,8 +1104,18 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                     for dyn in dt.findall("dynamics/*"):
                         s.events["dynamics"].append((mi, onset, _dyn_token(dyn)))
                     for w in dt.findall("wedge"):
-                        if w.get("type") in ("crescendo", "diminuendo"):
-                            s.events["hairpins"].append((mi, onset, w.get("type")))
+                        if w.get("type") == "stop":
+                            close(open_wedges, w.get("number", "1"), mi, onset)
+                        elif w.get("type") in ("crescendo", "diminuendo"):
+                            s.events["hairpins"].append((mi, onset, w.get("type") + ">?"))
+                            open_wedges[w.get("number", "1")] = (s.events["hairpins"], len(s.events["hairpins"]) - 1,
+                                                                 mi, w.get("type"))
+                    for d in dt.findall("dashes"):
+                        if d.get("type") == "start":
+                            s.events["dashes"].append((mi, onset, "dashes"))
+                    for pd in dt.findall("pedal"):
+                        if pd.get("type") in ("start", "sostenuto"):
+                            s.events["pedals"].append((mi, onset, "pedal"))
                     cat = "systemtext" if el.get("system") in ("only-top", "also-top") else "words"
                     # one text split over several <words> runs (line break, tempo glyph) is one token
                     text = re.sub(r"[\ue000-\uf8ff]", "", "".join(w.text or "" for w in dt.findall("words")))
@@ -1080,6 +1147,9 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                 tok = (f"{_txt(el, 'root/root-step', '?')}{acc.get(_txt(el, 'root/root-alter', '0'), '')}:"
                        f"{_txt(el, 'kind', '')}"
                        + (f"/{bass}{acc.get(_txt(el, 'bass/bass-alter', '0'), '')}" if bass else ""))
+                for dg in el.findall("degree"):    # added / altered / removed degrees (M4, R38)
+                    tok += (f"({_txt(dg, 'degree-type', 'add')}{_txt(dg, 'degree-value', '?')}"
+                            f"{acc.get(_txt(dg, 'degree-alter', '0'), '')})")
                 s.events["chords"].append((mi, onset, tok))
             elif tag == "barline":
                 s = st(1)
@@ -1100,9 +1170,27 @@ def part_staves(part: etree._Element, pi: int = 0, name: str = "") -> list[Staff
                     s.events["barlines"].append((mi, at, f"bar:{style}"))
         if changed:
             st(1).events["instruments"].append((mi, Fraction(0), "ic"))
+    for pending in open_ties.values():
+        for lst, k in pending:
+            lst[k] = (*lst[k][:2], "tie>?")
     for s in pstaves.values():
         s.n_measures = len(measures)
     return [pstaves[k] for k in sorted(pstaves)]
+
+
+def _sounding(note, transpose) -> str:
+    """Sounding MIDI pitch of a note ("u:<step><octave>" unpitched) for the grace-note token."""
+    p = note.find("pitch")
+    if p is None:
+        return _pitch_token(note) or "~"
+    try:
+        alter = int(float(_txt(p, "alter", "0")))
+    except ValueError:
+        alter = 0
+    midi = _STEP_MIDI.get(_txt(p, "step", "C"), 0) + alter + 12 * (int(_txt(p, "octave", "4")) + 1)
+    if transpose:
+        midi += int(float(transpose[0])) + 12 * int(float(transpose[1]))
+    return str(midi)
 
 
 def _sound(snd, s: Staff, mi: int, onset, skip=()) -> None:
