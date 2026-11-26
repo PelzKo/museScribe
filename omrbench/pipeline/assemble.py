@@ -2558,9 +2558,17 @@ def _canonical_singers(plans: list[SysPlan]) -> dict[str, str]:
     out: dict[str, str] = {}
     for name, _ in counts.most_common():
         # "ALL MEN" is no spelling of "ALL WOMEN" (ratio 0.875, Anastasia 3: the men's line was lost)
-        out[name] = next((c for c in out.values() if c == out.get(c) and Levenshtein.ratio(c, name) >= 0.85
+        out[name] = next((c for c in out.values() if c == out.get(c) and _spelling(c, name)
                           and bool(male.search(c)) == bool(male.search(name))), name)
     return out
+
+
+def _spelling(a: str, b: str) -> bool:
+    """`b` is an OCR spelling of label `a`: Levenshtein ratio >= 0.85 and the same numbers
+    ("DRUNK 1" is no spelling of "DRUNK 3", Anastasia 8)."""
+    import Levenshtein
+
+    return Levenshtein.ratio(a.upper(), b.upper()) >= 0.85 and re.findall(r"\d+", a) == re.findall(r"\d+", b)
 
 
 MALE_VOICES = r"\b(men|male|tenors?|bass(es)?|baritones?)\b"
@@ -2574,7 +2582,7 @@ def _known(name: str, known: set[str]) -> str:
     import Levenshtein
 
     best = max(known, key=lambda k: Levenshtein.ratio(k.upper(), name.upper()), default=None)
-    return best if best and Levenshtein.ratio(best.upper(), name.upper()) >= 0.85 else name
+    return best if best and _spelling(best, name) else name
 
 
 def _singers_of(label: str, known: set[str], groups: dict | None = None) -> list[str]:

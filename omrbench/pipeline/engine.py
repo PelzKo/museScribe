@@ -456,7 +456,7 @@ class Pipeline(Engine):
             A.continue_patterns(plans, D, stats, scan=True)   # R29: the groove over the "etc." slash bars
         credits, instruments = A.place_text(
             plans, pages, D, stats, sample.meta, split, estimate, symbols,
-            SL.read_lines(sample.pdf, pages, re.compile(r"[A-Z].*[:;]"), left=True)
+            SL.read_lines(sample.pdf, pages, re.compile(r"\(?[A-Z].*[:;]"), left=True)   # "(GLEB:)" too
             if vocal and not is_scan(sample.pdf) else ())
         if is_scan(sample.pdf) and sample.score_type in ("part", "drums"):
             A.place_text_dynamics(plans, pages, stats)   # D12: dynamics Audiveris filed as (lyric) text
@@ -547,8 +547,8 @@ class Pipeline(Engine):
             LOG.info(f"words: drop: {sum(musicxml.drop_words(r) for r in [score, *(files or {}).values()])} removed")
         if plain_text := sample.meta.get("plain_text"):
             # workbook `plainText`: lyrics sung together are printed in the first voice only
-            for root in [score, *(files or {}).values()]:
-                n = musicxml.dedup_lyrics(root, plain_text)
+            # the score and the Voices file hold the same voices: report the larger count, not the last file's
+            n = max(musicxml.dedup_lyrics(root, plain_text) for root in [score, *(files or {}).values()])
             LOG.info(f"plainText: lyrics dropped in {n} bar(s) of later voices")
         for note in stats.notes:
             if not note.startswith("bar numbers:"):     # those were logged as they happened

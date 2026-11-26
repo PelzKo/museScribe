@@ -304,6 +304,7 @@ def test_duet_and_group_labels_go_to_the_known_singers():
     assert A._singers_of("BOTH", known) == ["BOTH"]
     from omrbench.pipeline import text as T
     assert T.parse_label("VLAD & DIMITRY:", False) == ("VLAD & DIMITRY", "")
+    assert T.parse_label("DRUNKS 2 & 4:", False) == ("DRUNKS 2 & 4", "")     # Anastasia 8
 
 
 def test_canonical_singers_keeps_men_apart_from_women():
@@ -341,3 +342,11 @@ def test_unlabelled_vocal_staff_takes_its_first_later_label():
     names = {p.name for p in A.build_vocal_parts(plans, 1, A.Stats())[0]}
     assert "Voice 1" in names and "Voice 2" not in names
     assert A.INSTR_CUE.search("Vc. (pizz)") and A.INSTR_CUE.search("Fl.") and not A.INSTR_CUE.search("ALL MEN:")
+
+
+def test_numbered_singers_are_no_spellings_of_each_other():
+    # Anastasia 8: "DRUNK 1" (ratio 0.857 to "DRUNK 3") is another singer
+    from types import SimpleNamespace as NS
+    plans = [NS(singers={(0, 0): [(0, "DRUNK 3"), (0, "DRUNK 3")], (0, 1): [(0, "DRUNK 1")]})]
+    assert A._canonical_singers(plans)["DRUNK 1"] == "DRUNK 1"
+    assert A._known("DRUNK 1", {"DRUNK 3"}) == "DRUNK 1"

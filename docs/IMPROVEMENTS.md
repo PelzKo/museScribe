@@ -15,7 +15,7 @@ work dirs copied into `h71`, reassembled with unchanged code; current truths). T
 the old metric: +980 = grace 219, hairpin ends 181, slur ends 177, technique (stopped) 164, ties without stop 59,
 bowings 41, lyric syllabic / melisma 34, ornaments 33, pedals 27, dashes 16, arpeggios 14, glissandi 7, chord
 degrees 7. User answers of the same day: section 3, "Answers". Accepted the same day (section 5): staff order /
-short names / key fix (neutral), D2, D9, D12, D7, D1, D4: D4 on drum books (-11) and Ghost vector hairpins (-29): **current reference `r82-ref` = 9 665** (copied into `results/<show>/<song>/`).
+short names / key fix (neutral), D2, D9, D12, D7, D1, D4: D4 on drum books (-11) and Ghost vector hairpins (-29): `r82-ref` = 9 665. 2026-11-26: singer labels S12 (section 5): **current reference `r83-lab2` = 9 629** (Anastasia 6 948, Ghost 2 681; copied into `results/<show>/<song>/`).
 Born-digital books (Ghost, Anastasia piano reduction): what the PDF itself gives and the pipeline does not read is in
 `docs/BORN_DIGITAL_IMPROVEMENTS.md` (B1-B13, TB1-TB4; sharpens D1, K2, K9, S1, P2).
 
@@ -242,7 +242,7 @@ Totals are comparable only inside one block; the blocks differ in songs, truths 
 | 2026-11-01/02 | `r4-t` 11 026 (truth marcatos +64) -> `r4-ref` 11 259 (`playtech`, `instrument` scored +233) -> `r4-k` 10 662 -> `r5-b` 9 766 | metric additions |
 | 2026-11-02, + Anastasia 3 | `r6-ref` 13 735 -> `r6-a3` 13 060 -> `r12-a` 11 998 | song 3 linked |
 | 2026-11-09, 12 songs | `r13-ref` 13 863 -> `r14-h70` 13 555 -> `r14-h71` 12 243 -> ... -> `r69-a` **9 111** | song 5 added, `plainArticulation` flags of songs 1 / 2 / 4 / 4A removed, Klavierauszug piano not scored |
-| 2026-11-15, 13 songs, metric M1-M4 | `r70-ref` 9 941 -> `r71-d2` 9 912 -> `r72-d9` 9 852 -> `r73-d12` 9 837 -> `r78-ref` 9 748 (+ D7, D1) -> `r79-d4` **9 705** | 5A added (work dirs from run `20261114-102221` in `h71`), truths of 3 / 5 / 5A fixed by the user, grace notes / curve ends / lyric syllabic / ornaments scored (+980 on the same outputs) |
+| 2026-11-15, 13 songs, metric M1-M4 | `r70-ref` 9 941 -> `r71-d2` 9 912 -> `r72-d9` 9 852 -> `r73-d12` 9 837 -> `r78-ref` 9 748 (+ D7, D1) -> `r79-d4` 9 705 -> `r82-ref` 9 665 -> `r83-lab2` **9 629** | 5A added (work dirs from run `20261114-102221` in `h71`), truths of 3 / 5 / 5A fixed by the user, grace notes / curve ends / lyric syllabic / ornaments scored (+980 on the same outputs) |
 
 ## 5. What worked (accepted)
 
@@ -265,6 +265,14 @@ Dynamics and hairpins, 2026-11-15 (metric M1-M4, reference chain in section 4)
   the last note under the tip -74 (the truths stop there; M2 made it visible).
 - D9 R42 keeps a dynamic two readers agree on -60; D12 dynamics in Audiveris text atoms -15; D4 template detector
   (overlap suppression, removes template tokens it does not see) -43; D1 Ghost dynamics from the vector glyphs -15.
+
+Singer labels of the vocal scores, 2026-11-26 (Anastasia 7 / 8 transcription)
+- S12 **-36** (`r83-lab2`): text-layer labels in brackets ("(GLEB:)", `engine.py` read_lines pattern); labels of up
+  to four words ("DRUNKS 2 & 4", `text._LABEL`); numbered labels are never OCR spellings of each other ("DRUNK 1" /
+  "DRUNK 3", "GROUP 1" / "GROUP 2", "BLACK MARKETEER #1..#3"; `assemble._spelling`). Song 4 then has the parts
+  Black Marketeer #3 and Group 2: workbook truth cells Black Marketeer #3=Frauen, Group 2=Frauen, Group 1=Männer
+  (was Frauen + Männer) and `male_voices: [Dmitry, Vlad, Group 1]`. Ghost 4 Sam -3, Anastasia 4 Männer -26,
+  Frauen -7. A label naming several singers by number ("DRUNKS 2 & 4") still needs `singer_groups`.
 
 Marks placed by image x (homr `imgpos`), the pattern that paid most in November
 - R51 `.omr` articulations onto homr notes by x (staccatos only from ctx-grade 0.8; kit accents too): **-263**.
