@@ -51,6 +51,8 @@ Runtime and Codex usage are not a concern; Claude tokens are. So:
 - The printed page is the reference. Where a convention below says otherwise (cues, German words, octave lines),
   follow the convention. Where the scan is unreadable or a page is missing, leave the bar and list it as a doubt.
 - Change a bar only when the page shows clearly that it is wrong. A wrong "fix" costs as much as a missed error.
+  Before you remove an articulation, zoom in on it (300 dpi, x range): a tenuto over or under an accent, or a thin
+  dash, is easy to miss at 200 dpi.
   Codex and `lint` findings are hints, not facts: look at the system before acting on one.
 - Before you add notes the pipeline did not have (a whole figure, a passage), check that they are not another
   book's line printed as a cue or for reference: if another book of the song has the same notes in the same bars,
@@ -95,10 +97,12 @@ python scripts/review_codex.py $R/work/combined.mscx 12,13 "data/anastasia/pdfs/
   filled, no whole-bar rest of the wrong length) and every part has `<N>` bars.
 - `lint` lists per staff: wrong bar lengths, notes out of range, double accidentals, clef changes in wind / string
   parts, slurs / hairpins over more than 4 bars, spanner halves without partner, duplicate hairpins and ties,
-  articulations on rests, repeated system text, labels and playing words, fermatas most parts have, a keyboard
-  playing the other keyboard's line, doubling parts that disagree. `--fix-safe 1` applies the safe ones (marked
-  `[fix-safe]`: whole-bar rest lengths, duplicate hairpins, rest marks, repeated system text, fermatas 2/3 of the parts
-  have at the same position). Pass the workbook `plainArticulation` parts as `--plain` (part names, comma-separated).
+  articulations on rests, repeated system text, a tempo word copied as staff text into 3+ parts, labels and playing
+  words, fermatas most parts have, a keyboard playing the other keyboard's line, doubling parts that disagree.
+  `--fix-safe 1` applies the safe ones (marked `[fix-safe]`: whole-bar rest lengths, duplicate hairpins, rest marks,
+  repeated system text, a tempo word as staff text in 3+ parts -> one system text on the top staff, fermatas 2/3 of
+  the parts have at the same position). A hairpin ending at the end of the last bar has two end halves in `.mscx`:
+  that is how MuseScore writes it, not an error. Pass the workbook `plainArticulation` parts as `--plain` (part names, comma-separated).
 - `review_codex.py` renders the pages at 200 dpi, sends every 2 pages with the staves' `dump` and a short conventions
   list to Codex in an empty folder (Codex never sees the repository) and writes `codex-p<a>-<b>.txt`: lines
   `bar | staff | transcription has | page shows | kind | sure/unsure`, ending with `covered | <bars> | unreadable:
@@ -120,6 +124,7 @@ E.artic(E.chords(score, 13, 25)[0], "articTenutoAbove");  E.del_artics(chord, {"
 E.add_tie(score, 13, 25, -1);  E.add_slur(score, 13, (25, 0), (26, 2));  E.add_fermata(score, 13, 25, F(1, 2))
 E.add_arpeggio(chord);  E.add_gliss(score, 13, (25, 0, 0, 60), (25, 0, 1, 67), sid2=None);  E.add_barline(score, 13, 25)
 E.set_lyric(chord, "dreams", "end");  E.del_spanner(score, 13, "Slur", 25);  E.drop_orphans(score, 13, "Tie")
+E.add_text(score, 1, 21, F(1, 4), "Attacca")   # kind="SystemText" (default, top staff) / "StaffText" / "PlayTechAnnotation"
 E.save(tree, path)
 ```
 
@@ -160,7 +165,11 @@ You are the **lead**. You own the structure, start Codex and the subagents, and 
    to confirm). Insert / delete bars **in that part's staves only**, so every part ends with `<N>` bars and the key
    / time changes and rehearsal letters line up across parts.
 3. Time and key signatures against the workbook rows (key transposed for the part; drums have none).
-4. `lint --fix-safe 1`, then `lint` again and keep its list. `check`, `pack`. Write `review/plan.md`: the table,
+4. Global marks, once for all parts: render the systems of one simple single-staff book of the song once (60-110
+   dpi, the whole song often fits one image) and read the tempo headings and transitions, double barlines and cuts
+   ("[to] 16"), "Attacca", the final barline. Apply them now: tempo / system text once on the top staff
+   (`E.add_text`), staff-text copies of them removed, barlines in every staff. Subagents and Codex skip these.
+5. `lint --fix-safe 1`, then `lint` again and keep its list. `check`, `pack`. Write `review/plan.md`: the table,
    the workbook facts (meter, keys, bars, letters), the conventions that matter for this song, and per book the
    `lint` lines of its staves. Start `review/progress.md`.
 
@@ -169,12 +178,15 @@ its pages, `--skip` and `--letters` from the workbook, `--passes 2` for keyboard
 at once in the background (`&`, then `wait`), output to `review/codex/<book>/`. The `--label` is all Codex knows
 about the book: name each staff and its instrument; for doubling books where the printed labels switch; for the drum
 book the staff of each instrument and, for the kit, the `drumkit.yaml` positions; for singers which printed label
-goes to which part (duets to both); and "no articulations / dynamics / hairpins / slurs / fermatas" for a
-`plainArticulation` part. This takes a while; Claude does nothing meanwhile.
+goes to which part (duets to both); "no articulations / dynamics / hairpins / slurs / fermatas" for a
+`plainArticulation` part; and always "tempo texts, barlines, Attacca and key signatures are handled elsewhere: do not
+report them". This takes a while; Claude does nothing meanwhile.
 
 **Phase 3 (subagents, Sonnet): verify and fix, one book or up to 4 pages each.** Up to 4 at once; subagents of
-the same staves (a long book split by pages) run one after the other on the same copy. Each gets this brief (fill in
-the brackets):
+the same staves (a long book split by pages) run one after the other on the same copy; small books (one page each)
+can share a subagent up to 4 pages. Write the brief below once to `review/brief.md` (with <SONG> filled in, the global
+marks of phase 1 named as "skip, the lead did them"); each Agent prompt is then two lines: "Follow
+`review/brief.md`" plus the brackets (parts, staves, book, pages, skip, folder, Codex folder). The brief:
 
 > Check and fix the part(s) [names] (staves [ids]) of Anastasia <SONG>, `data/anastasia/pdfs/[book].pdf` pages
 > [pages] (skip the first [k] systems of the first page). Read `docs/REVIEW_AGENT_PROMPT.md` sections Budget, Rules,
@@ -192,15 +204,17 @@ the brackets):
 > Run `check` after each page and `lint --staves [ids]` at the end. Reply in at most 15 lines: staff ids, fixes per
 > kind (counts), Codex points used / rejected, last `check` result, doubts (bar, what, why).
 
-When a subagent is done: `splice` its staves into `review/work/combined.mscx`, `check`, `pack`, update
-`progress.md`. If `check` is no longer OK after a splice, find the cause or leave that book out and list it.
+Wait until all subagents of a round are done (no turn per finished subagent), then splice all their staves in one
+shell command (one `splice` per book), `check`, `pack`, update `progress.md`. If `check` is no longer OK, splice the
+books one by one to find the cause, or leave that book out and list it.
 
 Book order (largest gain first): Keyboard 1, Keyboard 2, Drums-Percussion, PianoReduction singers, then strings,
 reeds, brass. Single-staff books without Codex points and without `lint` lines need no subagent.
 
 **Phase 4 (lead): whole score.** Second Codex round for keyboards, drum book and singers: `review_codex.py` again
 on the spliced score into `review/codex2/<book>/`; give the new points (not those already decided in the book's
-`notes.md`) to one short Sonnet subagent per book, same brief. Then `lint` on the whole score (fermatas, repeated texts, keyboards playing each
+`notes.md`) to one short Sonnet subagent per book, same brief. A new point that contradicts a decision in `notes.md`
+(Codex says X, the subagent decided not-X): the lead looks at it once (zoom on that bar) and decides. Then `lint` on the whole score (fermatas, repeated texts, keyboards playing each
 other's lines, doubling parts that disagree): fix what the page confirms (one system image per point). Same
 rehearsal letters, key / time changes, double barlines and repeats as printed in each book. Final `check` (must say
 OK), `pack`, report.

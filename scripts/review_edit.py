@@ -196,6 +196,15 @@ def add_dynamic(score, sid, b, pos, sub):
     insert_at(bar(score, sid, b).find("voice"), pos, d)
 
 
+def add_text(score, sid, b, pos, text, kind="SystemText"):
+    """Text at bar b, pos (Fraction of a whole note): SystemText (tempo headings, "Attacca": on the top staff),
+    StaffText (expression words) or PlayTechAnnotation (playing words: "pizz.", "gedämpft")."""
+    el = etree.Element(kind)
+    E(el, "text").text = text
+    insert_at(bar(score, sid, b).find("voice"), pos, el)
+    return el
+
+
 def del_dynamics(score, sid, b, subs=None):
     for d in bar(score, sid, b).iter("Dynamic"):
         if subs is None or d.findtext("subtype") in subs:
@@ -315,6 +324,8 @@ def self_test():
     set_lyric(c1, "Ah")
     set_lyric(c1, "Ah", "begin")
     assert [l.findtext("text") for l in c1.findall("Lyrics")] == ["Ah"] and c1.findtext("Lyrics/syllabic") == "begin"
+    add_text(score, 1, 2, 0, "Attacca")
+    assert bar(score, 1, 2).find("voice")[0].findtext("text") == "Attacca"
 
 
 def mk_rest(d="quarter", dots=0, measure=None):

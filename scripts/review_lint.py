@@ -7,11 +7,13 @@ Prints one line per finding, grouped by staff: `bar: [kind] what`. Kinds:
   range      note more than 2 semitones outside the instrument's range (misread clef / ledger lines / octave line)
   spelling   double accidentals
   clef       clef change in a non-keyboard part (almost always a misread; cello / bassoon / trombone can be real)
-  span       slur or hairpin over more than 4 bars; spanner half without its partner; duplicate hairpin (fix-safe)
+  span       slur or hairpin over more than 4 bars; spanner half without its partner (cross-staff glissandi:
+             looked up on the other staff); duplicate hairpin (fix-safe)
   tie        two ties on one note
   rest-mark  articulation on a rest (fix-safe: removed)
-  text       system / tempo text repeated on several staves (fix-safe: kept on the top one); staff text repeated in
-             3+ parts (tempo word?); label words (solo, to ..., Harp); playing words not as German playing technique;
+  text       system / tempo text repeated on several staves (fix-safe: kept on the top one); staff text in 3+ parts,
+             spelled a little differently, within +-1 bar (fix-safe: one system text on the top staff at the bar
+             most copies have; copies at other bars only listed; playing, expression and dynamic words excluded); label words (solo, to ..., Harp); playing words not as German playing technique;
              expression text in a keyboard
   fermata    2/3 of the parts have a fermata at this position, this one none in the bar (fix-safe: added); 3+ have
              one; parts named in --plain (workbook plainArticulation, by part name) are left out
@@ -134,16 +136,40 @@ def _target(s, b, t, tag):
     return b + int(loc.findtext("measures") or 0), t + F(loc.findtext("fractions") or 0)
 
 
+def _cross(s):
+    """Staff offset of a spanner half that links to another staff of the part (cross-staff glissando), else 0."""
+    return int(s.findtext("next/location/staves") or s.findtext("prev/location/staves") or 0)
+
+
+def _partner(score, sid, kind, s, b, t, is_start):
+    """True when the other staff holds the opposite half that points back to (b, t)."""
+    other = str(int(sid) + _cross(s))
+    tb, tt = _target(s, b, t, "next" if is_start else "prev")
+    try:
+        sp = E.spanners(score, other, kind)
+    except StopIteration:
+        return False
+    return any(s2 is not s and is_start != st2 and (b2, t2) == (tb, tt)
+               and _target(s2, b2, t2, "prev" if is_start else "next") == (b, t) for s2, b2, t2, st2 in sp)
+
+
 def check_spanners(st, score):
     sid = st.sid
     for kind in SPAN_KINDS:
         sp = E.spanners(score, sid, kind)
         starts = Counter()
-        ends = {(_target(s, b, t, "prev"), (b, t)) for s, b, t, is_start in sp if not is_start}
-        begins = {((b, t), _target(s, b, t, "next")) for s, b, t, is_start in sp if is_start}
+        local = [x for x in sp if not _cross(x[0])]
+        ends = Counter((_target(s, b, t, "prev"), (b, t)) for s, b, t, is_start in local if not is_start)
+        begins = Counter(((b, t), _target(s, b, t, "next")) for s, b, t, is_start in local if is_start)
         for s, b, t, is_start in sp:
+            if _cross(s):
+                if kind != "Tie" and not _partner(score, sid, kind, s, b, t, is_start):
+                    st.add(b, "span", f"cross-staff {kind} {'start' if is_start else 'end'} without its partner "
+                                      f"on staff {int(sid) + _cross(s)}")
+                continue
             if not is_start:
-                if (_target(s, b, t, "prev"), (b, t)) not in begins and kind != "Tie":
+                key = (_target(s, b, t, "prev"), (b, t))
+                if key not in begins and kind != "Tie":   # two end halves at the score's end: MuseScore's own way
                     st.add(b, "span", f"{kind} end without its start")
                 continue
             (eb, ep) = _target(s, b, t, "next")
@@ -189,7 +215,21 @@ def check_marks(st):
             st.add(b, "text", f'{tag} "{text}" in a keyboard (convention: none)')
 
 
-def check_texts(staves):
+NOT_TEMPO = re.compile(r"^(pizz|arco|div|unis|sim|solo|soli|tutti|gedämpft|offen|mute|open|senza|con sord|l\.?v|"
+                       r"let ring)|cresc|dim\b|dim\.|decresc|\bsub\b|\b(ppp|pp|p|mp|mf|f|ff|fff|sfz|fp)\b|poco\s*f\b",
+                       re.I)   # playing, expression and dynamic words stay staff text
+
+
+def _norm(text):
+    """Text compared without case, brackets, dots and extra spaces ("Con mosso (In 1))" = "con mosso (in 1)")."""
+    return re.sub(r"[^\w]+", " ", text.lower()).strip()
+
+
+def _balanced(text):
+    return text.count("(") == text.count(")")
+
+
+def check_texts(staves, score=None):
     seen = defaultdict(list)
     for st in staves:
         for b, tag, text, el, t in st.texts:
@@ -200,11 +240,33 @@ def check_texts(staves):
         for st, tag, el in system[1:]:
             st.add(b, "text", f'{tag} "{text}" also on staff {system[0][0].sid}: kept once on the top staff',
                    lambda el=el: el.getparent().remove(el))
-        parts = {h[0].pidx for h in hits if h[1] in ("StaffText", "Expression")}
-        if len(parts) >= 3:
-            st = next(h[0] for h in hits if h[1] in ("StaffText", "Expression"))
-            st.add(b, "text", f'"{text}" as staff text in {len(parts)} parts: tempo / system word? '
-                              "(convention: once, as system text on the top part)")
+    # staff text in 3+ parts (any bar, spelling variants joined): a tempo / system word copied into every part
+    groups, sys_texts = defaultdict(list), set()
+    for st in staves:
+        for b, tag, text, el, t in st.texts:
+            if tag in ("SystemText", "TempoText"):
+                sys_texts.add(_norm(text))
+            elif tag in ("StaffText", "Expression") and text and not NOT_TEMPO.search(text.strip()):
+                groups[_norm(text)].append((st, b, t, text, el))
+    for key, hits in groups.items():
+        if len({h[0].pidx for h in hits}) < 3:
+            continue
+        (b, t), _ = Counter((h[1], h[2]) for h in hits).most_common(1)[0]
+        near = [h for h in hits if abs(h[1] - b) <= 1]       # the copies of one printed mark
+        far = sorted({f"{h[0].sid}@{h[1]}" for h in hits if abs(h[1] - b) > 1}, key=lambda x: int(x.split("@")[0]))
+        if len({h[0].pidx for h in near}) < 3:
+            continue
+        forms = Counter(h[3] for h in near if (h[1], h[2]) == (b, t))
+        text = max(forms, key=lambda x: (_balanced(x), forms[x]))
+        def fix(near=near, b=b, t=t, text=text, key=key):
+            for h in near:
+                h[4].getparent().remove(h[4])
+            if key not in sys_texts and score is not None:
+                E.add_text(score, staves[0].sid, b, t, text)
+        near[0][0].add(b, "text", f'"{text}" as staff text in {len({h[0].pidx for h in near})} parts at bar {b}'
+                       f"{'+-1' if any(h[1] != b for h in near) else ''}: tempo / system word (fix-safe: one system "
+                       f"text on staff {staves[0].sid})" + (f"; same text at other bars, check: {', '.join(far)}"
+                                                           if far else ""), fix)
 
 
 def check_fermatas(score, staves, plain=()):
@@ -292,7 +354,7 @@ def lint(path, staves=None, fix_safe=False, plain=""):
         check_clefs(st)
         check_spanners(st, score)
         check_marks(st)
-    check_texts(sts)
+    check_texts(sts, score)
     check_fermatas(score, sts, {x.strip() for x in plain.split(",") if x.strip()})
     check_cues(sts)
     check_doublings(sts)
